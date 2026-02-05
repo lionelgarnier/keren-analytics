@@ -1,0 +1,8 @@
+let start={{timeStart}};
+let end={{timeEnd}};
+union isfuzzy=true withsource=tableName pageViews, requests, customEvents
+| where timestamp between (start..end)
+| extend cdKeys = bag_keys(customDimensions)
+| mv-expand cdKeys
+| summarize keyCount = count() by tableName, key = tostring(cdKeys)
+| top 50 by keyCount desc

@@ -1,0 +1,9 @@
+let start={{timeStart}};
+let end={{timeEnd}};
+requests
+| where timestamp between (start..end)
+| summarize avgDuration = avg(duration),
+          p95Duration = percentile(duration, 95),
+          total = count(),
+          errors = countif(success == false)
+| extend errorRate = iif(total == 0, 0.0, todouble(errors) / todouble(total))

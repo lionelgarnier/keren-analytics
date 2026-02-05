@@ -1,0 +1,13 @@
+let start={{timeStart}};
+let end={{timeEnd}};
+let ordered = {{tableName}}
+| where timestamp between (start..end)
+| extend sessionId = {{sessionIdExpr}}, pagePath = {{pagePathExpr}}
+| where isnotempty(sessionId) and isnotempty(pagePath)
+| order by sessionId asc, timestamp asc
+| serialize;
+ordered
+| extend nextPage = next(pagePath), nextSession = next(sessionId)
+| where sessionId == nextSession and pagePath != nextPage
+| summarize transitions = count() by from = pagePath, to = nextPage
+| top 10 by transitions desc

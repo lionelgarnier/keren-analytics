@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Azure GA-like Analytics</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <header class="header">
+        <h1>Azure Analytics Overview</h1>
+        <button id="connectButton" class="primary">Connect Azure</button>
+        <button id="logoutButton" class="ghost hidden">Logout</button>
+      </header>
+
+      <section id="statusPanel" class="panel"></section>
+
+      <section id="resourcePanel" class="panel hidden">
+        <h2>Select Application Insights</h2>
+        <div id="resourceList" class="resource-list"></div>
+      </section>
+
+      <section id="dashboardPanel" class="panel hidden">
+        <div class="toolbar">
+          <label for="rangeSelect">Range</label>
+          <select id="rangeSelect">
+            <option value="today">Today</option>
+            <option value="7d" selected>Last 7 days</option>
+            <option value="30d">Last 30 days</option>
+          </select>
+        </div>
+
+        <div class="kpis">
+          <div class="kpi">
+            <span class="label">Unique Visitors</span>
+            <span id="kpiVisitors" class="value">-</span>
+          </div>
+          <div class="kpi">
+            <span class="label">Sessions</span>
+            <span id="kpiSessions" class="value">-</span>
+          </div>
+          <div class="kpi">
+            <span class="label">Avg Response (ms)</span>
+            <span id="kpiAvg" class="value">-</span>
+          </div>
+          <div class="kpi">
+            <span class="label">Error Rate</span>
+            <span id="kpiErrors" class="value">-</span>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div>
+            <h3>Top Pages</h3>
+            <table class="table">
+              <thead>
+                <tr><th>Path</th><th>Views</th><th>Share</th></tr>
+              </thead>
+              <tbody id="topPagesTable"></tbody>
+            </table>
+          </div>
+          <div>
+            <h3>Top Navigation Paths</h3>
+            <table class="table">
+              <thead>
+                <tr><th>From</th><th>To</th><th>Count</th></tr>
+              </thead>
+              <tbody id="topNavTable"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div>
+            <h3>Browser</h3>
+            <ul id="browserList" class="list"></ul>
+          </div>
+          <div>
+            <h3>OS</h3>
+            <ul id="osList" class="list"></ul>
+          </div>
+          <div>
+            <h3>Device</h3>
+            <ul id="deviceList" class="list"></ul>
+          </div>
+        </div>
+      </section>
+
+      <aside id="readinessPanel" class="panel hidden">
+        <h2>Data Readiness</h2>
+        <p id="readinessStatus"></p>
+        <ul id="readinessActions" class="list"></ul>
+      </aside>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

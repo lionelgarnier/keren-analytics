@@ -1,0 +1,8 @@
+let start={{timeStart}};
+let end={{timeEnd}};
+requests
+| where timestamp between (start..end)
+| extend path = tostring(parse_url(url).Path)
+| where isnotempty(path)
+| summarize p95 = percentile(duration, 95), count = count() by path
+| top 5 by p95 desc
