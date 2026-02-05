@@ -1,0 +1,1 @@
+# easy-analytics-for-azure
