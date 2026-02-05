@@ -59,6 +59,10 @@ Notes:
 npm test
 ```
 
+## Documentation
+
+See `docs/README.md` for product, technical, and phased backlog docs.
+
 ## Environment variables
 
 - `AZURE_MODE` - `mock` (default) or `real`
