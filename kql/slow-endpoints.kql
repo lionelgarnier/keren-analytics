@@ -4,5 +4,14 @@ requests
 | where timestamp between (start..end)
 | extend path = tostring(parse_url(url).Path)
 | where isnotempty(path)
-| summarize p95 = percentile(duration, 95), count = count() by path
-| top 5 by p95 desc
+| summarize
+    p50 = percentile(duration, 50),
+    p95 = percentile(duration, 95),
+    p99 = percentile(duration, 99),
+    avgDuration = avg(duration),
+    count = count(),
+    errors = countif(success == false)
+  by path
+| extend errorRate = iif(count == 0, 0.0, todouble(errors) / todouble(count))
+| project path, p50, p95, p99, avgDuration, count, errorRate
+| top 10 by p95 desc

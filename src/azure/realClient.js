@@ -2,9 +2,9 @@ import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "../config.js";
+import { getCurrentToken } from "./tokenStore.js";
 
 const armEndpoint = "https://management.azure.com";
-const logAnalyticsEndpoint = "https://api.loganalytics.io";
 
 // Resolve .env path once (project root)
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -44,11 +44,23 @@ function readTokenFromEnvFile() {
   return null;
 }
 
+/**
+ * Resolve the current access token using this priority:
+ * 1. Request-scoped token from OAuth (via AsyncLocalStorage)
+ * 2. AZURE_ACCESS_TOKEN from .env file
+ * 3. AZURE_ACCESS_TOKEN from process.env
+ *
+ * Also validates JWT expiry when possible.
+ */
 function getAccessToken() {
-  // Prefer fresh value from .env file, fall back to process.env
+  // 1. OAuth token (set by server middleware via AsyncLocalStorage)
+  const oauthToken = getCurrentToken();
+  if (oauthToken) return oauthToken;
+
+  // 2–3. Legacy: read from .env or process.env
   const token = readTokenFromEnvFile() || process.env.AZURE_ACCESS_TOKEN;
   if (!token) {
-    throw new Error("AZURE_ACCESS_TOKEN is required for real Azure mode.");
+    throw new Error("No Azure access token available. Sign in via the web UI or set AZURE_ACCESS_TOKEN in .env.");
   }
 
   // Best-effort validation: if the token looks like a JWT, check its expiry.
@@ -62,14 +74,12 @@ function getAccessToken() {
         const skewSeconds = 60; // treat tokens expiring within 60s as expired
         if (payload.exp <= nowInSeconds + skewSeconds) {
           throw new Error(
-            "AZURE_ACCESS_TOKEN has expired or is about to expire. " +
-              "Obtain a new access token and update the AZURE_ACCESS_TOKEN environment variable."
+            "Azure access token has expired. Sign in again via the web UI or refresh your token."
           );
         }
       }
     } catch (e) {
-      // If parsing fails and it's not our expiry error, fall back to using the token as-is.
-      if (e.message.includes("AZURE_ACCESS_TOKEN has expired")) {
+      if (e.message.includes("expired") || e.message.includes("Sign in")) {
         throw e;
       }
     }

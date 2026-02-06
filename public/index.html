@@ -3,101 +3,224 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Azure GA-like Analytics</title>
+    <title>Azure Analytics Dashboard</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <main class="container">
       <header class="header">
-        <h1>Azure Analytics Overview</h1>
-        <button id="connectButton" class="primary">Connect Azure</button>
-        <button id="logoutButton" class="ghost hidden">Logout</button>
+        <div class="header-left">
+          <h1>Azure Analytics</h1>
+          <span class="badge" id="modeBadge"></span>
+        </div>
+        <div class="header-right">
+          <button id="connectButton" class="btn btn-primary">Connect Azure</button>
+          <button id="logoutButton" class="btn btn-ghost hidden">Logout</button>
+        </div>
       </header>
 
-      <section id="statusPanel" class="panel"></section>
+      <section id="statusPanel" class="panel status-panel"></section>
 
+      <!-- Resource selection -->
       <section id="resourcePanel" class="panel hidden">
         <h2>Select Application Insights</h2>
         <div id="resourceList" class="resource-list"></div>
       </section>
 
-      <section id="dashboardPanel" class="panel hidden">
-        <div id="selectedResourceBar" class="selected-resource-bar hidden">
-          <span id="selectedResourceName" class="selected-resource-name"></span>
-          <button id="changeResourceButton" class="ghost-sm">Change</button>
-        </div>
-        <div class="toolbar">
-          <label for="rangeSelect">Range</label>
-          <select id="rangeSelect">
-            <option value="today">Today</option>
-            <option value="7d" selected>Last 7 days</option>
-            <option value="30d">Last 30 days</option>
-          </select>
-        </div>
+      <!-- Dashboard -->
+      <section id="dashboardPanel" class="hidden">
 
-        <div class="kpis">
-          <div class="kpi">
-            <span class="label">Unique Visitors</span>
-            <span id="kpiVisitors" class="value">-</span>
+        <!-- Resource bar + toolbar -->
+        <div class="dashboard-toolbar">
+          <div id="selectedResourceBar" class="resource-bar hidden">
+            <span id="selectedResourceName" class="resource-name"></span>
+            <button id="changeResourceButton" class="btn btn-ghost-sm">Change</button>
           </div>
-          <div class="kpi">
-            <span class="label">Sessions</span>
-            <span id="kpiSessions" class="value">-</span>
-          </div>
-          <div class="kpi">
-            <span class="label">Avg Response (ms)</span>
-            <span id="kpiAvg" class="value">-</span>
-          </div>
-          <div class="kpi">
-            <span class="label">Error Rate</span>
-            <span id="kpiErrors" class="value">-</span>
+          <div class="toolbar-controls">
+            <label for="rangeSelect">Period</label>
+            <select id="rangeSelect" class="select">
+              <option value="today">Today</option>
+              <option value="7d" selected>Last 7 days</option>
+              <option value="30d">Last 30 days</option>
+            </select>
           </div>
         </div>
 
-        <div class="grid">
-          <div>
-            <h3>Top Pages</h3>
-            <table class="table">
+        <!-- KPI cards -->
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <span class="kpi-label">Unique Visitors</span>
+            <span id="kpiVisitors" class="kpi-value">-</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Sessions</span>
+            <span id="kpiSessions" class="kpi-value">-</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Avg Response</span>
+            <span id="kpiAvg" class="kpi-value">-</span>
+            <span class="kpi-unit">ms</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">P95 Response</span>
+            <span id="kpiP95" class="kpi-value">-</span>
+            <span class="kpi-unit">ms</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Error Rate</span>
+            <span id="kpiErrors" class="kpi-value">-</span>
+          </div>
+        </div>
+
+        <!-- Daily trend chart -->
+        <div class="panel chart-panel">
+          <h3>Traffic Trend</h3>
+          <div class="chart-container chart-wide">
+            <canvas id="dailyTrendChart"></canvas>
+          </div>
+          <div id="dailyTrendEmpty" class="empty-state hidden">
+            <p>No trend data available for this period.</p>
+          </div>
+        </div>
+
+        <!-- Two columns: top pages + geo -->
+        <div class="grid-2">
+          <div class="panel">
+            <div class="panel-header">
+              <h3>Top Pages</h3>
+              <span id="topPagesCount" class="badge-count"></span>
+            </div>
+            <table class="data-table sortable" id="topPagesTable">
               <thead>
-                <tr><th>Path</th><th>Views</th><th>Share</th></tr>
+                <tr>
+                  <th data-sort="string">Path</th>
+                  <th data-sort="number">Views</th>
+                  <th data-sort="number">Share</th>
+                </tr>
               </thead>
-              <tbody id="topPagesTable"></tbody>
+              <tbody id="topPagesBody"></tbody>
             </table>
+            <div id="topPagesEmpty" class="empty-state hidden">
+              <p>No page view data. Enable frontend tracking in Application Insights.</p>
+            </div>
           </div>
-          <div>
-            <h3>Top Navigation Paths</h3>
-            <table class="table">
-              <thead>
-                <tr><th>From</th><th>To</th><th>Count</th></tr>
-              </thead>
-              <tbody id="topNavTable"></tbody>
-            </table>
+          <div class="panel">
+            <h3>Geo Distribution</h3>
+            <div class="chart-container chart-medium">
+              <canvas id="geoChart"></canvas>
+            </div>
+            <div id="geoEmpty" class="empty-state hidden">
+              <p>No geo data available. Enable geo enrichment in Application Insights settings.</p>
+            </div>
           </div>
         </div>
 
-        <div class="grid">
-          <div>
+        <!-- Three columns: browser / OS / device doughnuts -->
+        <div class="grid-3">
+          <div class="panel">
             <h3>Browser</h3>
-            <ul id="browserList" class="list"></ul>
+            <div class="chart-container chart-small">
+              <canvas id="browserChart"></canvas>
+            </div>
+            <div id="browserEmpty" class="empty-state hidden">
+              <p>No browser data.</p>
+            </div>
           </div>
-          <div>
+          <div class="panel">
             <h3>OS</h3>
-            <ul id="osList" class="list"></ul>
+            <div class="chart-container chart-small">
+              <canvas id="osChart"></canvas>
+            </div>
+            <div id="osEmpty" class="empty-state hidden">
+              <p>No OS data.</p>
+            </div>
           </div>
-          <div>
+          <div class="panel">
             <h3>Device</h3>
-            <ul id="deviceList" class="list"></ul>
+            <div class="chart-container chart-small">
+              <canvas id="deviceChart"></canvas>
+            </div>
+            <div id="deviceEmpty" class="empty-state hidden">
+              <p>No device data.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Two columns: browser timings + slow endpoints -->
+        <div class="grid-2">
+          <div class="panel">
+            <h3>Frontend Performance</h3>
+            <div class="chart-container chart-medium">
+              <canvas id="browserTimingsChart"></canvas>
+            </div>
+            <div id="browserTimingsKpis" class="timing-kpis hidden">
+              <span class="timing-kpi">Avg: <strong id="btAvgTotal">-</strong> ms</span>
+              <span class="timing-kpi">P95: <strong id="btP95Total">-</strong> ms</span>
+              <span class="timing-kpi">Samples: <strong id="btSamples">-</strong></span>
+            </div>
+            <div id="browserTimingsEmpty" class="empty-state hidden">
+              <p>No browser timing data. Enable the Application Insights JavaScript SDK to capture page load metrics.</p>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-header">
+              <h3>Slow Endpoints</h3>
+              <span id="slowEndpointsCount" class="badge-count"></span>
+            </div>
+            <table class="data-table sortable" id="slowEndpointsTable">
+              <thead>
+                <tr>
+                  <th data-sort="string">Path</th>
+                  <th data-sort="number">P50</th>
+                  <th data-sort="number">P95</th>
+                  <th data-sort="number">P99</th>
+                  <th data-sort="number">Calls</th>
+                  <th data-sort="number">Err%</th>
+                </tr>
+              </thead>
+              <tbody id="slowEndpointsBody"></tbody>
+            </table>
+            <div id="slowEndpointsEmpty" class="empty-state hidden">
+              <p>No request data. Enable backend request tracking.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Navigation paths -->
+        <div class="panel">
+          <div class="panel-header">
+            <h3>Navigation Paths</h3>
+          </div>
+          <table class="data-table sortable" id="topNavTable">
+            <thead>
+              <tr>
+                <th data-sort="string">From</th>
+                <th data-sort="string">To</th>
+                <th data-sort="number">Transitions</th>
+              </tr>
+            </thead>
+            <tbody id="topNavBody"></tbody>
+          </table>
+          <div id="topNavEmpty" class="empty-state hidden">
+            <p>No navigation path data available.</p>
           </div>
         </div>
       </section>
 
-      <aside id="readinessPanel" class="panel hidden">
+      <!-- Readiness aside -->
+      <aside id="readinessPanel" class="panel readiness-panel hidden">
         <h2>Data Readiness</h2>
-        <p id="readinessStatus"></p>
-        <ul id="readinessActions" class="list"></ul>
+        <div id="readinessStatusBar" class="readiness-bar">
+          <span id="readinessStatusBadge" class="readiness-badge"></span>
+          <span id="readinessConfidence" class="readiness-confidence"></span>
+        </div>
+        <div id="readinessSignals" class="readiness-signals"></div>
+        <h4>Recommended Actions</h4>
+        <ul id="readinessActions" class="readiness-actions"></ul>
       </aside>
     </main>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>

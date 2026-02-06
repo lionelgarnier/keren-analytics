@@ -1,0 +1,12 @@
+let start={{timeStart}};
+let end={{timeEnd}};
+browserTimings
+| where timestamp between (start..end)
+| summarize
+    avgNetworkDuration = avg(networkDuration),
+    avgSendDuration = avg(sendDuration),
+    avgReceiveDuration = avg(receiveDuration),
+    avgProcessingDuration = avg(processingDuration),
+    avgTotalDuration = avg(totalDuration),
+    p95TotalDuration = percentile(totalDuration, 95),
+    sampleCount = count()

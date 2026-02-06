@@ -1,36 +1,41 @@
-# Phase 2 - Production Readiness
+# Phase 2 - Concept Validation
 
 ## Goal
-Enable real Azure tenants with secure auth, persistent storage, and resilient
-query execution.
+
+Deepen analytics coverage, improve dashboard visualization, and validate with
+real Azure data. Prove the product value before investing in infrastructure.
 
 ## Scope
-### Auth and Security
-- Entra ID OAuth Code + PKCE (multi-tenant)
-- Secure session storage and CSRF protections
-- RBAC detection with actionable errors
 
-### Azure Integration
-- ARM discovery for subscriptions and App Insights
-- Resolve workspace resource to customerId
-- Query Log Analytics with timeouts and retry
+### Priority 1 — Analytics Depth
 
-### Data Storage
-- Postgres schema for tenant metadata, mappings, readiness, transitions
-- Redis cache for query results and discovery cache
-- Migrations and seed scripts
+- Daily aggregates for last 30 days with trend charts (no PII)
+- Geo distribution (country/city) when available in customDimensions
+- Frontend performance (browserTimings) when present
+- Slow endpoint drill-downs (percentiles, evolution, detail per endpoint)
 
-### API and UX
-- Resource list UX with environment hints and telemetry freshness
+### Priority 2 — UX and Visualization
+
+- Visual charts (line chart for trends, pie/bar for browsers, map for geo)
+- Enhanced time range picker with custom range and period comparison
+- Sorting, pagination, and drill-down for top pages / slow endpoints
+- Actionable empty states with guidance ("enable browserTimings", etc.)
+
+### Priority 3 — Real Azure Connection
+
+- Service Principal auth (simpler than full OAuth, sufficient for validation)
+- Test and harden real client with actual tenant data
+- RBAC detection with actionable error messages
 - Range validation and per-range cache TTL
-- Readiness state rendering for NO_ACCESS, NO_DATA, PARTIAL
 
 ### Testing
+
 - Integration tests with mocked Azure APIs
 - RBAC and no-data test scenarios
 
 ## Exit Criteria
-- Real tenant can connect and see dashboard
-- Cache persistence in Redis
-- Metadata persisted in Postgres
-- Readiness and errors visible in UI
+
+- Dashboard shows trend charts, geo, and frontend performance metrics
+- Interactive tables with sort, pagination, and drill-down
+- Real tenant can connect via Service Principal and see dashboard
+- Readiness and errors visible in UI with actionable guidance

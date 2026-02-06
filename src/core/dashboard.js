@@ -92,6 +92,13 @@ function safeDivide(numerator, denominator) {
   return denominator > 0 ? numerator / denominator : 0;
 }
 
+/**
+ * Choose the time bin size for daily trend based on range key.
+ */
+function binSizeForRange(rangeKey) {
+  return rangeKey === "today" ? "1h" : "1d";
+}
+
 export async function buildOverviewDashboard({
   tenantId,
   resourceId,
@@ -108,6 +115,8 @@ export async function buildOverviewDashboard({
   const tableName = schemaProfile?.tables?.[pageTable] ? pageTable : "requests";
   const hasPageTable = schemaProfile?.tables?.pageViews || schemaProfile?.tables?.requests;
   const hasRequests = schemaProfile?.tables?.requests || readinessReport?.availableSignals?.requests;
+  const hasGeo = readinessReport?.availableSignals?.geo;
+  const hasBrowserTimings = readinessReport?.availableSignals?.browserTimings || schemaProfile?.tables?.browserTimings;
   const sessionExpr =
     mapping.canonicalSessionId?.expr ||
     (schemaProfile?.tables?.requests ? mappingExpressions.sessionId.operation : mappingExpressions.sessionId.session);
@@ -120,8 +129,11 @@ export async function buildOverviewDashboard({
   };
 
   const uniqueTemplate = userIdExpr ? "unique-visitors-user" : "unique-visitors-session";
+  const binSize = binSizeForRange(timeRange.key);
 
   const emptyResult = { tables: [{ columns: [], rows: [] }] };
+
+  // --- Core queries (same as Phase 1) ---
 
   const uniqueVisitorsResult = hasPageTable
     ? await runQuery({
@@ -298,6 +310,69 @@ export async function buildOverviewDashboard({
       })
     : emptyResult;
 
+  // --- Phase 2 new queries ---
+
+  const dailyTrendResult = hasPageTable
+    ? await runQuery({
+        tenantId,
+        resourceId,
+        workspaceId,
+        queryName: "dailyTrend",
+        templateName: "daily-trend",
+        params: {
+          ...timeParams,
+          tableName,
+          pagePathExpr,
+          sessionIdExpr: sessionExpr,
+          binSize,
+        },
+        allowedValues: {
+          tableName: ["pageViews", "requests"],
+          pagePathExpr: allowedExpr.pagePathExpr,
+          sessionIdExpr: allowedExpr.sessionIdExpr,
+          binSize: ["1h", "1d"],
+        },
+        timeRangeKey: timeRange.key,
+        mappingVersion: mapping.version,
+        ttlMs: cacheTtlMs,
+        azureClient,
+      })
+    : emptyResult;
+
+  const geoResult = hasGeo
+    ? await runQuery({
+        tenantId,
+        resourceId,
+        workspaceId,
+        queryName: "geoDistribution",
+        templateName: "geo-distribution",
+        params: { ...timeParams, tableName },
+        allowedValues: { tableName: ["pageViews", "requests"] },
+        timeRangeKey: timeRange.key,
+        mappingVersion: mapping.version,
+        ttlMs: cacheTtlMs,
+        azureClient,
+      })
+    : emptyResult;
+
+  const browserTimingsResult = hasBrowserTimings
+    ? await runQuery({
+        tenantId,
+        resourceId,
+        workspaceId,
+        queryName: "browserTimings",
+        templateName: "browser-timings",
+        params: { ...timeParams },
+        allowedValues: {},
+        timeRangeKey: timeRange.key,
+        mappingVersion: mapping.version,
+        ttlMs: cacheTtlMs,
+        azureClient,
+      })
+    : emptyResult;
+
+  // --- Process results ---
+
   const uniqueRows = toRows(uniqueVisitorsResult);
   const sessionRows = toRows(sessionsResult);
   const topPagesRows = toRows(topPagesResult);
@@ -307,6 +382,9 @@ export async function buildOverviewDashboard({
   const devicesRows = toRows(deviceResult);
   const perfRows = toRows(performanceResult);
   const slowRows = toRows(slowEndpointsResult);
+  const dailyTrendRows = toRows(dailyTrendResult);
+  const geoRows = toRows(geoResult);
+  const browserTimingsRows = toRows(browserTimingsResult);
 
   const totalBrowser =
     Number(browsersRows[0]?.total) || browsersRows.reduce((sum, row) => sum + (row.count || 0), 0);
@@ -318,6 +396,8 @@ export async function buildOverviewDashboard({
   const osListedSum = osRows.reduce((sum, row) => sum + (row.count || 0), 0);
   const devicesListedSum = devicesRows.reduce((sum, row) => sum + (row.count || 0), 0);
 
+  const totalGeo = geoRows.reduce((sum, row) => sum + (row.count || 0), 0);
+
   return {
     kpis: {
       uniqueVisitors: toSingleValue(uniqueRows, "uniqueVisitors"),
@@ -327,6 +407,11 @@ export async function buildOverviewDashboard({
       errorRate: Number(toSingleValue(perfRows, "errorRate")) || 0,
     },
     charts: {
+      dailyTrend: dailyTrendRows.map((row) => ({
+        period: row.period,
+        visitors: row.visitors || 0,
+        pageViews: row.pageViews || 0,
+      })),
       topPages: topPagesRows.map((row) => ({
         path: row.pagePath,
         views: row.viewCount ?? row.views,
@@ -379,13 +464,39 @@ export async function buildOverviewDashboard({
             }
           : null,
       ].filter(Boolean),
+      geoDistribution: geoRows.map((row) => ({
+        country: row.country,
+        count: row.count,
+        share: row.share || safeDivide(row.count, totalGeo),
+      })),
+      browserTimings: browserTimingsRows.length > 0
+        ? {
+            avgNetwork: Number(browserTimingsRows[0].avgNetworkDuration) || 0,
+            avgSend: Number(browserTimingsRows[0].avgSendDuration) || 0,
+            avgReceive: Number(browserTimingsRows[0].avgReceiveDuration) || 0,
+            avgProcessing: Number(browserTimingsRows[0].avgProcessingDuration) || 0,
+            avgTotal: Number(browserTimingsRows[0].avgTotalDuration) || 0,
+            p95Total: Number(browserTimingsRows[0].p95TotalDuration) || 0,
+            sampleCount: Number(browserTimingsRows[0].sampleCount) || 0,
+          }
+        : null,
     },
     tables: {
       slowEndpoints: slowRows.map((row) => ({
         path: row.path,
+        p50: row.p50 || 0,
         p95: row.p95,
+        p99: row.p99 || 0,
+        avgDuration: row.avgDuration || 0,
         count: row.count,
+        errorRate: row.errorRate || 0,
       })),
+    },
+    availability: {
+      hasPageTable: Boolean(hasPageTable),
+      hasRequests: Boolean(hasRequests),
+      hasGeo: Boolean(hasGeo),
+      hasBrowserTimings: Boolean(hasBrowserTimings),
     },
     meta: {
       mappingVersion: mapping.version,

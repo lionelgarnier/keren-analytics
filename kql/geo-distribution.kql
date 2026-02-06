@@ -1,0 +1,14 @@
+let start={{timeStart}};
+let end={{timeEnd}};
+let total = toscalar(
+  {{tableName}}
+  | where timestamp between (start..end)
+  | where isnotempty(client_CountryOrRegion)
+  | summarize count()
+);
+{{tableName}}
+| where timestamp between (start..end)
+| where isnotempty(client_CountryOrRegion)
+| summarize count = count() by country = client_CountryOrRegion
+| top 10 by count desc
+| extend share = iif(total == 0, 0.0, count * 1.0 / total)

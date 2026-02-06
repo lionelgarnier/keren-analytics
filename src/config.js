@@ -1,4 +1,5 @@
 const sessionSecret = process.env.SESSION_SECRET || "dev-secret-change-me";
+const port = Number(process.env.PORT || 3000);
 
 if (sessionSecret === "dev-secret-change-me" && process.env.NODE_ENV !== "test") {
   console.warn(
@@ -7,7 +8,7 @@ if (sessionSecret === "dev-secret-change-me" && process.env.NODE_ENV !== "test")
 }
 
 export const config = {
-  port: Number(process.env.PORT || 3000),
+  port,
   // Tests always run in mock mode to avoid hitting real Azure APIs
   azureMode: process.env.NODE_ENV === "test" ? "mock" : (process.env.AZURE_MODE || "mock"),
   sessionSecret,
@@ -22,4 +23,14 @@ export const config = {
   maxStateTransitions: 200,
   /** Maximum number of workspace cache entries */
   maxWorkspaceCacheSize: 100,
+
+  // --- OAuth (Entra ID) ---
+  /** Application (client) ID from the Entra ID app registration */
+  azureClientId: process.env.AZURE_CLIENT_ID || "",
+  /** Client secret from the Entra ID app registration (Certificates & secrets) */
+  azureClientSecret: process.env.AZURE_CLIENT_SECRET || "",
+  /** OAuth redirect URI — must match the app registration */
+  azureRedirectUri: process.env.AZURE_REDIRECT_URI || `http://localhost:${port}/auth/callback`,
+  /** Entra ID tenant: "organizations" (multi-tenant work accounts), "common", or a specific tenant ID */
+  azureTenantId: process.env.AZURE_TENANT_ID || "organizations",
 };
