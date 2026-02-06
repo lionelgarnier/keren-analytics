@@ -76,8 +76,18 @@ async function runQuery({
       status: "error",
       error: error.message,
     });
-    throw error;
+    const wrappedError = new Error(`Query '${queryName}' (template: ${templateName}) failed: ${error.message}`);
+    wrappedError.cause = error;
+    wrappedError.queryName = queryName;
+    throw wrappedError;
   }
+}
+
+/**
+ * Safe division helper to prevent division by zero.
+ */
+function safeDivide(numerator, denominator) {
+  return denominator > 0 ? numerator / denominator : 0;
 }
 
 export async function buildOverviewDashboard({
@@ -292,6 +302,10 @@ export async function buildOverviewDashboard({
   const totalDevices =
     Number(devicesRows[0]?.total) || devicesRows.reduce((sum, row) => sum + (row.count || 0), 0);
 
+  const browserListedSum = browsersRows.reduce((sum, row) => sum + (row.count || 0), 0);
+  const osListedSum = osRows.reduce((sum, row) => sum + (row.count || 0), 0);
+  const devicesListedSum = devicesRows.reduce((sum, row) => sum + (row.count || 0), 0);
+
   return {
     kpis: {
       uniqueVisitors: toSingleValue(uniqueRows, "uniqueVisitors"),
@@ -315,14 +329,13 @@ export async function buildOverviewDashboard({
         ...browsersRows.map((row) => ({
           name: row.browser,
           count: row.count,
-          share: totalBrowser ? row.count / totalBrowser : 0,
+          share: safeDivide(row.count, totalBrowser),
         })),
-        totalBrowser > browsersRows.reduce((sum, row) => sum + row.count, 0)
+        totalBrowser > browserListedSum
           ? {
               name: "Other",
-              count: totalBrowser - browsersRows.reduce((sum, row) => sum + row.count, 0),
-              share:
-                (totalBrowser - browsersRows.reduce((sum, row) => sum + row.count, 0)) / totalBrowser,
+              count: totalBrowser - browserListedSum,
+              share: safeDivide(totalBrowser - browserListedSum, totalBrowser),
             }
           : null,
       ].filter(Boolean),
@@ -330,13 +343,13 @@ export async function buildOverviewDashboard({
         ...osRows.map((row) => ({
           name: row.os,
           count: row.count,
-          share: totalOs ? row.count / totalOs : 0,
+          share: safeDivide(row.count, totalOs),
         })),
-        totalOs > osRows.reduce((sum, row) => sum + row.count, 0)
+        totalOs > osListedSum
           ? {
               name: "Other",
-              count: totalOs - osRows.reduce((sum, row) => sum + row.count, 0),
-              share: (totalOs - osRows.reduce((sum, row) => sum + row.count, 0)) / totalOs,
+              count: totalOs - osListedSum,
+              share: safeDivide(totalOs - osListedSum, totalOs),
             }
           : null,
       ].filter(Boolean),
@@ -344,14 +357,13 @@ export async function buildOverviewDashboard({
         ...devicesRows.map((row) => ({
           name: row.device,
           count: row.count,
-          share: totalDevices ? row.count / totalDevices : 0,
+          share: safeDivide(row.count, totalDevices),
         })),
-        totalDevices > devicesRows.reduce((sum, row) => sum + row.count, 0)
+        totalDevices > devicesListedSum
           ? {
               name: "Other",
-              count: totalDevices - devicesRows.reduce((sum, row) => sum + row.count, 0),
-              share:
-                (totalDevices - devicesRows.reduce((sum, row) => sum + row.count, 0)) / totalDevices,
+              count: totalDevices - devicesListedSum,
+              share: safeDivide(totalDevices - devicesListedSum, totalDevices),
             }
           : null,
       ].filter(Boolean),

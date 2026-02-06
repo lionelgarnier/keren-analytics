@@ -1,4 +1,5 @@
 import express from "express";
+import helmet from "helmet";
 import session from "express-session";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -14,28 +15,77 @@ const azureClient = getAzureClient();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Security headers
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:"],
+      },
+    },
+  })
+);
+
 app.use(express.json({ limit: "1mb" }));
+
+const isProduction = process.env.NODE_ENV === "production";
 app.use(
   session({
     secret: config.sessionSecret,
     resave: false,
     saveUninitialized: false,
+    cookie: {
+      secure: isProduction,
+      httpOnly: true,
+      sameSite: "lax",
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    },
   })
 );
 app.use(express.static(path.resolve(__dirname, "..", "public")));
 
+/**
+ * Validate tenant ID to prevent path traversal / injection attacks.
+ * Only alphanumeric characters, hyphens, and underscores are allowed.
+ */
+function isValidTenantId(tenantId) {
+  return typeof tenantId === "string" && /^[a-zA-Z0-9_-]{1,128}$/.test(tenantId);
+}
+
 function ensureAuth(req, res, next) {
+  if (!req.session) {
+    return res.status(500).json({ error: "SESSION_UNAVAILABLE" });
+  }
   if (req.session.tenantId) return next();
   if (config.azureMode === "mock") {
-    req.session.tenantId = req.query.tenant || "mock-tenant";
+    const tenant = req.query.tenant || "mock-tenant";
+    if (!isValidTenantId(tenant)) {
+      return res.status(400).json({ error: "INVALID_TENANT_ID" });
+    }
+    req.session.tenantId = tenant;
     return next();
   }
   return res.status(401).json({ error: "AUTH_REQUIRED" });
 }
 
+/**
+ * Determine the appropriate HTTP status code for pipeline errors.
+ */
+function errorStatusCode(result) {
+  if (result.errorCode === "ACCESS_DENIED" || result.errorCode === "FORBIDDEN") return 403;
+  if (result.errorCode === "NOT_FOUND") return 404;
+  return 500;
+}
+
 app.get("/auth/login", (req, res) => {
   if (config.azureMode === "mock") {
     const tenant = req.query.tenant || "mock-tenant";
+    if (!isValidTenantId(tenant)) {
+      return res.status(400).json({ error: "INVALID_TENANT_ID" });
+    }
     return res.redirect(`/auth/callback?tenant=${encodeURIComponent(tenant)}&code=mock`);
   }
   return res.status(501).json({ error: "REAL_AUTH_NOT_CONFIGURED" });
@@ -44,6 +94,9 @@ app.get("/auth/login", (req, res) => {
 app.get("/auth/callback", (req, res) => {
   if (config.azureMode === "mock") {
     const tenant = req.query.tenant || "mock-tenant";
+    if (!isValidTenantId(tenant)) {
+      return res.status(400).json({ error: "INVALID_TENANT_ID" });
+    }
     req.session.tenantId = tenant;
     return res.redirect("/");
   }
@@ -52,14 +105,17 @@ app.get("/auth/callback", (req, res) => {
 
 app.get("/auth/session", (req, res) => {
   res.json({
-    authenticated: Boolean(req.session.tenantId),
-    tenantId: req.session.tenantId || null,
+    authenticated: Boolean(req.session?.tenantId),
+    tenantId: req.session?.tenantId || null,
     mode: config.azureMode,
   });
 });
 
 app.post("/auth/logout", (req, res) => {
-  req.session.destroy(() => {
+  req.session.destroy((err) => {
+    if (err) {
+      return res.status(500).json({ error: "LOGOUT_FAILED" });
+    }
     res.json({ ok: true });
   });
 });
@@ -120,7 +176,7 @@ app.get("/readiness", ensureAuth, async (req, res) => {
     cacheTtlMs: config.cacheTtlMs[rangeKey] || config.cacheTtlMs["7d"],
   });
   if (result.error) {
-    return res.status(403).json(result);
+    return res.status(errorStatusCode(result)).json(result);
   }
   res.json(result.readinessReport);
 });
@@ -140,7 +196,7 @@ app.get("/dashboard/overview", ensureAuth, async (req, res) => {
     return res.status(409).json({ error: "RESOURCE_SELECTION_REQUIRED", resources: result.resources });
   }
   if (result.error) {
-    return res.status(403).json(result);
+    return res.status(errorStatusCode(result)).json(result);
   }
   res.json({
     dashboard: result.dashboard,
@@ -154,6 +210,9 @@ app.get("/dashboard/overview", ensureAuth, async (req, res) => {
 app.get("/recommendations", ensureAuth, (req, res) => {
   const tenantId = req.session.tenantId;
   const tenant = getTenant(tenantId);
+  if (!tenant.readinessReport) {
+    return res.status(409).json({ error: "READINESS_NOT_CHECKED", message: "Run readiness check first." });
+  }
   const recommendations = buildRecommendations(tenant.readinessReport);
   res.json({ recommendations });
 });

@@ -59,12 +59,23 @@ function renderResources(resources) {
   resources.forEach((resource) => {
     const card = document.createElement("div");
     card.className = "resource-card";
-    card.innerHTML = `
-      <strong>${resource.appInsightsName}</strong>
-      <div>Subscription: ${resource.subscriptionId}</div>
-      <div>Workspace: ${resource.workspaceId}</div>
-      <div>Last telemetry: ${resource.lastTelemetryAt || "unknown"}</div>
-    `;
+
+    const nameEl = document.createElement("strong");
+    nameEl.textContent = resource.appInsightsName;
+    card.appendChild(nameEl);
+
+    const subDiv = document.createElement("div");
+    subDiv.textContent = `Subscription: ${resource.subscriptionId}`;
+    card.appendChild(subDiv);
+
+    const wsDiv = document.createElement("div");
+    wsDiv.textContent = `Workspace: ${resource.workspaceId}`;
+    card.appendChild(wsDiv);
+
+    const telDiv = document.createElement("div");
+    telDiv.textContent = `Last telemetry: ${resource.lastTelemetryAt || "unknown"}`;
+    card.appendChild(telDiv);
+
     const button = document.createElement("button");
     button.className = "primary";
     button.textContent = "Select";
@@ -97,34 +108,83 @@ function renderDashboard(data) {
   kpiAvg.textContent = Math.round(dashboard.kpis.avgResponseTimeMs || 0);
   kpiErrors.textContent = `${((dashboard.kpis.errorRate || 0) * 100).toFixed(2)}%`;
 
-  topPagesTable.innerHTML = dashboard.charts.topPages
-    .map(
-      (row) =>
-        `<tr><td>${row.path}</td><td>${row.views}</td><td>${(row.share * 100).toFixed(1)}%</td></tr>`
-    )
-    .join("");
+  // Render Top Pages table safely (no innerHTML with user data)
+  topPagesTable.innerHTML = "";
+  dashboard.charts.topPages.forEach((row) => {
+    const tr = document.createElement("tr");
 
-  topNavTable.innerHTML = dashboard.charts.topNavigationPaths
-    .map((row) => `<tr><td>${row.from}</td><td>${row.to}</td><td>${row.count}</td></tr>`)
-    .join("");
+    const pathTd = document.createElement("td");
+    pathTd.textContent = row.path;
+    tr.appendChild(pathTd);
 
-  browserList.innerHTML = dashboard.charts.browsers
-    .map((row) => `<li>${row.name}: ${row.count}</li>`)
-    .join("");
-  osList.innerHTML = dashboard.charts.os
-    .map((row) => `<li>${row.name}: ${row.count}</li>`)
-    .join("");
-  deviceList.innerHTML = dashboard.charts.devices
-    .map((row) => `<li>${row.name}: ${row.count}</li>`)
-    .join("");
+    const viewsTd = document.createElement("td");
+    viewsTd.textContent = String(row.views);
+    tr.appendChild(viewsTd);
+
+    const shareTd = document.createElement("td");
+    shareTd.textContent = `${(row.share * 100).toFixed(1)}%`;
+    tr.appendChild(shareTd);
+
+    topPagesTable.appendChild(tr);
+  });
+
+  // Render Top Navigation Paths table safely
+  topNavTable.innerHTML = "";
+  dashboard.charts.topNavigationPaths.forEach((row) => {
+    const tr = document.createElement("tr");
+
+    const fromTd = document.createElement("td");
+    fromTd.textContent = row.from;
+    tr.appendChild(fromTd);
+
+    const toTd = document.createElement("td");
+    toTd.textContent = row.to;
+    tr.appendChild(toTd);
+
+    const countTd = document.createElement("td");
+    countTd.textContent = String(row.count);
+    tr.appendChild(countTd);
+
+    topNavTable.appendChild(tr);
+  });
+
+  // Render browser list safely
+  browserList.innerHTML = "";
+  dashboard.charts.browsers.forEach((row) => {
+    const li = document.createElement("li");
+    li.textContent = `${row.name}: ${row.count}`;
+    browserList.appendChild(li);
+  });
+
+  // Render OS list safely
+  osList.innerHTML = "";
+  dashboard.charts.os.forEach((row) => {
+    const li = document.createElement("li");
+    li.textContent = `${row.name}: ${row.count}`;
+    osList.appendChild(li);
+  });
+
+  // Render device list safely
+  deviceList.innerHTML = "";
+  dashboard.charts.devices.forEach((row) => {
+    const li = document.createElement("li");
+    li.textContent = `${row.name}: ${row.count}`;
+    deviceList.appendChild(li);
+  });
 
   readinessStatus.textContent = `Status: ${readiness.overallStatus} (confidence ${(readiness.confidence * 100).toFixed(
     0
   )}%)`;
-  readinessActions.innerHTML = readiness.recommendedActions
+
+  // Render readiness actions safely
+  readinessActions.innerHTML = "";
+  readiness.recommendedActions
     .slice(0, 3)
-    .map((action) => `<li>${action.title}</li>`)
-    .join("");
+    .forEach((action) => {
+      const li = document.createElement("li");
+      li.textContent = action.title;
+      readinessActions.appendChild(li);
+    });
 
   dashboardPanel.classList.remove("hidden");
   readinessPanel.classList.remove("hidden");
