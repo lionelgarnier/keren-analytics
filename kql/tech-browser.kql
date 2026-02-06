@@ -1,0 +1,14 @@
+let start={{timeStart}};
+let end={{timeEnd}};
+let total = toscalar(
+  {{tableName}}
+  | where timestamp between (start..end)
+  | where isnotempty(client_Browser)
+  | summarize count()
+);
+{{tableName}}
+| where timestamp between (start..end)
+| where isnotempty(client_Browser)
+| summarize count = count() by browser = client_Browser
+| top 5 by count desc
+| extend total = total

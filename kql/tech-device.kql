@@ -1,0 +1,14 @@
+let start={{timeStart}};
+let end={{timeEnd}};
+let total = toscalar(
+  {{tableName}}
+  | where timestamp between (start..end)
+  | where isnotempty(client_Type)
+  | summarize count()
+);
+{{tableName}}
+| where timestamp between (start..end)
+| where isnotempty(client_Type)
+| summarize count = count() by device = client_Type
+| top 5 by count desc
+| extend total = total
