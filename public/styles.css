@@ -111,6 +111,39 @@ body {
   border-bottom: 1px dashed #e2e8f0;
 }
 
+.selected-resource-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: #f0f5ff;
+  border: 1px solid #bfdbfe;
+  padding: 10px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.selected-resource-name {
+  font-weight: 600;
+  color: #1e40af;
+  font-size: 14px;
+}
+
+.ghost-sm {
+  background: transparent;
+  border: 1px solid #93a3b8;
+  padding: 5px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #475569;
+}
+
+.ghost-sm:hover {
+  background: #f1f5f9;
+  border-color: #64748b;
+}
+
 .resource-card {
   border: 1px solid #e2e8f0;
   padding: 12px;

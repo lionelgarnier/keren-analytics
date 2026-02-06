@@ -68,6 +68,7 @@ export async function runOverviewPipeline({
   const readinessTemplate = loadKqlTemplate("readiness-probes");
   const readinessKql = renderTemplate(readinessTemplate, readinessParams);
   const readinessResult = await azureClient.queryWorkspace({
+    resourceId: selectedResource.resourceId,
     workspaceId: selectedResource.workspaceId,
     kql: readinessKql,
     queryName: "readiness",
@@ -90,6 +91,7 @@ export async function runOverviewPipeline({
     };
     const fallbackKql = renderTemplate(readinessTemplate, fallbackParams);
     const fallbackResult = await azureClient.queryWorkspace({
+      resourceId: selectedResource.resourceId,
       workspaceId: selectedResource.workspaceId,
       kql: fallbackKql,
       queryName: "readinessFallback",
@@ -110,6 +112,7 @@ export async function runOverviewPipeline({
   const schemaTablesTemplate = loadKqlTemplate("schema-tables");
   const schemaTablesKql = renderTemplate(schemaTablesTemplate, timeParams);
   const tablesResult = await azureClient.queryWorkspace({
+    resourceId: selectedResource.resourceId,
     workspaceId: selectedResource.workspaceId,
     kql: schemaTablesKql,
     queryName: "schemaTables",
@@ -119,6 +122,7 @@ export async function runOverviewPipeline({
   const schemaCustomTemplate = loadKqlTemplate("schema-custom-dimensions");
   const schemaCustomKql = renderTemplate(schemaCustomTemplate, timeParams);
   const customResult = await azureClient.queryWorkspace({
+    resourceId: selectedResource.resourceId,
     workspaceId: selectedResource.workspaceId,
     kql: schemaCustomKql,
     queryName: "schemaCustomDimensions",
@@ -138,6 +142,7 @@ export async function runOverviewPipeline({
   logStateTransition(tenantId, { state: PipelineStates.DASHBOARD_BUILD });
   const dashboard = await buildOverviewDashboard({
     tenantId,
+    resourceId: selectedResource.resourceId,
     workspaceId: selectedResource.workspaceId,
     mapping,
     schemaProfile,

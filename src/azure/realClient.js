@@ -1,7 +1,14 @@
+import { readFileSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { config } from "../config.js";
 
 const armEndpoint = "https://management.azure.com";
 const logAnalyticsEndpoint = "https://api.loganalytics.io";
+
+// Resolve .env path once (project root)
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const envFilePath = resolve(__dirname, "../../.env");
 
 async function fetchJson(url, options = {}, timeoutMs = config.queryTimeoutMs) {
   const controller = new AbortController();
@@ -23,8 +30,23 @@ async function fetchJson(url, options = {}, timeoutMs = config.queryTimeoutMs) {
   return response.json();
 }
 
+/**
+ * Read the latest AZURE_ACCESS_TOKEN directly from .env on every call.
+ * This allows updating .env without restarting the server (handy for POC/dev).
+ * Falls back to process.env if .env cannot be read.
+ */
+function readTokenFromEnvFile() {
+  try {
+    const content = readFileSync(envFilePath, "utf8");
+    const match = content.match(/^AZURE_ACCESS_TOKEN\s*=\s*(.+)$/m);
+    if (match) return match[1].trim();
+  } catch { /* .env not found or unreadable — fall through */ }
+  return null;
+}
+
 function getAccessToken() {
-  const token = process.env.AZURE_ACCESS_TOKEN;
+  // Prefer fresh value from .env file, fall back to process.env
+  const token = readTokenFromEnvFile() || process.env.AZURE_ACCESS_TOKEN;
   if (!token) {
     throw new Error("AZURE_ACCESS_TOKEN is required for real Azure mode.");
   }
@@ -99,6 +121,28 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Normalize the App Insights ARM proxy response format (PascalCase) to the
+ * format expected by the rest of the codebase (camelCase).
+ *
+ * App Insights returns: { Tables: [{ Columns: [{ ColumnName, DataType }], Rows: [...] }] }
+ * We need:              { tables: [{ columns: [{ name, type }], rows: [...] }] }
+ */
+function normalizeAppInsightsResponse(raw) {
+  // If already in the expected format, return as-is (Log Analytics direct)
+  if (raw.tables) return raw;
+
+  const tables = (raw.Tables || []).map((t) => ({
+    name: t.TableName || t.name || "PrimaryResult",
+    columns: (t.Columns || t.columns || []).map((c) => ({
+      name: c.ColumnName || c.name,
+      type: c.ColumnType || c.DataType || c.type || "string",
+    })),
+    rows: t.Rows || t.rows || [],
+  }));
+  return { tables };
+}
+
 export function createRealClient() {
   return {
     async discoverResources() {
@@ -141,14 +185,17 @@ export function createRealClient() {
         };
       }
     },
-    async queryWorkspace({ workspaceId, kql }) {
+    async queryWorkspace({ resourceId, workspaceId, kql }) {
       const token = getAccessToken();
-      const customerId = await resolveWorkspaceCustomerId(workspaceId);
       const body = JSON.stringify({ query: kql });
+      // Query through the App Insights ARM proxy so the management.azure.com
+      // token works and classic table names (pageViews, requests, etc.) are used.
+      const queryResourceId = resourceId || workspaceId;
+      const url = `${armEndpoint}${queryResourceId}/api/query?api-version=2015-05-01`;
       let lastError = null;
       for (let attempt = 0; attempt < 2; attempt += 1) {
         try {
-          return await fetchJson(`${logAnalyticsEndpoint}/v1/workspaces/${customerId}/query`, {
+          const raw = await fetchJson(url, {
             method: "POST",
             headers: {
               Authorization: `Bearer ${token}`,
@@ -156,6 +203,7 @@ export function createRealClient() {
             },
             body,
           });
+          return normalizeAppInsightsResponse(raw);
         } catch (error) {
           lastError = error;
           const retryable = error.status === 429 || error.status === 503;

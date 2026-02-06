@@ -24,6 +24,7 @@ function toSingleValue(rows, key) {
 
 async function runQuery({
   tenantId,
+  resourceId,
   workspaceId,
   queryName,
   templateName,
@@ -50,6 +51,7 @@ async function runQuery({
   const start = Date.now();
   try {
     const result = await azureClient.queryWorkspace({
+      resourceId,
       workspaceId,
       kql,
       queryName,
@@ -92,6 +94,7 @@ function safeDivide(numerator, denominator) {
 
 export async function buildOverviewDashboard({
   tenantId,
+  resourceId,
   workspaceId,
   mapping,
   schemaProfile,
@@ -123,6 +126,7 @@ export async function buildOverviewDashboard({
   const uniqueVisitorsResult = hasPageTable
     ? await runQuery({
         tenantId,
+        resourceId,
         workspaceId,
         queryName: "uniqueVisitors",
         templateName: uniqueTemplate,
@@ -146,6 +150,7 @@ export async function buildOverviewDashboard({
   const sessionsResult = hasPageTable
     ? await runQuery({
         tenantId,
+        resourceId,
         workspaceId,
         queryName: "sessions",
         templateName: "sessions",
@@ -168,6 +173,7 @@ export async function buildOverviewDashboard({
   const topPagesResult = hasPageTable
     ? await runQuery({
         tenantId,
+        resourceId,
         workspaceId,
         queryName: "topPages",
         templateName: "top-pages",
@@ -190,6 +196,7 @@ export async function buildOverviewDashboard({
   const topNavResult = hasPageTable
     ? await runQuery({
         tenantId,
+        resourceId,
         workspaceId,
         queryName: "topNavigation",
         templateName: "top-navigation",
@@ -214,6 +221,7 @@ export async function buildOverviewDashboard({
   const browsersResult = hasPageTable
     ? await runQuery({
         tenantId,
+        resourceId,
         workspaceId,
         queryName: "techBrowser",
         templateName: "tech-browser",
@@ -229,6 +237,7 @@ export async function buildOverviewDashboard({
   const osResult = hasPageTable
     ? await runQuery({
         tenantId,
+        resourceId,
         workspaceId,
         queryName: "techOs",
         templateName: "tech-os",
@@ -244,6 +253,7 @@ export async function buildOverviewDashboard({
   const deviceResult = hasPageTable
     ? await runQuery({
         tenantId,
+        resourceId,
         workspaceId,
         queryName: "techDevice",
         templateName: "tech-device",
@@ -259,6 +269,7 @@ export async function buildOverviewDashboard({
   const performanceResult = hasRequests
     ? await runQuery({
         tenantId,
+        resourceId,
         workspaceId,
         queryName: "performance",
         templateName: "performance",
@@ -274,6 +285,7 @@ export async function buildOverviewDashboard({
   const slowEndpointsResult = hasRequests
     ? await runQuery({
         tenantId,
+        resourceId,
         workspaceId,
         queryName: "slowEndpoints",
         templateName: "slow-endpoints",
@@ -317,7 +329,7 @@ export async function buildOverviewDashboard({
     charts: {
       topPages: topPagesRows.map((row) => ({
         path: row.pagePath,
-        views: row.views,
+        views: row.viewCount ?? row.views,
         share: row.share,
       })),
       topNavigationPaths: topNavRows.map((row) => ({

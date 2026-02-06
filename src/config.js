@@ -8,7 +8,8 @@ if (sessionSecret === "dev-secret-change-me" && process.env.NODE_ENV !== "test")
 
 export const config = {
   port: Number(process.env.PORT || 3000),
-  azureMode: process.env.AZURE_MODE || "mock",
+  // Tests always run in mock mode to avoid hitting real Azure APIs
+  azureMode: process.env.NODE_ENV === "test" ? "mock" : (process.env.AZURE_MODE || "mock"),
   sessionSecret,
   cacheTtlMs: {
     today: 5 * 60 * 1000,

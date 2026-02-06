@@ -4,10 +4,10 @@ let events = union isfuzzy=true withsource=tableName pageViews, requests
 | where timestamp between (start..end);
 let pageViewsCount = toscalar(events | where tableName == "pageViews" | count);
 let requestsCount = toscalar(events | where tableName == "requests" | count);
-let userAuthCount = toscalar(events | where isnotempty(user_AuthenticatedId) | dcount(user_AuthenticatedId));
-let userAnonCount = toscalar(events | where isnotempty(user_Id) | dcount(user_Id));
-let sessionCount = toscalar(events | where isnotempty(session_Id) | dcount(session_Id));
-let requestSessionCount = toscalar(events | where tableName == "requests" and isnotempty(session_Id) | dcount(session_Id));
+let userAuthCount = toscalar(events | where isnotempty(user_AuthenticatedId) | summarize dcount(user_AuthenticatedId));
+let userAnonCount = toscalar(events | where isnotempty(user_Id) | summarize dcount(user_Id));
+let sessionCount = toscalar(events | where isnotempty(session_Id) | summarize dcount(session_Id));
+let requestSessionCount = toscalar(events | where tableName == "requests" and isnotempty(session_Id) | summarize dcount(session_Id));
 let browserCount = toscalar(events | where isnotempty(client_Browser) | count);
 let osCount = toscalar(events | where isnotempty(client_OS) | count);
 let deviceCount = toscalar(events | where isnotempty(client_Type) | count);

@@ -10,7 +10,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node src/server.js",
-    "test": "NODE_ENV=test node --test"
+    "test": "node --env-file=.env.test --test"
   },
   "repository": {
     "type": "git",
@@ -24,6 +24,7 @@
   },
   "homepage": "https://github.com/lionelgarnier/easy-analytics-for-azure#readme",
   "dependencies": {
+    "dotenv": "^17.2.4",
     "express": "^5.2.1",
     "express-session": "^1.19.0",
     "helmet": "^8.1.0"

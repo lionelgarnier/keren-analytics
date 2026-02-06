@@ -6,6 +6,12 @@ const resourceList = document.getElementById("resourceList");
 const dashboardPanel = document.getElementById("dashboardPanel");
 const readinessPanel = document.getElementById("readinessPanel");
 const rangeSelect = document.getElementById("rangeSelect");
+const selectedResourceBar = document.getElementById("selectedResourceBar");
+const selectedResourceName = document.getElementById("selectedResourceName");
+const changeResourceButton = document.getElementById("changeResourceButton");
+
+// Track discovered resources for re-display
+let lastDiscoveredResources = [];
 
 const kpiVisitors = document.getElementById("kpiVisitors");
 const kpiSessions = document.getElementById("kpiSessions");
@@ -34,6 +40,29 @@ rangeSelect.addEventListener("change", () => {
   loadDashboard(rangeSelect.value);
 });
 
+changeResourceButton.addEventListener("click", async () => {
+  // Clear selection on server
+  try {
+    await apiFetch("/azure/select/clear", { method: "POST" });
+  } catch { /* ignore */ }
+  // Hide dashboard, show resource picker
+  dashboardPanel.classList.add("hidden");
+  readinessPanel.classList.add("hidden");
+  selectedResourceBar.classList.add("hidden");
+  if (lastDiscoveredResources.length > 0) {
+    renderResources(lastDiscoveredResources);
+  } else {
+    // Re-discover
+    try {
+      const discovery = await apiFetch("/azure/discover");
+      lastDiscoveredResources = discovery.resources || [];
+      renderResources(lastDiscoveredResources);
+    } catch (error) {
+      setStatus(error.message || "Unable to load resources.", "error");
+    }
+  }
+});
+
 async function apiFetch(url, options = {}) {
   const response = await fetch(url, {
     credentials: "same-origin",
@@ -42,7 +71,12 @@ async function apiFetch(url, options = {}) {
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const error = new Error(data.error || "Request failed");
+    // Build a user-friendly error message with details
+    const parts = [data.message || data.error || "Request failed"];
+    if (data.azureError?.message) {
+      parts.push(data.azureError.message);
+    }
+    const error = new Error(parts.join(" — "));
     error.data = data;
     throw error;
   }
@@ -54,7 +88,13 @@ function setStatus(message, variant = "info") {
   statusPanel.className = `panel ${variant}`;
 }
 
+function showSelectedResource(name) {
+  selectedResourceName.textContent = name;
+  selectedResourceBar.classList.remove("hidden");
+}
+
 function renderResources(resources) {
+  lastDiscoveredResources = resources;
   resourceList.innerHTML = "";
   resources.forEach((resource) => {
     const card = document.createElement("div");
@@ -91,6 +131,7 @@ function renderResources(resources) {
         }),
       });
       resourcePanel.classList.add("hidden");
+      showSelectedResource(resource.appInsightsName);
       await loadDashboard(rangeSelect.value);
     });
     card.appendChild(button);
@@ -198,6 +239,7 @@ async function loadDashboard(range) {
     renderDashboard(data);
   } catch (error) {
     if (error.data && error.data.error === "RESOURCE_SELECTION_REQUIRED") {
+      selectedResourceBar.classList.add("hidden");
       renderResources(error.data.resources || []);
       return;
     }
@@ -218,9 +260,16 @@ async function init() {
     logoutButton.classList.remove("hidden");
 
     const discovery = await apiFetch("/azure/discover");
+    lastDiscoveredResources = discovery.resources || [];
     if (!discovery.autoSelected && discovery.resources?.length > 1) {
       renderResources(discovery.resources);
     } else {
+      // Show the auto-selected resource name
+      if (discovery.autoSelected && discovery.resources?.length === 1) {
+        showSelectedResource(discovery.resources[0].appInsightsName);
+      } else if (discovery.selectedResource) {
+        showSelectedResource(discovery.selectedResource);
+      }
       await loadDashboard(rangeSelect.value);
     }
   } catch (error) {
