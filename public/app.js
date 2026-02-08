@@ -11,8 +11,18 @@ const rangeSelect = document.getElementById("rangeSelect");
 const selectedResourceBar = document.getElementById("selectedResourceBar");
 const selectedResourceName = document.getElementById("selectedResourceName");
 const changeResourceButton = document.getElementById("changeResourceButton");
+const customRangeInputs = document.getElementById("customRangeInputs");
+const customStartInput = document.getElementById("customStart");
+const customEndInput = document.getElementById("customEnd");
+const customRangeApply = document.getElementById("customRangeApply");
+const compareToggle = document.getElementById("compareToggle");
+const endpointModal = document.getElementById("endpointModal");
+const endpointModalClose = document.getElementById("endpointModalClose");
+const endpointModalTitle = document.getElementById("endpointModalTitle");
 
 let lastDiscoveredResources = [];
+let lastDashboardData = null;
+let comparisonData = null;
 
 /* ========== Chart instances (for cleanup) ========== */
 const charts = {};
@@ -41,7 +51,49 @@ logoutButton.addEventListener("click", async () => {
 });
 
 rangeSelect.addEventListener("change", () => {
-  loadDashboard(rangeSelect.value);
+  if (rangeSelect.value === "custom") {
+    customRangeInputs.classList.remove("hidden");
+    // Pre-fill with last 7 days
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    customEndInput.value = now.toISOString().split("T")[0];
+    customStartInput.value = weekAgo.toISOString().split("T")[0];
+  } else {
+    customRangeInputs.classList.add("hidden");
+    loadDashboard(rangeSelect.value);
+  }
+});
+
+customRangeApply.addEventListener("click", () => {
+  const start = customStartInput.value;
+  const end = customEndInput.value;
+  if (!start || !end) return;
+  if (new Date(start) >= new Date(end)) {
+    setStatus("Start date must be before end date.", "error");
+    return;
+  }
+  loadDashboard("custom", start, end);
+});
+
+compareToggle.addEventListener("change", () => {
+  const range = rangeSelect.value;
+  if (range === "custom") {
+    const start = customStartInput.value;
+    const end = customEndInput.value;
+    if (start && end) loadDashboard("custom", start, end);
+  } else {
+    loadDashboard(range);
+  }
+});
+
+endpointModalClose.addEventListener("click", () => {
+  endpointModal.classList.add("hidden");
+});
+
+endpointModal.addEventListener("click", (e) => {
+  if (e.target === endpointModal) {
+    endpointModal.classList.add("hidden");
+  }
 });
 
 changeResourceButton.addEventListener("click", async () => {
@@ -435,8 +487,84 @@ function renderBrowserTimings(data) {
   });
 }
 
+/* ========== Pagination state ========== */
+const PAGE_SIZE = 10;
+const paginationState = {};
+
+function renderPagination(paginationId, totalRows, currentPage, onPageChange) {
+  const el = document.getElementById(paginationId);
+  if (!el) return;
+  const totalPages = Math.ceil(totalRows / PAGE_SIZE);
+  if (totalPages <= 1) {
+    el.classList.add("hidden");
+    return;
+  }
+  el.classList.remove("hidden");
+  el.innerHTML = "";
+
+  const prevBtn = document.createElement("button");
+  prevBtn.textContent = "Prev";
+  prevBtn.disabled = currentPage <= 1;
+  prevBtn.addEventListener("click", () => onPageChange(currentPage - 1));
+  el.appendChild(prevBtn);
+
+  const maxVisible = 5;
+  let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+  let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+  if (endPage - startPage < maxVisible - 1) {
+    startPage = Math.max(1, endPage - maxVisible + 1);
+  }
+
+  if (startPage > 1) {
+    const first = document.createElement("button");
+    first.textContent = "1";
+    first.addEventListener("click", () => onPageChange(1));
+    el.appendChild(first);
+    if (startPage > 2) {
+      const dots = document.createElement("span");
+      dots.textContent = "...";
+      dots.className = "page-info";
+      el.appendChild(dots);
+    }
+  }
+
+  for (let i = startPage; i <= endPage; i++) {
+    const btn = document.createElement("button");
+    btn.textContent = String(i);
+    if (i === currentPage) btn.classList.add("active");
+    btn.addEventListener("click", () => onPageChange(i));
+    el.appendChild(btn);
+  }
+
+  if (endPage < totalPages) {
+    if (endPage < totalPages - 1) {
+      const dots = document.createElement("span");
+      dots.textContent = "...";
+      dots.className = "page-info";
+      el.appendChild(dots);
+    }
+    const last = document.createElement("button");
+    last.textContent = String(totalPages);
+    last.addEventListener("click", () => onPageChange(totalPages));
+    el.appendChild(last);
+  }
+
+  const nextBtn = document.createElement("button");
+  nextBtn.textContent = "Next";
+  nextBtn.disabled = currentPage >= totalPages;
+  nextBtn.addEventListener("click", () => onPageChange(currentPage + 1));
+  el.appendChild(nextBtn);
+
+  const info = document.createElement("span");
+  info.className = "page-info";
+  const fromRow = (currentPage - 1) * PAGE_SIZE + 1;
+  const toRow = Math.min(currentPage * PAGE_SIZE, totalRows);
+  info.textContent = `${fromRow}-${toRow} of ${totalRows}`;
+  el.appendChild(info);
+}
+
 /* ========== Render: Tables ========== */
-function renderTableRows(tbodyId, emptyId, countId, rows, renderFn) {
+function renderTableRows(tbodyId, emptyId, countId, rows, renderFn, paginationId) {
   const tbody = document.getElementById(tbodyId);
   const empty = document.getElementById(emptyId);
   const count = countId ? document.getElementById(countId) : null;
@@ -445,6 +573,7 @@ function renderTableRows(tbodyId, emptyId, countId, rows, renderFn) {
   if (!rows || rows.length === 0) {
     tbody.parentElement.classList.add("hidden");
     empty?.classList.remove("hidden");
+    if (paginationId) document.getElementById(paginationId)?.classList.add("hidden");
     return;
   }
 
@@ -452,11 +581,31 @@ function renderTableRows(tbodyId, emptyId, countId, rows, renderFn) {
   empty?.classList.add("hidden");
   if (count) count.textContent = `${rows.length} items`;
 
-  rows.forEach((row) => {
-    const tr = document.createElement("tr");
-    renderFn(tr, row);
-    tbody.appendChild(tr);
-  });
+  // If paginated, show only the current page
+  if (paginationId && rows.length > PAGE_SIZE) {
+    if (!paginationState[paginationId]) paginationState[paginationId] = 1;
+    const page = paginationState[paginationId];
+    const start = (page - 1) * PAGE_SIZE;
+    const pageRows = rows.slice(start, start + PAGE_SIZE);
+
+    pageRows.forEach((row) => {
+      const tr = document.createElement("tr");
+      renderFn(tr, row);
+      tbody.appendChild(tr);
+    });
+
+    renderPagination(paginationId, rows.length, page, (newPage) => {
+      paginationState[paginationId] = newPage;
+      renderTableRows(tbodyId, emptyId, countId, rows, renderFn, paginationId);
+    });
+  } else {
+    rows.forEach((row) => {
+      const tr = document.createElement("tr");
+      renderFn(tr, row);
+      tbody.appendChild(tr);
+    });
+    if (paginationId) document.getElementById(paginationId)?.classList.add("hidden");
+  }
 }
 
 function td(text, className) {
@@ -517,10 +666,159 @@ function renderReadiness(readiness) {
   readinessPanel.classList.remove("hidden");
 }
 
+/* ========== KPI comparison helpers ========== */
+function computeDelta(current, previous) {
+  if (previous == null || previous === 0) return null;
+  return (current - previous) / previous;
+}
+
+function renderKpiDelta(parentId, delta, invertPositive) {
+  const parent = document.getElementById(parentId)?.parentElement;
+  if (!parent) return;
+  const existing = parent.querySelector(".kpi-delta");
+  if (existing) existing.remove();
+  if (delta == null) return;
+
+  const span = document.createElement("span");
+  const pct = (delta * 100).toFixed(1);
+  const isPositive = delta > 0;
+  const isNeg = delta < 0;
+  const favorable = invertPositive ? isNeg : isPositive;
+  const unfavorable = invertPositive ? isPositive : isNeg;
+
+  span.className = `kpi-delta ${favorable ? "positive" : unfavorable ? "negative" : "neutral"}`;
+  span.textContent = `${isPositive ? "+" : ""}${pct}% vs prev`;
+  parent.appendChild(span);
+}
+
+function clearKpiDeltas() {
+  document.querySelectorAll(".kpi-delta").forEach((el) => el.remove());
+}
+
+/* ========== Endpoint drill-down ========== */
+function openEndpointDrillDown(endpointPath) {
+  endpointModalTitle.textContent = endpointPath;
+
+  const range = rangeSelect.value;
+  let url = `/dashboard/endpoint-detail?path=${encodeURIComponent(endpointPath)}&range=${range}`;
+  if (range === "custom") {
+    url += `&start=${customStartInput.value}&end=${customEndInput.value}`;
+  }
+
+  apiFetch(url).then((data) => {
+    const kpisEl = document.getElementById("endpointKpis");
+    kpisEl.innerHTML = "";
+    const kpis = [
+      { label: "Avg", value: fmtMs(data.avgDuration) + " ms" },
+      { label: "P50", value: fmtMs(data.p50) + " ms" },
+      { label: "P95", value: fmtMs(data.p95) + " ms" },
+      { label: "P99", value: fmtMs(data.p99) + " ms" },
+      { label: "Calls", value: fmt(data.totalCount) },
+      { label: "Error Rate", value: fmtPct(data.errorRate) },
+    ];
+    kpis.forEach((kpi) => {
+      const card = document.createElement("div");
+      card.className = "endpoint-kpi-card";
+      card.innerHTML = `<div class="label">${kpi.label}</div><div class="value">${kpi.value}</div>`;
+      kpisEl.appendChild(card);
+    });
+
+    // Trend chart
+    destroyChart("endpointTrend");
+    const trendPoints = data.trend || [];
+    if (trendPoints.length > 0) {
+      const ctx = document.getElementById("endpointTrendChart").getContext("2d");
+      charts.endpointTrend = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: trendPoints.map((p) => fmtDate(p.period)),
+          datasets: [
+            {
+              label: "Avg Duration (ms)",
+              data: trendPoints.map((p) => p.avgDuration),
+              borderColor: "#3b82f6",
+              backgroundColor: "rgba(59, 130, 246, 0.08)",
+              fill: true,
+              tension: 0.3,
+              borderWidth: 2,
+              pointRadius: trendPoints.length > 14 ? 0 : 3,
+            },
+            {
+              label: "P95 (ms)",
+              data: trendPoints.map((p) => p.p95),
+              borderColor: "#f59e0b",
+              borderDash: [4, 4],
+              tension: 0.3,
+              borderWidth: 2,
+              pointRadius: 0,
+              fill: false,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: "index", intersect: false },
+          plugins: { legend: { position: "top", align: "end" } },
+          scales: {
+            x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkipPadding: 20 } },
+            y: { beginAtZero: true, grid: { color: "#f1f5f9" }, ticks: { callback: (v) => v + " ms" } },
+          },
+        },
+      });
+    }
+
+    // Error chart
+    destroyChart("endpointError");
+    if (trendPoints.length > 0 && trendPoints.some((p) => p.errorRate > 0)) {
+      const ctx2 = document.getElementById("endpointErrorChart").getContext("2d");
+      charts.endpointError = new Chart(ctx2, {
+        type: "bar",
+        data: {
+          labels: trendPoints.map((p) => fmtDate(p.period)),
+          datasets: [
+            {
+              label: "Error Rate",
+              data: trendPoints.map((p) => (p.errorRate || 0) * 100),
+              backgroundColor: "rgba(239, 68, 68, 0.6)",
+              borderRadius: 3,
+            },
+            {
+              label: "Calls",
+              data: trendPoints.map((p) => p.count),
+              type: "line",
+              borderColor: "#64748b",
+              borderWidth: 1.5,
+              pointRadius: 0,
+              yAxisID: "y1",
+              tension: 0.3,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { position: "top", align: "end" } },
+          scales: {
+            x: { grid: { display: false } },
+            y: { beginAtZero: true, grid: { color: "#f1f5f9" }, ticks: { callback: (v) => v + "%" }, title: { display: true, text: "Error %" } },
+            y1: { beginAtZero: true, position: "right", grid: { display: false }, title: { display: true, text: "Calls" } },
+          },
+        },
+      });
+    }
+
+    endpointModal.classList.remove("hidden");
+  }).catch((err) => {
+    setStatus(`Drill-down failed: ${err.message}`, "error");
+  });
+}
+
 /* ========== Main render ========== */
 function renderDashboard(data) {
   const dashboard = data.dashboard;
   const readiness = data.readiness;
+  lastDashboardData = data;
 
   // KPIs
   document.getElementById("kpiVisitors").textContent = fmt(dashboard.kpis.uniqueVisitors);
@@ -529,15 +827,27 @@ function renderDashboard(data) {
   document.getElementById("kpiP95").textContent = fmtMs(dashboard.kpis.p95ResponseTimeMs);
   document.getElementById("kpiErrors").textContent = fmtPct(dashboard.kpis.errorRate);
 
+  // Comparison deltas
+  clearKpiDeltas();
+  if (comparisonData) {
+    const prev = comparisonData.dashboard.kpis;
+    renderKpiDelta("kpiVisitors", computeDelta(dashboard.kpis.uniqueVisitors, prev.uniqueVisitors));
+    renderKpiDelta("kpiSessions", computeDelta(dashboard.kpis.sessions, prev.sessions));
+    renderKpiDelta("kpiAvg", computeDelta(dashboard.kpis.avgResponseTimeMs, prev.avgResponseTimeMs), true);
+    renderKpiDelta("kpiP95", computeDelta(dashboard.kpis.p95ResponseTimeMs, prev.p95ResponseTimeMs), true);
+    renderKpiDelta("kpiErrors", computeDelta(dashboard.kpis.errorRate, prev.errorRate), true);
+  }
+
   // Daily trend
   renderDailyTrend(dashboard.charts.dailyTrend);
 
-  // Top Pages table
+  // Top Pages table (paginated)
+  paginationState["topPagesPagination"] = 1;
   renderTableRows("topPagesBody", "topPagesEmpty", "topPagesCount", dashboard.charts.topPages, (tr, row) => {
     tr.appendChild(td(row.path));
     tr.appendChild(td(fmt(row.views), "num"));
     tr.appendChild(td(fmtPct(row.share), "num"));
-  });
+  }, "topPagesPagination");
 
   // Geo distribution
   renderGeoChart(dashboard.charts.geoDistribution);
@@ -550,22 +860,26 @@ function renderDashboard(data) {
   // Browser timings
   renderBrowserTimings(dashboard.charts.browserTimings);
 
-  // Slow endpoints table
+  // Slow endpoints table (paginated + clickable drill-down)
+  paginationState["slowEndpointsPagination"] = 1;
   renderTableRows("slowEndpointsBody", "slowEndpointsEmpty", "slowEndpointsCount", dashboard.tables.slowEndpoints, (tr, row) => {
+    tr.classList.add("clickable");
+    tr.addEventListener("click", () => openEndpointDrillDown(row.path));
     tr.appendChild(td(row.path));
     tr.appendChild(td(fmtMs(row.p50), "num"));
     tr.appendChild(td(fmtMs(row.p95), "num"));
     tr.appendChild(td(fmtMs(row.p99), "num"));
     tr.appendChild(td(fmt(row.count), "num"));
     tr.appendChild(td(fmtPct(row.errorRate), "num"));
-  });
+  }, "slowEndpointsPagination");
 
-  // Navigation paths table
+  // Navigation paths table (paginated)
+  paginationState["topNavPagination"] = 1;
   renderTableRows("topNavBody", "topNavEmpty", null, dashboard.charts.topNavigationPaths, (tr, row) => {
     tr.appendChild(td(row.from));
     tr.appendChild(td(row.to));
     tr.appendChild(td(fmt(row.count), "num"));
-  });
+  }, "topNavPagination");
 
   // Readiness
   renderReadiness(readiness);
@@ -576,10 +890,45 @@ function renderDashboard(data) {
 }
 
 /* ========== Dashboard loading ========== */
-async function loadDashboard(range) {
+function buildDashboardUrl(range, start, end) {
+  if (range === "custom" && start && end) {
+    return `/dashboard/overview?range=custom&start=${start}&end=${end}`;
+  }
+  return `/dashboard/overview?range=${range}`;
+}
+
+function buildComparisonUrl(range, start, end) {
+  // Compute previous period of the same length
+  if (range === "custom" && start && end) {
+    const s = new Date(start);
+    const e = new Date(end);
+    const durationMs = e.getTime() - s.getTime();
+    const prevEnd = new Date(s.getTime());
+    const prevStart = new Date(s.getTime() - durationMs);
+    return `/dashboard/overview?range=custom&start=${prevStart.toISOString().split("T")[0]}&end=${prevEnd.toISOString().split("T")[0]}`;
+  }
+  const rangeMap = { today: "yesterday", "7d": "prev7d", "30d": "prev30d" };
+  return `/dashboard/overview?range=${rangeMap[range] || "prev7d"}`;
+}
+
+async function loadDashboard(range, start, end) {
   setStatus("Loading dashboard...");
+  comparisonData = null;
   try {
-    const data = await apiFetch(`/dashboard/overview?range=${range}`);
+    const url = buildDashboardUrl(range, start, end);
+    const data = await apiFetch(url);
+
+    // Load comparison data if toggle is checked
+    if (compareToggle.checked) {
+      try {
+        const compUrl = buildComparisonUrl(range, start, end);
+        comparisonData = await apiFetch(compUrl);
+      } catch {
+        // Comparison is best-effort
+        comparisonData = null;
+      }
+    }
+
     renderDashboard(data);
   } catch (error) {
     if (error.data && error.data.error === "RESOURCE_SELECTION_REQUIRED") {

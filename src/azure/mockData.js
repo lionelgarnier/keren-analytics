@@ -179,6 +179,35 @@ const baseline = {
   ],
 };
 
+/* ========== Endpoint detail generator ========== */
+
+function generateEndpointDetail(numPoints, baseAvg, baseP95) {
+  const points = [];
+  const now = new Date();
+  for (let i = numPoints - 1; i >= 0; i--) {
+    const d = new Date(now);
+    if (numPoints <= 24) {
+      d.setUTCHours(d.getUTCHours() - i, 0, 0, 0);
+    } else {
+      d.setUTCDate(d.getUTCDate() - i);
+      d.setUTCHours(0, 0, 0, 0);
+    }
+    const variation = ((i * 7 + 3) % 11) - 5;
+    const avgDuration = Math.max(10, baseAvg + variation * 10);
+    const p95 = Math.max(avgDuration * 1.5, baseP95 + variation * 20);
+    points.push({
+      period: d.toISOString(),
+      avgDuration: Math.round(avgDuration),
+      p50: Math.round(avgDuration * 0.8),
+      p95: Math.round(p95),
+      p99: Math.round(p95 * 1.5),
+      count: Math.max(5, 30 + ((i * 3) % 15) - 7),
+      errorRate: Math.max(0, (0.02 + ((i * 5) % 7) * 0.005 - 0.01)),
+    });
+  }
+  return points;
+}
+
 /* ========== Public API ========== */
 
 /**
@@ -234,6 +263,12 @@ export function getMockRows(queryName, timeRangeKey) {
   }
   if (queryName === "browserTimings") {
     return baseline.browserTimings.map((r) => ({ ...r, sampleCount: scale(r.sampleCount, rk) }));
+  }
+
+  // Endpoint detail
+  if (queryName === "endpointDetail") {
+    const numPoints = rk === "today" ? 24 : rk === "30d" ? 30 : 7;
+    return generateEndpointDetail(numPoints, 280, 800);
   }
 
   // Readiness, schema, performance — range-independent

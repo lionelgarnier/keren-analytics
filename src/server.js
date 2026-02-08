@@ -469,14 +469,39 @@ app.get("/readiness", ensureAuth, async (req, res) => {
 
 app.get("/dashboard/overview", ensureAuth, async (req, res) => {
   const requestedRange = req.query.range || "7d";
-  const rangeKey = ["today", "7d", "30d"].includes(requestedRange) ? requestedRange : "7d";
+  const validRanges = ["today", "yesterday", "7d", "prev7d", "30d", "prev30d", "custom"];
+  const rangeKey = validRanges.includes(requestedRange) ? requestedRange : "7d";
+  const customStart = req.query.start || null;
+  const customEnd = req.query.end || null;
+
+  // Validate custom dates
+  if (rangeKey === "custom") {
+    if (!customStart || !customEnd) {
+      return res.status(400).json({ error: "INVALID_RANGE", message: "Custom range requires start and end parameters." });
+    }
+    if (isNaN(Date.parse(customStart)) || isNaN(Date.parse(customEnd))) {
+      return res.status(400).json({ error: "INVALID_RANGE", message: "Invalid date format." });
+    }
+    if (new Date(customStart) >= new Date(customEnd)) {
+      return res.status(400).json({ error: "INVALID_RANGE", message: "Start date must be before end date." });
+    }
+    // Limit range to 90 days
+    const diffDays = (new Date(customEnd) - new Date(customStart)) / (1000 * 60 * 60 * 24);
+    if (diffDays > 90) {
+      return res.status(400).json({ error: "INVALID_RANGE", message: "Custom range cannot exceed 90 days." });
+    }
+  }
+
   const tenantId = req.session.tenantId;
+  const ttlKey = ["today", "yesterday"].includes(rangeKey) ? "today" : "7d";
   try {
     const result = await runOverviewPipeline({
       tenantId,
       rangeKey,
       azureClient,
-      cacheTtlMs: config.cacheTtlMs[rangeKey] || config.cacheTtlMs["7d"],
+      cacheTtlMs: config.cacheTtlMs[ttlKey] || config.cacheTtlMs["7d"],
+      customStart,
+      customEnd,
     });
 
     if (result.requiresSelection) {
@@ -505,6 +530,115 @@ app.get("/dashboard/overview", ensureAuth, async (req, res) => {
       message: error.message,
       azureError,
     });
+  }
+});
+
+app.get("/dashboard/endpoint-detail", ensureAuth, async (req, res) => {
+  const tenantId = req.session.tenantId;
+  const tenant = getTenant(tenantId);
+  const endpointPath = req.query.path;
+  if (!endpointPath) {
+    return res.status(400).json({ error: "MISSING_PATH", message: "Endpoint path is required." });
+  }
+  if (!tenant.selectedResource) {
+    return res.status(409).json({ error: "RESOURCE_NOT_SELECTED" });
+  }
+
+  const requestedRange = req.query.range || "7d";
+  const validRanges = ["today", "7d", "30d", "custom"];
+  const rangeKey = validRanges.includes(requestedRange) ? requestedRange : "7d";
+  const customStart = req.query.start || null;
+  const customEnd = req.query.end || null;
+
+  try {
+    const { resolveTimeRange, toKqlDatetime } = await import("./core/timeRange.js");
+    const { loadKqlTemplate, renderTemplate } = await import("./core/kql.js");
+    const { buildCacheKey, cacheStore } = await import("./core/cache.js");
+
+    const timeRange = resolveTimeRange(rangeKey, customStart, customEnd);
+    const binSize = rangeKey === "today" ? "1h" : "1d";
+    const timeParams = {
+      timeStart: toKqlDatetime(timeRange.start),
+      timeEnd: toKqlDatetime(timeRange.end),
+    };
+
+    const cacheKey = buildCacheKey({
+      tenantId,
+      workspaceId: tenant.selectedResource.workspaceId,
+      queryName: `endpointDetail:${endpointPath}`,
+      timeRangeKey: rangeKey,
+      mappingVersion: tenant.mapping?.version || "1",
+    });
+    const cached = cacheStore.get(cacheKey);
+    if (cached) return res.json(cached);
+
+    const template = loadKqlTemplate("endpoint-detail");
+    const kql = renderTemplate(template, {
+      ...timeParams,
+      endpointPath,
+      binSize,
+    }, {
+      endpointPath: "any",
+      binSize: ["1h", "1d"],
+    });
+
+    const result = await azureClient.queryWorkspace({
+      resourceId: tenant.selectedResource.resourceId,
+      workspaceId: tenant.selectedResource.workspaceId,
+      kql,
+      queryName: "endpointDetail",
+      timeRangeKey: rangeKey,
+    });
+
+    // Parse result rows
+    const rows = [];
+    if (result?.tables?.[0]) {
+      const cols = result.tables[0].columns.map((c) => c.name);
+      for (const row of result.tables[0].rows) {
+        const obj = {};
+        cols.forEach((name, i) => { obj[name] = row[i]; });
+        rows.push(obj);
+      }
+    }
+
+    // Build response
+    const trend = rows.map((r) => ({
+      period: r.period,
+      avgDuration: Number(r.avgDuration) || 0,
+      p50: Number(r.p50) || 0,
+      p95: Number(r.p95) || 0,
+      p99: Number(r.p99) || 0,
+      count: Number(r.count) || 0,
+      errorRate: Number(r.errorRate) || 0,
+    }));
+
+    const totalCount = trend.reduce((s, r) => s + r.count, 0);
+    const weightedAvg = totalCount > 0
+      ? trend.reduce((s, r) => s + r.avgDuration * r.count, 0) / totalCount
+      : 0;
+    const allP50 = trend.map((r) => r.p50).filter((v) => v > 0);
+    const allP95 = trend.map((r) => r.p95).filter((v) => v > 0);
+    const allP99 = trend.map((r) => r.p99).filter((v) => v > 0);
+    const median = (arr) => arr.length > 0 ? arr.sort((a, b) => a - b)[Math.floor(arr.length / 2)] : 0;
+    const totalErrors = trend.reduce((s, r) => s + r.errorRate * r.count, 0);
+
+    const detail = {
+      path: endpointPath,
+      avgDuration: Math.round(weightedAvg),
+      p50: median(allP50),
+      p95: allP95.length > 0 ? Math.max(...allP95) : 0,
+      p99: allP99.length > 0 ? Math.max(...allP99) : 0,
+      totalCount,
+      errorRate: totalCount > 0 ? totalErrors / totalCount : 0,
+      trend,
+    };
+
+    const ttlKey = ["today"].includes(rangeKey) ? "today" : "7d";
+    cacheStore.set(cacheKey, detail, config.cacheTtlMs[ttlKey] || config.cacheTtlMs["7d"]);
+    res.json(detail);
+  } catch (error) {
+    console.error("Endpoint detail error:", error.message);
+    res.status(500).json({ error: "ENDPOINT_DETAIL_ERROR", message: error.message });
   }
 });
 
