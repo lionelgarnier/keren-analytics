@@ -412,8 +412,12 @@ function renderDoughnut(canvasId, emptyId, chartKey, items, labelKey, valueKey) 
 function renderGeoChart(data) {
   const items = data || [];
   const hasData = items.length > 0;
-  showOrHide("geoChart", "geoEmpty", hasData);
-  if (!hasData) return;
+  const emptyEl = document.getElementById("geoEmpty");
+  if (!hasData) {
+    emptyEl?.classList.remove("hidden");
+    return;
+  }
+  emptyEl?.classList.add("hidden");
 
   destroyChart("geo");
   const ctx = document.getElementById("geoChart").getContext("2d");
@@ -509,6 +513,143 @@ function renderBrowserTimings(data) {
       },
     },
   });
+}
+
+/* ========== View Toggle logic ========== */
+document.querySelectorAll(".view-toggle").forEach((toggle) => {
+  const group = toggle.dataset.toggleGroup;
+  toggle.querySelectorAll(".view-toggle-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      // Update buttons
+      toggle.querySelectorAll(".view-toggle-btn").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      // Update views
+      const panel = toggle.closest(".panel");
+      panel.querySelectorAll(".toggle-view").forEach((v) => v.classList.remove("active"));
+      const viewId = btn.dataset.view;
+      // Find the matching view by id convention: {group}{View}View
+      const targetMap = {
+        "geo-map": "geoMapView",
+        "geo-chart": "geoChartView",
+        "flow-sankey": "flowSankeyView",
+        "flow-table": "flowTableView",
+      };
+      const targetId = targetMap[`${group}-${viewId}`];
+      if (targetId) {
+        document.getElementById(targetId)?.classList.add("active");
+      }
+      // Resize map if switching to map view
+      if (group === "geo" && viewId === "map" && geoMapInstance) {
+        setTimeout(() => geoMapInstance.invalidateSize(), 100);
+      }
+    });
+  });
+});
+
+/* ========== Leaflet World Map ========== */
+let geoMapInstance = null;
+let geoMapMarkers = [];
+
+const COUNTRY_COORDS = {
+  "United States": [39.8, -98.5],
+  "France": [46.6, 2.3],
+  "Germany": [51.2, 10.4],
+  "United Kingdom": [55.4, -3.4],
+  "Canada": [56.1, -106.3],
+  "Netherlands": [52.1, 5.3],
+  "Japan": [36.2, 138.3],
+  "Australia": [-25.3, 133.8],
+  "Brazil": [-14.2, -51.9],
+  "India": [20.6, 78.9],
+  "China": [35.9, 104.2],
+  "South Korea": [35.9, 127.8],
+  "Mexico": [23.6, -102.6],
+  "Spain": [40.5, -3.7],
+  "Italy": [41.9, 12.6],
+  "Sweden": [60.1, 18.6],
+  "Switzerland": [46.8, 8.2],
+  "Norway": [60.5, 8.5],
+  "Poland": [51.9, 19.1],
+  "Belgium": [50.5, 4.5],
+  "Austria": [47.5, 14.6],
+  "Ireland": [53.1, -7.7],
+  "Denmark": [56.3, 9.5],
+  "Finland": [61.9, 25.7],
+  "Portugal": [39.4, -8.2],
+  "Czech Republic": [49.8, 15.5],
+  "Russia": [61.5, 105.3],
+  "Turkey": [38.9, 35.2],
+  "Argentina": [-38.4, -63.6],
+  "Colombia": [4.6, -74.3],
+  "South Africa": [-30.6, 22.9],
+  "Nigeria": [9.1, 8.7],
+  "Egypt": [26.8, 30.8],
+  "Israel": [31.0, 34.9],
+  "UAE": [23.4, 53.8],
+  "Singapore": [1.4, 103.8],
+  "Indonesia": [-0.8, 113.9],
+  "Thailand": [15.9, 100.9],
+  "Vietnam": [14.1, 108.3],
+  "Philippines": [12.9, 121.8],
+  "New Zealand": [-40.9, 174.9],
+  "Chile": [-35.7, -71.5],
+};
+
+function renderGeoMap(data) {
+  const items = data || [];
+  const container = document.getElementById("geoMap");
+  if (!items.length) return;
+
+  // Destroy previous map
+  if (geoMapInstance) {
+    geoMapInstance.remove();
+    geoMapInstance = null;
+  }
+
+  geoMapInstance = L.map(container, {
+    scrollWheelZoom: false,
+    zoomControl: true,
+    attributionControl: true,
+  }).setView([25, 10], 2);
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: '&copy; <a href="https://openstreetmap.org/copyright">OSM</a>',
+    maxZoom: 8,
+    minZoom: 1,
+  }).addTo(geoMapInstance);
+
+  // Find max for scaling
+  const maxCount = Math.max(...items.map((i) => i.count));
+  geoMapMarkers = [];
+
+  items.forEach((item) => {
+    const coords = COUNTRY_COORDS[item.country];
+    if (!coords) return;
+
+    const radius = Math.max(5, Math.sqrt(item.count / maxCount) * 35);
+    const pct = maxCount > 0 ? ((item.count / maxCount) * 100).toFixed(0) : 0;
+
+    const circle = L.circleMarker(coords, {
+      radius,
+      fillColor: "#3b82f6",
+      fillOpacity: 0.55,
+      color: "#2563eb",
+      weight: 1.5,
+    }).addTo(geoMapInstance);
+
+    const popupHtml = `<div class="map-popup-name">${item.country}</div><div class="map-popup-count">${fmt(item.count)} visitors (${fmtPct(item.share)})</div><div class="map-popup-bar" style="width:${pct}%"></div>`;
+    circle.bindPopup(popupHtml, { className: "map-popup" });
+    circle.on("mouseover", function () { this.openPopup(); });
+    circle.on("mouseout", function () { this.closePopup(); });
+
+    geoMapMarkers.push(circle);
+  });
+
+  // Fit bounds to markers
+  if (geoMapMarkers.length > 0) {
+    const group = L.featureGroup(geoMapMarkers);
+    geoMapInstance.fitBounds(group.getBounds().pad(0.3));
+  }
 }
 
 /* ========== Render: Referrer sources ========== */
@@ -1099,8 +1240,9 @@ function renderDashboard(data) {
     tr.appendChild(td(fmtPct(row.share), "num"));
   });
 
-  // Geo distribution
+  // Geo distribution (map + chart)
   renderGeoChart(dashboard.charts.geoDistribution);
+  renderGeoMap(dashboard.charts.geoDistribution);
 
   // Doughnut charts
   renderDoughnut("browserChart", "browserEmpty", "browser", dashboard.charts.browsers, "name", "count");
@@ -1120,8 +1262,13 @@ function renderDashboard(data) {
     tr.appendChild(td(fmtPct(row.errorRate), "num"));
   });
 
-  // Sankey User Flow
+  // Sankey User Flow + table fallback
   renderSankeyFlow(dashboard.charts.userFlow);
+  renderTableRows("topNavBody", null, null, dashboard.charts.topNavigationPaths, (tr, row) => {
+    tr.appendChild(td(row.from));
+    tr.appendChild(td(row.to));
+    tr.appendChild(td(fmt(row.count), "num"));
+  });
 
   // Conversion Funnel
   renderFunnel(dashboard.charts.topNavigationPaths, dashboard.charts.topPages);
@@ -1201,6 +1348,7 @@ async function init() {
   // Init sortable tables
   initSortableTable("topPagesTable");
   initSortableTable("slowEndpointsTable");
+  initSortableTable("topNavTable");
 
   // Check for OAuth redirect errors
   if (checkAuthError()) {

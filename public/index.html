@@ -155,35 +155,46 @@
             </div>
           </div>
 
-          <!-- Top Pages + Geo side by side -->
-          <div class="grid-2">
-            <div class="panel">
-              <div class="panel-header">
-                <h3>Top Pages</h3>
-                <span id="topPagesCount" class="badge-count"></span>
-              </div>
-              <table class="data-table sortable" id="topPagesTable">
-                <thead>
-                  <tr>
-                    <th data-sort="string">Path</th>
-                    <th data-sort="number">Views</th>
-                    <th data-sort="number">Share</th>
-                  </tr>
-                </thead>
-                <tbody id="topPagesBody"></tbody>
-              </table>
-              <div id="topPagesEmpty" class="empty-state hidden">
-                <p>No page view data. Enable frontend tracking.</p>
+          <!-- Top Pages (full width) -->
+          <div class="panel">
+            <div class="panel-header">
+              <h3>Top Pages</h3>
+              <span id="topPagesCount" class="badge-count"></span>
+            </div>
+            <table class="data-table sortable" id="topPagesTable">
+              <thead>
+                <tr>
+                  <th data-sort="string">Path</th>
+                  <th data-sort="number">Views</th>
+                  <th data-sort="number">Share</th>
+                </tr>
+              </thead>
+              <tbody id="topPagesBody"></tbody>
+            </table>
+            <div id="topPagesEmpty" class="empty-state hidden">
+              <p>No page view data. Enable frontend tracking.</p>
+            </div>
+          </div>
+
+          <!-- Geo Distribution (map + chart toggle) -->
+          <div class="panel">
+            <div class="panel-header">
+              <h3>Geo Distribution</h3>
+              <div class="view-toggle" data-toggle-group="geo">
+                <button class="view-toggle-btn active" data-view="map">Map</button>
+                <button class="view-toggle-btn" data-view="chart">Chart</button>
               </div>
             </div>
-            <div class="panel">
-              <h3>Geo Distribution</h3>
+            <div id="geoMapView" class="toggle-view active">
+              <div id="geoMap" class="map-container"></div>
+            </div>
+            <div id="geoChartView" class="toggle-view">
               <div class="chart-container chart-medium">
                 <canvas id="geoChart"></canvas>
               </div>
-              <div id="geoEmpty" class="empty-state hidden">
-                <p>No geo data available.</p>
-              </div>
+            </div>
+            <div id="geoEmpty" class="empty-state hidden">
+              <p>No geo data available.</p>
             </div>
           </div>
 
@@ -207,13 +218,33 @@
             </div>
           </div>
 
-          <!-- User Flow (visual Sankey-style) -->
+          <!-- User Flow (sankey + table toggle) -->
           <div class="panel">
             <div class="panel-header">
               <h3>User Flow</h3>
-              <span id="flowCount" class="badge-count"></span>
+              <div class="panel-header-right">
+                <span id="flowCount" class="badge-count"></span>
+                <div class="view-toggle" data-toggle-group="flow">
+                  <button class="view-toggle-btn active" data-view="sankey">Flow</button>
+                  <button class="view-toggle-btn" data-view="table">Table</button>
+                </div>
+              </div>
             </div>
-            <div id="flowDiagram" class="flow-diagram"></div>
+            <div id="flowSankeyView" class="toggle-view active">
+              <div id="flowDiagram" class="flow-diagram"></div>
+            </div>
+            <div id="flowTableView" class="toggle-view">
+              <table class="data-table sortable" id="topNavTable">
+                <thead>
+                  <tr>
+                    <th data-sort="string">From</th>
+                    <th data-sort="string">To</th>
+                    <th data-sort="number">Transitions</th>
+                  </tr>
+                </thead>
+                <tbody id="topNavBody"></tbody>
+              </table>
+            </div>
             <div id="flowEmpty" class="empty-state hidden">
               <p>No navigation path data available.</p>
             </div>
@@ -394,6 +425,8 @@
       </section>
     </main>
 
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="/app.js"></script>
   </body>
