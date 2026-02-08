@@ -144,6 +144,11 @@
             </div>
           </div>
 
+          <!-- Smart Insights (auto-generated) -->
+          <div id="insightsPanel" class="insights-panel hidden">
+            <div id="insightsList" class="insights-list"></div>
+          </div>
+
           <!-- Traffic trend (full width) -->
           <div class="panel">
             <h3>Traffic Trend</h3>
@@ -195,6 +200,27 @@
             </div>
             <div id="geoEmpty" class="empty-state hidden">
               <p>No geo data available.</p>
+            </div>
+          </div>
+
+          <!-- Peak Hours + Content Performance -->
+          <div class="grid-2">
+            <div class="panel">
+              <h3>Peak Hours</h3>
+              <div id="peakHoursGrid" class="peak-hours-grid"></div>
+              <div id="peakHoursEmpty" class="empty-state hidden">
+                <p>No hourly data available.</p>
+              </div>
+            </div>
+            <div class="panel">
+              <div class="panel-header">
+                <h3>Content Performance</h3>
+                <span class="badge-count">conversion contribution</span>
+              </div>
+              <div id="contentScoring" class="content-scoring"></div>
+              <div id="contentScoringEmpty" class="empty-state hidden">
+                <p>No navigation data to compute content scores.</p>
+              </div>
             </div>
           </div>
 

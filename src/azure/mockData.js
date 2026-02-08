@@ -230,6 +230,35 @@ function generateUserFlow(rng) {
   return { nodes, links };
 }
 
+/* ========== Peak hours heatmap ========== */
+
+function generatePeakHours(rng) {
+  // 7 days x 24 hours grid of visitor counts
+  const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const grid = [];
+  for (let d = 0; d < 7; d++) {
+    const isWeekend = d >= 5;
+    for (let h = 0; h < 24; h++) {
+      const isNight = h < 6 || h > 22;
+      const isPeak = !isWeekend && ((h >= 9 && h <= 12) || (h >= 14 && h <= 17));
+      const isMorning = !isWeekend && h >= 7 && h <= 9;
+      const isEvening = h >= 18 && h <= 21;
+      let base = isNight ? 2 : isWeekend ? 8 : isPeak ? 28 : isMorning ? 15 : isEvening ? 12 : 8;
+      // Tuesday and Wednesday are slightly higher
+      if (d === 1 || d === 2) base = Math.round(base * 1.15);
+      // Friday afternoon dip
+      if (d === 4 && h >= 15) base = Math.round(base * 0.75);
+      grid.push({
+        day: days[d],
+        dayIndex: d,
+        hour: h,
+        count: vary(base, 20, rng),
+      });
+    }
+  }
+  return grid;
+}
+
 /* ========== URL parameter auto-detection ========== */
 
 function generateUrlParams(rng) {
@@ -440,6 +469,8 @@ function generateBaseline() {
       { source: "Email", count: vary(180, 20, rng) },
     ],
     userFlow: generateUserFlow(rng),
+    // Peak hours heatmap (day-of-week x hour)
+    peakHours: generatePeakHours(rng),
     // Auto-detected URL parameters with top values
     urlParams: generateUrlParams(rng),
     // Campaign (UTM) breakdown with metrics
@@ -506,6 +537,11 @@ export function getMockRows(queryName, timeRangeKey) {
   }
   if (queryName === "referrerSources") {
     return baseline.referrerSources.map((r) => ({ ...r, count: scale(r.count, rk) }));
+  }
+
+  // Peak hours heatmap
+  if (queryName === "peakHours") {
+    return baseline.peakHours.map((r) => ({ ...r, count: scale(r.count, rk) }));
   }
 
   // URL parameters — scale frequencies

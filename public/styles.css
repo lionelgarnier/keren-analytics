@@ -928,6 +928,193 @@ body {
   line-height: 1.4;
 }
 
+/* ========== Smart Insights ========== */
+.insights-panel {
+  background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin-top: 12px;
+}
+
+.insights-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.insight-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--surface);
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  flex: 1 1 280px;
+  min-width: 0;
+}
+
+.insight-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.insight-text {
+  line-height: 1.4;
+}
+
+.insight-text strong {
+  color: var(--accent);
+}
+
+.insight-text .insight-highlight {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.insight-text .insight-warning {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* ========== Peak Hours Heatmap ========== */
+.peak-hours-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 10px;
+}
+
+.peak-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.peak-day-label {
+  width: 30px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 10px;
+  text-align: right;
+  padding-right: 4px;
+  flex-shrink: 0;
+}
+
+.peak-cell {
+  flex: 1;
+  aspect-ratio: 1.8;
+  min-width: 0;
+  border-radius: 2px;
+  cursor: default;
+  transition: opacity 0.1s ease;
+  position: relative;
+}
+
+.peak-cell:hover {
+  opacity: 0.75;
+  outline: 1px solid var(--text-muted);
+}
+
+.peak-hour-labels {
+  display: flex;
+  gap: 2px;
+  margin-left: 34px;
+  margin-top: 2px;
+}
+
+.peak-hour-label {
+  flex: 1;
+  text-align: center;
+  font-size: 9px;
+  color: var(--text-muted);
+  min-width: 0;
+}
+
+.peak-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: flex-end;
+  margin-top: 8px;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.peak-legend-bar {
+  display: flex;
+  gap: 1px;
+}
+
+.peak-legend-cell {
+  width: 12px;
+  height: 10px;
+  border-radius: 1px;
+}
+
+/* ========== Content Performance ========== */
+.content-scoring {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.content-score-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.content-page {
+  min-width: 90px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.content-bar-bg {
+  flex: 1;
+  height: 24px;
+  background: var(--border-light);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.content-bar {
+  height: 100%;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  transition: width 0.5s ease;
+  min-width: fit-content;
+}
+
+.content-score-badge {
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 50px;
+  text-align: right;
+  color: var(--text-secondary);
+}
+
+.content-target {
+  font-size: 11px;
+  color: var(--text-muted);
+  min-width: 60px;
+}
+
 /* ========== View Toggle ========== */
 .view-toggle {
   display: flex;

@@ -652,6 +652,255 @@ function renderGeoMap(data) {
   }
 }
 
+/* ========== Render: Smart Insights ========== */
+function renderInsights(dashboard) {
+  const panel = document.getElementById("insightsPanel");
+  const list = document.getElementById("insightsList");
+  list.innerHTML = "";
+  const insights = [];
+
+  // Insight 1: Best converting campaign
+  const campaigns = dashboard.charts.campaignBreakdown || [];
+  if (campaigns.length > 0) {
+    const best = campaigns.reduce((a, b) => (a.convRate || 0) > (b.convRate || 0) ? a : b);
+    if (best.convRate > 0) {
+      insights.push({
+        icon: "\uD83C\uDFAF",
+        text: `Best converting campaign: <strong>${best.campaign}</strong> via ${best.source} at <span class="insight-highlight">${fmtPct(best.convRate)}</span> conversion rate`,
+      });
+    }
+  }
+
+  // Insight 2: Peak traffic time
+  const peakData = dashboard.charts.peakHours;
+  if (peakData && peakData.length > 0) {
+    const peak = peakData.reduce((a, b) => a.count > b.count ? a : b);
+    insights.push({
+      icon: "\u23F0",
+      text: `Peak traffic: <strong>${peak.day} ${peak.hour}:00-${peak.hour + 1}:00</strong> with ${fmt(peak.count)} visitors/period`,
+    });
+  }
+
+  // Insight 3: Top traffic source
+  const sources = dashboard.charts.referrerSources || [];
+  if (sources.length > 0) {
+    const total = sources.reduce((s, r) => s + r.count, 0);
+    const top = sources[0];
+    if (top && total > 0) {
+      insights.push({
+        icon: "\uD83D\uDD17",
+        text: `Top traffic source: <strong>${top.source}</strong> drives <span class="insight-highlight">${((top.count / total) * 100).toFixed(0)}%</span> of all traffic`,
+      });
+    }
+  }
+
+  // Insight 4: Error rate check
+  if (dashboard.kpis.errorRate > 0.03) {
+    insights.push({
+      icon: "\u26A0\uFE0F",
+      text: `Error rate at <span class="insight-warning">${fmtPct(dashboard.kpis.errorRate)}</span> — above 3% threshold. Check slow endpoints in the Technical tab.`,
+    });
+  } else if (dashboard.kpis.errorRate > 0) {
+    insights.push({
+      icon: "\u2705",
+      text: `Error rate is healthy at <span class="insight-highlight">${fmtPct(dashboard.kpis.errorRate)}</span>`,
+    });
+  }
+
+  // Insight 5: URL parameter coverage
+  const urlParams = dashboard.charts.urlParams;
+  if (urlParams) {
+    const pct = urlParams.totalUrlsScanned > 0 ? ((urlParams.urlsWithParams / urlParams.totalUrlsScanned) * 100).toFixed(0) : 0;
+    const utmCount = urlParams.discovered.filter((p) => p.isUtm).length;
+    insights.push({
+      icon: "\uD83D\uDD0D",
+      text: `<strong>${urlParams.discovered.length}</strong> URL parameters auto-detected (${utmCount} UTM). <strong>${pct}%</strong> of page views carry tracking params.`,
+    });
+  }
+
+  // Insight 6: Top page dominance
+  const topPages = dashboard.charts.topPages || [];
+  if (topPages.length >= 2) {
+    const topShare = topPages[0].share || 0;
+    if (topShare > 0.25) {
+      insights.push({
+        icon: "\uD83D\uDCCA",
+        text: `<strong>${topPages[0].path}</strong> captures <span class="insight-highlight">${fmtPct(topShare)}</span> of all page views — high homepage concentration`,
+      });
+    }
+  }
+
+  if (insights.length === 0) {
+    panel.classList.add("hidden");
+    return;
+  }
+
+  panel.classList.remove("hidden");
+  insights.forEach((insight) => {
+    const item = document.createElement("div");
+    item.className = "insight-item";
+    item.innerHTML = `<span class="insight-icon">${insight.icon}</span><span class="insight-text">${insight.text}</span>`;
+    list.appendChild(item);
+  });
+}
+
+/* ========== Render: Peak Hours Heatmap ========== */
+function renderPeakHours(data) {
+  const container = document.getElementById("peakHoursGrid");
+  const emptyEl = document.getElementById("peakHoursEmpty");
+  container.innerHTML = "";
+
+  if (!data || data.length === 0) {
+    container.classList.add("hidden");
+    emptyEl?.classList.remove("hidden");
+    return;
+  }
+  container.classList.remove("hidden");
+  emptyEl?.classList.add("hidden");
+
+  const maxCount = Math.max(...data.map((d) => d.count));
+  const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+  // Color scale: light blue to deep blue
+  function heatColor(count) {
+    const intensity = maxCount > 0 ? count / maxCount : 0;
+    if (intensity < 0.15) return "#f0f9ff";
+    if (intensity < 0.3) return "#bae6fd";
+    if (intensity < 0.5) return "#7dd3fc";
+    if (intensity < 0.7) return "#38bdf8";
+    if (intensity < 0.85) return "#0284c7";
+    return "#0c4a6e";
+  }
+
+  // Build grid
+  days.forEach((day, dayIdx) => {
+    const row = document.createElement("div");
+    row.className = "peak-row";
+
+    const label = document.createElement("span");
+    label.className = "peak-day-label";
+    label.textContent = day;
+    row.appendChild(label);
+
+    for (let h = 0; h < 24; h++) {
+      const cell = data.find((d) => d.dayIndex === dayIdx && d.hour === h);
+      const count = cell ? cell.count : 0;
+      const div = document.createElement("div");
+      div.className = "peak-cell";
+      div.style.background = heatColor(count);
+      div.title = `${day} ${h}:00 — ${fmt(count)} visitors`;
+      row.appendChild(div);
+    }
+    container.appendChild(row);
+  });
+
+  // Hour labels (every 3 hours)
+  const hourLabels = document.createElement("div");
+  hourLabels.className = "peak-hour-labels";
+  for (let h = 0; h < 24; h++) {
+    const lbl = document.createElement("span");
+    lbl.className = "peak-hour-label";
+    lbl.textContent = h % 3 === 0 ? `${h}h` : "";
+    hourLabels.appendChild(lbl);
+  }
+  container.appendChild(hourLabels);
+
+  // Legend
+  const legend = document.createElement("div");
+  legend.className = "peak-legend";
+  legend.innerHTML = '<span>Less</span><div class="peak-legend-bar"></div><span>More</span>';
+  const bar = legend.querySelector(".peak-legend-bar");
+  ["#f0f9ff", "#bae6fd", "#7dd3fc", "#38bdf8", "#0284c7", "#0c4a6e"].forEach((c) => {
+    const cell = document.createElement("div");
+    cell.className = "peak-legend-cell";
+    cell.style.background = c;
+    bar.appendChild(cell);
+  });
+  container.appendChild(legend);
+}
+
+/* ========== Render: Content Performance ========== */
+function renderContentScoring(navPaths, topPages) {
+  const container = document.getElementById("contentScoring");
+  const emptyEl = document.getElementById("contentScoringEmpty");
+  container.innerHTML = "";
+
+  if (!navPaths || navPaths.length === 0 || !topPages || topPages.length === 0) {
+    container.classList.add("hidden");
+    emptyEl?.classList.remove("hidden");
+    return;
+  }
+  container.classList.remove("hidden");
+  emptyEl?.classList.add("hidden");
+
+  // Score: for each page, how much does it contribute to funnel progression?
+  // "Contribution" = sum of transitions from this page to funnel pages (/pricing, /signup)
+  const funnelTargets = new Set(["/pricing", "/signup", "/checkout"]);
+  const pageScores = {};
+
+  navPaths.forEach((path) => {
+    if (funnelTargets.has(path.to) && !funnelTargets.has(path.from)) {
+      pageScores[path.from] = (pageScores[path.from] || 0) + path.count;
+    }
+  });
+
+  // Also count pages that are themselves funnel pages (self-contribution)
+  navPaths.forEach((path) => {
+    if (funnelTargets.has(path.from) && funnelTargets.has(path.to)) {
+      pageScores[path.from] = (pageScores[path.from] || 0) + path.count;
+    }
+  });
+
+  // Build scored list with target info
+  const scored = Object.entries(pageScores)
+    .map(([page, score]) => {
+      // Find which funnel page this content drives to most
+      const targets = navPaths
+        .filter((p) => p.from === page && funnelTargets.has(p.to))
+        .sort((a, b) => b.count - a.count);
+      const mainTarget = targets[0]?.to || "/pricing";
+      return { page, score, mainTarget };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 6);
+
+  if (scored.length === 0) {
+    container.classList.add("hidden");
+    emptyEl?.classList.remove("hidden");
+    return;
+  }
+
+  const maxScore = scored[0].score;
+  const colors = {
+    "/pricing": "#f97316",
+    "/signup": "#10b981",
+    "/checkout": "#8b5cf6",
+  };
+
+  scored.forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "content-score-row";
+
+    const pageName = document.createElement("span");
+    pageName.className = "content-page";
+    pageName.textContent = item.page;
+    pageName.title = item.page;
+    row.appendChild(pageName);
+
+    const barBg = document.createElement("div");
+    barBg.className = "content-bar-bg";
+    const bar = document.createElement("div");
+    bar.className = "content-bar";
+    bar.style.width = (maxScore > 0 ? (item.score / maxScore) * 100 : 0) + "%";
+    bar.style.background = colors[item.mainTarget] || "#3b82f6";
+    bar.textContent = `${fmt(item.score)} \u2192 ${item.mainTarget}`;
+    barBg.appendChild(bar);
+    row.appendChild(barBg);
+
+    container.appendChild(row);
+  });
+}
+
 /* ========== Active Filters ========== */
 let activeFilters = [];
 
@@ -1428,6 +1677,9 @@ function renderDashboard(data) {
   const btData = dashboard.charts.browserTimings;
   document.getElementById("kpiFrontendAvg").textContent = btData ? fmtMs(btData.avgTotal) : "-";
 
+  // Smart Insights (auto-generated from all data)
+  renderInsights(dashboard);
+
   // Daily trend
   renderDailyTrend(dashboard.charts.dailyTrend);
 
@@ -1467,6 +1719,12 @@ function renderDashboard(data) {
     tr.appendChild(td(row.to));
     tr.appendChild(td(fmt(row.count), "num"));
   });
+
+  // Peak Hours heatmap
+  renderPeakHours(dashboard.charts.peakHours);
+
+  // Content Performance scoring
+  renderContentScoring(dashboard.charts.topNavigationPaths, dashboard.charts.topPages);
 
   // Campaigns & URL Parameters
   renderCampaignTable(dashboard.charts.campaignBreakdown);
