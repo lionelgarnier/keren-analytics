@@ -9,6 +9,8 @@ import { config } from "./config.js";
 import { getAzureClient } from "./azure/client.js";
 import { runOverviewPipeline } from "./core/orchestrator.js";
 import { buildRecommendations } from "./core/recommendations.js";
+import { computeReadinessScore } from "./core/readinessScore.js";
+import { generatePrompts } from "./core/promptGenerator.js";
 import { getTenant, updateTenant } from "./core/metadataStore.js";
 import { runWithToken } from "./azure/tokenStore.js";
 
@@ -485,9 +487,11 @@ app.get("/dashboard/overview", ensureAuth, async (req, res) => {
     if (result.error) {
       return res.status(errorStatusCode(result)).json(result);
     }
+    const readinessScore = computeReadinessScore(result.readinessReport);
     res.json({
       dashboard: result.dashboard,
       readiness: result.readinessReport,
+      readinessScore,
       schemaProfile: result.schemaProfile,
       mapping: result.mapping,
       recommendations: buildRecommendations(result.readinessReport),
@@ -515,7 +519,23 @@ app.get("/recommendations", ensureAuth, (req, res) => {
     return res.status(409).json({ error: "READINESS_NOT_CHECKED", message: "Run readiness check first." });
   }
   const recommendations = buildRecommendations(tenant.readinessReport);
-  res.json({ recommendations });
+  const readinessScore = computeReadinessScore(tenant.readinessReport);
+  res.json({ recommendations, readinessScore });
+});
+
+app.get("/prompts", ensureAuth, (req, res) => {
+  const tenantId = req.session.tenantId;
+  const tenant = getTenant(tenantId);
+  if (!tenant.readinessReport) {
+    return res.status(409).json({ error: "READINESS_NOT_CHECKED", message: "Run readiness check first." });
+  }
+  const resourceName = tenant.selectedResource?.appInsightsName || null;
+  const prompts = generatePrompts({
+    readinessReport: tenant.readinessReport,
+    schemaProfile: tenant.schemaProfile,
+    resourceName,
+  });
+  res.json({ prompts });
 });
 
 /* ========== Server ========== */

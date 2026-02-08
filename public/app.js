@@ -6,21 +6,21 @@ const statusPanel = document.getElementById("statusPanel");
 const resourcePanel = document.getElementById("resourcePanel");
 const resourceList = document.getElementById("resourceList");
 const dashboardPanel = document.getElementById("dashboardPanel");
-const readinessPanel = document.getElementById("readinessPanel");
 const rangeSelect = document.getElementById("rangeSelect");
 const selectedResourceBar = document.getElementById("selectedResourceBar");
 const selectedResourceName = document.getElementById("selectedResourceName");
 const changeResourceButton = document.getElementById("changeResourceButton");
 
 let lastDiscoveredResources = [];
+let lastDashboardData = null;
 
-/* ========== Chart instances (for cleanup) ========== */
+/* ========== Chart instances ========== */
 const charts = {};
 
 /* ========== Chart.js global defaults ========== */
 Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 Chart.defaults.font.size = 12;
-Chart.defaults.color = "#64748b";
+Chart.defaults.color = "#9ca3af";
 Chart.defaults.plugins.legend.labels.usePointStyle = true;
 Chart.defaults.plugins.legend.labels.pointStyleWidth = 8;
 Chart.defaults.plugins.legend.labels.padding = 16;
@@ -29,6 +29,29 @@ const CHART_COLORS = [
   "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6",
   "#06b6d4", "#f97316", "#ec4899", "#84cc16", "#6366f1",
 ];
+
+/* ========== Tab Navigation ========== */
+const tabs = document.querySelectorAll(".tab[data-tab]");
+
+tabs.forEach((tab) => {
+  tab.addEventListener("click", () => {
+    tabs.forEach((t) => {
+      t.classList.remove("active");
+      t.setAttribute("aria-selected", "false");
+    });
+    tab.classList.add("active");
+    tab.setAttribute("aria-selected", "true");
+
+    document.querySelectorAll(".tab-content").forEach((tc) => tc.classList.remove("active"));
+    const target = document.getElementById(`tab-${tab.dataset.tab}`);
+    if (target) target.classList.add("active");
+
+    // Load prompts on first visit to readiness tab
+    if (tab.dataset.tab === "readiness" && lastDashboardData && !document.querySelector(".prompt-card")) {
+      loadPrompts();
+    }
+  });
+});
 
 /* ========== Events ========== */
 connectButton.addEventListener("click", () => {
@@ -49,7 +72,6 @@ changeResourceButton.addEventListener("click", async () => {
     await apiFetch("/azure/select/clear", { method: "POST" });
   } catch { /* ignore */ }
   dashboardPanel.classList.add("hidden");
-  readinessPanel.classList.add("hidden");
   selectedResourceBar.classList.add("hidden");
   if (lastDiscoveredResources.length > 0) {
     renderResources(lastDiscoveredResources);
@@ -87,7 +109,7 @@ async function apiFetch(url, options = {}) {
 /* ========== Status ========== */
 function setStatus(message, variant = "info") {
   statusPanel.textContent = message;
-  statusPanel.className = `panel status-panel${variant !== "info" ? ` ${variant}` : ""}`;
+  statusPanel.className = `status-bar${variant !== "info" ? ` ${variant}` : ""}`;
 }
 
 /* ========== Resource selection ========== */
@@ -122,7 +144,7 @@ function renderResources(resources) {
     }
 
     const button = document.createElement("button");
-    button.className = "btn btn-primary";
+    button.className = "btn btn-primary btn-sm";
     button.textContent = "Select";
     button.addEventListener("click", async () => {
       await apiFetch("/azure/select", {
@@ -201,7 +223,6 @@ function initSortableTable(tableId) {
       const type = th.dataset.sort;
       const isDesc = th.classList.contains("sort-asc");
 
-      // Clear other sort indicators
       headers.forEach((h) => h.classList.remove("sort-asc", "sort-desc"));
       th.classList.add(isDesc ? "sort-desc" : "sort-asc");
 
@@ -239,9 +260,9 @@ function renderDailyTrend(data) {
           label: "Visitors",
           data: points.map((p) => p.visitors),
           borderColor: "#3b82f6",
-          backgroundColor: "rgba(59, 130, 246, 0.08)",
+          backgroundColor: "rgba(59, 130, 246, 0.06)",
           fill: true,
-          tension: 0.3,
+          tension: 0.35,
           pointRadius: points.length > 20 ? 0 : 3,
           pointHoverRadius: 5,
           borderWidth: 2,
@@ -250,9 +271,9 @@ function renderDailyTrend(data) {
           label: "Page Views",
           data: points.map((p) => p.pageViews),
           borderColor: "#10b981",
-          backgroundColor: "rgba(16, 185, 129, 0.05)",
+          backgroundColor: "rgba(16, 185, 129, 0.04)",
           fill: true,
-          tension: 0.3,
+          tension: 0.35,
           pointRadius: points.length > 20 ? 0 : 3,
           pointHoverRadius: 5,
           borderWidth: 2,
@@ -312,7 +333,7 @@ function renderDoughnut(canvasId, emptyId, chartKey, items, labelKey, valueKey) 
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      cutout: "60%",
+      cutout: "62%",
       plugins: {
         legend: {
           position: "right",
@@ -350,7 +371,7 @@ function renderGeoChart(data) {
           data: items.map((i) => i.count),
           backgroundColor: "#3b82f6",
           borderRadius: 4,
-          maxBarThickness: 32,
+          maxBarThickness: 28,
         },
       ],
     },
@@ -408,7 +429,7 @@ function renderBrowserTimings(data) {
           data: [data.avgNetwork, data.avgSend, data.avgReceive, data.avgProcessing],
           backgroundColor: ["#3b82f6", "#06b6d4", "#10b981", "#f59e0b"],
           borderRadius: 6,
-          maxBarThickness: 48,
+          maxBarThickness: 40,
         },
       ],
     },
@@ -466,68 +487,204 @@ function td(text, className) {
   return el;
 }
 
-/* ========== Render: Readiness ========== */
-function renderReadiness(readiness) {
-  if (!readiness) return;
+/* ========== Render: Readiness Score ========== */
+function renderReadinessScore(readinessScore, readiness) {
+  if (!readinessScore) return;
 
-  const statusBadge = document.getElementById("readinessStatusBadge");
-  const confidence = document.getElementById("readinessConfidence");
-  const signals = document.getElementById("readinessSignals");
-  const actions = document.getElementById("readinessActions");
+  const { score, percentage, breakdown, grade } = readinessScore;
 
-  const status = readiness.overallStatus || "EMPTY";
-  statusBadge.textContent = status;
-  statusBadge.className = `readiness-badge ${status.toLowerCase()}`;
-  confidence.textContent = `Confidence: ${(readiness.confidence * 100).toFixed(0)}%`;
+  // Score ring
+  const circumference = 2 * Math.PI * 52; // r=52
+  const offset = circumference - (percentage / 100) * circumference;
+  const ring = document.getElementById("scoreRingFill");
+  ring.style.strokeDashoffset = offset;
+  ring.className = `score-ring-fill grade-${grade.toLowerCase()}`;
 
-  // Render signal tags
-  signals.innerHTML = "";
-  if (readiness.availableSignals) {
-    const signalNames = {
-      pageViews: "Page Views",
-      requests: "Requests",
-      userId: "User ID",
-      sessionId: "Sessions",
-      userAgent: "User Agent",
-      geo: "Geo",
-      browserTimings: "Browser Timings",
-    };
-    for (const [key, label] of Object.entries(signalNames)) {
-      const tag = document.createElement("span");
-      tag.className = `signal-tag ${readiness.availableSignals[key] ? "available" : "missing"}`;
-      tag.textContent = label;
-      signals.appendChild(tag);
-    }
+  // Score number
+  document.getElementById("scoreValue").textContent = score;
+
+  // Grade text
+  const gradeTexts = {
+    A: "Excellent coverage! Your telemetry is comprehensive.",
+    B: "Good coverage. A few improvements will unlock more insights.",
+    C: "Fair coverage. Key signals are missing — see below to improve.",
+    D: "Limited coverage. Several important signals need to be added.",
+    F: "Minimal coverage. Start with the required signals below.",
+  };
+  document.getElementById("scoreGradeText").textContent = gradeTexts[grade] || "";
+
+  // Mini badge in tab
+  const miniBadge = document.getElementById("scoreMiniBadge");
+  miniBadge.textContent = `${score}`;
+  miniBadge.className = `score-mini-badge grade-${grade.toLowerCase()}`;
+  miniBadge.classList.remove("hidden");
+
+  // Status badge
+  if (readiness) {
+    const status = readiness.overallStatus || "EMPTY";
+    const statusBadge = document.getElementById("readinessStatusBadge");
+    statusBadge.textContent = status;
+    statusBadge.className = `readiness-badge ${status.toLowerCase()}`;
+
+    const confidence = document.getElementById("readinessConfidence");
+    confidence.textContent = `Confidence: ${(readiness.confidence * 100).toFixed(0)}%`;
   }
 
-  // Render actions
-  actions.innerHTML = "";
-  (readiness.recommendedActions || []).slice(0, 5).forEach((action) => {
-    const li = document.createElement("li");
-    const title = document.createElement("strong");
-    title.textContent = action.title;
-    li.appendChild(title);
-    if (action.message) {
-      const msg = document.createTextNode(action.message);
-      li.appendChild(msg);
-    }
-    actions.appendChild(li);
-  });
+  // Breakdown rows
+  const container = document.getElementById("scoreBreakdown");
+  container.innerHTML = "";
+  breakdown.forEach((item) => {
+    const row = document.createElement("div");
+    row.className = `score-row ${item.available ? "available" : "missing"}`;
 
-  readinessPanel.classList.remove("hidden");
+    const check = document.createElement("span");
+    check.className = `score-check ${item.available ? "available" : "missing"}`;
+    check.textContent = item.available ? "\u2713" : "\u00B7";
+    row.appendChild(check);
+
+    const label = document.createElement("span");
+    label.className = "score-row-label";
+    label.innerHTML = `${item.label}<small>${item.description}</small>`;
+    row.appendChild(label);
+
+    const cat = document.createElement("span");
+    cat.className = `score-row-category cat-${item.category}`;
+    cat.textContent = item.category;
+    row.appendChild(cat);
+
+    const points = document.createElement("span");
+    points.className = "score-row-points";
+    points.textContent = item.available ? `+${item.points}` : `+${item.points}`;
+    row.appendChild(points);
+
+    container.appendChild(row);
+  });
+}
+
+/* ========== Render: Prompt Cards ========== */
+async function loadPrompts() {
+  try {
+    const data = await apiFetch("/prompts");
+    const container = document.getElementById("promptCards");
+    const noMessage = document.getElementById("noPromptsMessage");
+    container.innerHTML = "";
+
+    if (!data.prompts || data.prompts.length === 0) {
+      noMessage?.classList.remove("hidden");
+      return;
+    }
+    noMessage?.classList.add("hidden");
+
+    data.prompts.forEach((p) => {
+      const card = document.createElement("div");
+      card.className = "prompt-card";
+
+      const header = document.createElement("div");
+      header.className = "prompt-card-header";
+      header.addEventListener("click", () => card.classList.toggle("open"));
+
+      const title = document.createElement("span");
+      title.className = "prompt-card-title";
+      title.textContent = p.label;
+
+      const stack = document.createElement("span");
+      stack.className = "prompt-card-stack";
+      stack.textContent = p.detectedStack;
+      title.appendChild(stack);
+
+      const arrow = document.createElement("span");
+      arrow.className = "prompt-card-arrow";
+      arrow.textContent = "\u25BC";
+
+      header.appendChild(title);
+      header.appendChild(arrow);
+      card.appendChild(header);
+
+      const body = document.createElement("div");
+      body.className = "prompt-card-body";
+
+      const pre = document.createElement("div");
+      pre.className = "prompt-text";
+      pre.textContent = p.prompt;
+      body.appendChild(pre);
+
+      const copyBtn = document.createElement("button");
+      copyBtn.className = "prompt-copy-btn";
+      copyBtn.textContent = "Copy prompt";
+      copyBtn.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(p.prompt);
+          copyBtn.textContent = "Copied!";
+          copyBtn.classList.add("copied");
+          setTimeout(() => {
+            copyBtn.textContent = "Copy prompt";
+            copyBtn.classList.remove("copied");
+          }, 2000);
+        } catch {
+          // Fallback for non-HTTPS
+          const textarea = document.createElement("textarea");
+          textarea.value = p.prompt;
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand("copy");
+          document.body.removeChild(textarea);
+          copyBtn.textContent = "Copied!";
+          copyBtn.classList.add("copied");
+          setTimeout(() => {
+            copyBtn.textContent = "Copy prompt";
+            copyBtn.classList.remove("copied");
+          }, 2000);
+        }
+      });
+      body.appendChild(copyBtn);
+
+      card.appendChild(body);
+      container.appendChild(card);
+    });
+  } catch (error) {
+    console.error("Failed to load prompts:", error.message);
+  }
 }
 
 /* ========== Main render ========== */
 function renderDashboard(data) {
+  lastDashboardData = data;
   const dashboard = data.dashboard;
   const readiness = data.readiness;
+  const readinessScore = data.readinessScore;
 
-  // KPIs
+  // Marketing KPIs
   document.getElementById("kpiVisitors").textContent = fmt(dashboard.kpis.uniqueVisitors);
   document.getElementById("kpiSessions").textContent = fmt(dashboard.kpis.sessions);
+
+  // Compute total page views from trend data
+  const totalPageViews = (dashboard.charts.dailyTrend || []).reduce((sum, d) => sum + (d.pageViews || 0), 0);
+  document.getElementById("kpiPageViews").textContent = fmt(totalPageViews);
+
+  // Pages per session
+  const pagesPerSession = dashboard.kpis.sessions > 0
+    ? (totalPageViews / dashboard.kpis.sessions).toFixed(1)
+    : "-";
+  document.getElementById("kpiPagesPerSession").textContent = pagesPerSession;
+
+  // Technical KPIs
   document.getElementById("kpiAvg").textContent = fmtMs(dashboard.kpis.avgResponseTimeMs);
   document.getElementById("kpiP95").textContent = fmtMs(dashboard.kpis.p95ResponseTimeMs);
   document.getElementById("kpiErrors").textContent = fmtPct(dashboard.kpis.errorRate);
+
+  // Color-code error rate
+  const errorCard = document.getElementById("kpiErrorCard");
+  if (dashboard.kpis.errorRate > 0.05) {
+    errorCard.style.borderLeft = "3px solid var(--danger)";
+  } else if (dashboard.kpis.errorRate > 0.02) {
+    errorCard.style.borderLeft = "3px solid var(--warning)";
+  } else {
+    errorCard.style.borderLeft = "3px solid var(--success)";
+  }
+
+  // Frontend avg KPI
+  const btData = dashboard.charts.browserTimings;
+  document.getElementById("kpiFrontendAvg").textContent = btData ? fmtMs(btData.avgTotal) : "-";
 
   // Daily trend
   renderDailyTrend(dashboard.charts.dailyTrend);
@@ -567,8 +724,8 @@ function renderDashboard(data) {
     tr.appendChild(td(fmt(row.count), "num"));
   });
 
-  // Readiness
-  renderReadiness(readiness);
+  // Readiness score
+  renderReadinessScore(readinessScore, readiness);
 
   // Show dashboard
   dashboardPanel.classList.remove("hidden");
@@ -597,7 +754,6 @@ function checkAuthError() {
   const authError = params.get("auth_error");
   if (authError) {
     setStatus(`Authentication failed: ${authError}`, "error");
-    // Clean URL
     window.history.replaceState({}, "", "/");
     return true;
   }
@@ -629,7 +785,7 @@ async function showSetupInstructions() {
       ol.appendChild(li);
     });
     statusPanel.appendChild(ol);
-    statusPanel.className = "panel status-panel";
+    statusPanel.className = "status-bar";
   } catch { /* ignore */ }
 }
 
@@ -653,7 +809,6 @@ async function init() {
     modeBadge.textContent = session.mode || "mock";
 
     if (!session.authenticated) {
-      // Real mode without OAuth configured → show setup instructions
       if (session.mode === "real" && !session.oauthConfigured) {
         await showSetupInstructions();
       } else {
@@ -667,7 +822,6 @@ async function init() {
     connectButton.classList.add("hidden");
     logoutButton.classList.remove("hidden");
 
-    // Show user info if available
     if (session.user?.name) {
       logoutButton.textContent = `${session.user.name} — Logout`;
     }
