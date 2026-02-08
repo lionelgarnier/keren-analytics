@@ -23,6 +23,36 @@ export const mockResources = [
   },
 ];
 
+/* ========== Realistic random helpers ========== */
+
+/** Seeded random that changes every few minutes (keeps demo stable within a page load) */
+function sessionSeed() {
+  return Math.floor(Date.now() / (3 * 60 * 1000));
+}
+
+/** Simple seeded pseudo-random (mulberry32) */
+function seededRandom(seed) {
+  let t = (seed + 0x6d2b79f5) | 0;
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
+/** Returns a function that produces consistent pseudo-random numbers for this session */
+function createRng() {
+  let s = sessionSeed();
+  return () => {
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    return (s >>> 0) / 0x7fffffff;
+  };
+}
+
+/** Add realistic variance: +/- pct% around value */
+function vary(value, pct, rng) {
+  const factor = 1 + (rng() * 2 - 1) * (pct / 100);
+  return Math.max(1, Math.round(value * factor));
+}
+
 /* ========== Range-aware multipliers ========== */
 const RANGE_SCALE = { today: 0.07, "7d": 0.25, "30d": 1.0 };
 
@@ -35,19 +65,19 @@ function scale(value, rangeKey) {
 function generateHourlyTrend() {
   const hours = [];
   const now = new Date();
+  const rng = createRng();
   for (let i = 23; i >= 0; i--) {
     const d = new Date(now);
     d.setUTCHours(d.getUTCHours() - i, 0, 0, 0);
     const h = d.getUTCHours();
     const isActive = h >= 7 && h <= 22;
-    const isPeak = h >= 9 && h <= 12 || h >= 14 && h <= 18;
-    const base = isPeak ? 12 : isActive ? 6 : 2;
-    const variation = ((i * 3 + 1) % 5) - 2;
-    const visitors = Math.max(1, base + variation);
+    const isPeak = (h >= 9 && h <= 12) || (h >= 14 && h <= 18);
+    const base = isPeak ? 14 : isActive ? 7 : 2;
+    const visitors = vary(base, 25, rng);
     hours.push({
       period: d.toISOString(),
       visitors,
-      pageViews: visitors * 3 + ((i * 7) % 5),
+      pageViews: vary(visitors * 3, 15, rng),
     });
   }
   return hours;
@@ -56,136 +86,145 @@ function generateHourlyTrend() {
 function generateDailyTrend(numDays) {
   const days = [];
   const now = new Date();
+  const rng = createRng();
   for (let i = numDays - 1; i >= 0; i--) {
     const d = new Date(now);
     d.setUTCDate(d.getUTCDate() - i);
     d.setUTCHours(0, 0, 0, 0);
     const dow = d.getUTCDay();
     const isWeekend = dow === 0 || dow === 6;
-    const base = isWeekend ? 35 : 55;
-    const growth = Math.floor((numDays - 1 - i) * 0.4);
-    const variation = ((i * 7 + 3) % 11) - 5;
-    const visitors = Math.max(10, base + growth + variation);
+    const base = isWeekend ? 35 : 58;
+    const growth = Math.floor((numDays - 1 - i) * 0.5);
+    const visitors = vary(base + growth, 18, rng);
     days.push({
       period: d.toISOString(),
       visitors,
-      pageViews: visitors * 3 + ((i * 13) % 20),
+      pageViews: vary(visitors * 3, 12, rng),
     });
   }
   return days;
 }
 
-/* ========== Baseline data (30d) ========== */
+/* ========== Baseline data (30d) with variance ========== */
 
-const baseline = {
-  readiness: [
-    {
-      pageViewsCount: 4200,
-      requestsCount: 3900,
-      userAuthCount: 800,
-      userAnonCount: 3500,
-      sessionCount: 2100,
-      requestSessionCount: 2000,
-      browserCount: 3800,
-      osCount: 3700,
-      deviceCount: 3200,
-      geoCount: 3000,
-      browserTimingsCount: 900,
-      latestTimestamp: new Date().toISOString(),
-    },
-  ],
-  schemaTables: [
-    { tableName: "pageViews", count: 4200 },
-    { tableName: "requests", count: 3900 },
-    { tableName: "browserTimings", count: 900 },
-  ],
-  schemaCustomDimensions: [
-    { tableName: "pageViews", key: "page", keyCount: 1200 },
-    { tableName: "requests", key: "sessionId", keyCount: 800 },
-    { tableName: "customEvents", key: "checkoutStep", keyCount: 120 },
-  ],
-  uniqueVisitors: [{ uniqueVisitors: 1523 }],
-  sessions: [{ sessions: 1844 }],
-  topPages: [
-    { pagePath: "/", views: 3200, share: 0.28 },
-    { pagePath: "/pricing", views: 1800, share: 0.16 },
-    { pagePath: "/docs", views: 1200, share: 0.10 },
-    { pagePath: "/blog", views: 900, share: 0.08 },
-    { pagePath: "/signup", views: 780, share: 0.07 },
-    { pagePath: "/about", views: 620, share: 0.05 },
-    { pagePath: "/contact", views: 410, share: 0.04 },
-    { pagePath: "/features", views: 380, share: 0.03 },
-    { pagePath: "/changelog", views: 290, share: 0.025 },
-    { pagePath: "/terms", views: 120, share: 0.01 },
-  ],
-  topNavigation: [
-    { from: "/", to: "/pricing", transitions: 640 },
-    { from: "/pricing", to: "/signup", transitions: 420 },
-    { from: "/", to: "/docs", transitions: 310 },
-    { from: "/docs", to: "/pricing", transitions: 180 },
-    { from: "/blog", to: "/signup", transitions: 95 },
-  ],
-  techBrowser: [
-    { browser: "Chrome", count: 2300, total: 3600 },
-    { browser: "Edge", count: 700, total: 3600 },
-    { browser: "Safari", count: 400, total: 3600 },
-    { browser: "Firefox", count: 200, total: 3600 },
-  ],
-  techOs: [
-    { os: "Windows", count: 1900, total: 3600 },
-    { os: "macOS", count: 900, total: 3600 },
-    { os: "Linux", count: 500, total: 3600 },
-    { os: "iOS", count: 200, total: 3600 },
-  ],
-  techDevice: [
-    { device: "Desktop", count: 2500, total: 3600 },
-    { device: "Mobile", count: 900, total: 3600 },
-    { device: "Tablet", count: 200, total: 3600 },
-  ],
-  performance: [
-    { avgDuration: 248, p95Duration: 810, errorRate: 0.021 },
-  ],
-  slowEndpoints: [
-    { path: "/api/orders", p50: 320, p95: 980, p99: 2400, avgDuration: 450, count: 420, errorRate: 0.03 },
-    { path: "/api/login", p50: 210, p95: 870, p99: 1800, avgDuration: 340, count: 300, errorRate: 0.01 },
-    { path: "/api/products", p50: 180, p95: 650, p99: 1500, avgDuration: 280, count: 890, errorRate: 0.005 },
-    { path: "/api/search", p50: 250, p95: 720, p99: 1900, avgDuration: 390, count: 560, errorRate: 0.02 },
-    { path: "/api/checkout", p50: 340, p95: 1100, p99: 3200, avgDuration: 520, count: 210, errorRate: 0.045 },
-    { path: "/api/users/me", p50: 45, p95: 180, p99: 450, avgDuration: 80, count: 1200, errorRate: 0.002 },
-    { path: "/api/analytics", p50: 520, p95: 1400, p99: 3800, avgDuration: 680, count: 150, errorRate: 0.06 },
-  ],
-  geoDistribution: [
-    { country: "United States", count: 1200, share: 0.36 },
-    { country: "France", count: 450, share: 0.13 },
-    { country: "Germany", count: 380, share: 0.11 },
-    { country: "United Kingdom", count: 320, share: 0.10 },
-    { country: "Canada", count: 280, share: 0.08 },
-    { country: "Netherlands", count: 190, share: 0.06 },
-    { country: "Japan", count: 150, share: 0.04 },
-    { country: "Australia", count: 120, share: 0.04 },
-    { country: "Brazil", count: 95, share: 0.03 },
-    { country: "India", count: 80, share: 0.02 },
-  ],
-  browserTimings: [
-    {
-      avgNetworkDuration: 85,
-      avgSendDuration: 12,
-      avgReceiveDuration: 38,
-      avgProcessingDuration: 320,
-      avgTotalDuration: 480,
-      p95TotalDuration: 1200,
-      sampleCount: 900,
-    },
-  ],
-};
+function generateBaseline() {
+  const rng = createRng();
+
+  return {
+    readiness: [
+      {
+        pageViewsCount: vary(4200, 10, rng),
+        requestsCount: vary(3900, 10, rng),
+        userAuthCount: vary(800, 15, rng),
+        userAnonCount: vary(3500, 10, rng),
+        sessionCount: vary(2100, 10, rng),
+        requestSessionCount: vary(2000, 10, rng),
+        browserCount: vary(3800, 8, rng),
+        osCount: vary(3700, 8, rng),
+        deviceCount: vary(3200, 8, rng),
+        geoCount: vary(3000, 10, rng),
+        browserTimingsCount: vary(900, 15, rng),
+        latestTimestamp: new Date().toISOString(),
+      },
+    ],
+    schemaTables: [
+      { tableName: "pageViews", count: vary(4200, 10, rng) },
+      { tableName: "requests", count: vary(3900, 10, rng) },
+      { tableName: "browserTimings", count: vary(900, 15, rng) },
+    ],
+    schemaCustomDimensions: [
+      { tableName: "pageViews", key: "page", keyCount: vary(1200, 12, rng) },
+      { tableName: "requests", key: "sessionId", keyCount: vary(800, 12, rng) },
+      { tableName: "customEvents", key: "checkoutStep", keyCount: vary(120, 20, rng) },
+    ],
+    uniqueVisitors: [{ uniqueVisitors: vary(1523, 12, rng) }],
+    sessions: [{ sessions: vary(1844, 12, rng) }],
+    topPages: [
+      { pagePath: "/", views: vary(3200, 10, rng), share: 0.28 },
+      { pagePath: "/pricing", views: vary(1800, 12, rng), share: 0.16 },
+      { pagePath: "/docs", views: vary(1200, 14, rng), share: 0.10 },
+      { pagePath: "/blog", views: vary(900, 15, rng), share: 0.08 },
+      { pagePath: "/signup", views: vary(780, 15, rng), share: 0.07 },
+      { pagePath: "/about", views: vary(620, 18, rng), share: 0.05 },
+      { pagePath: "/contact", views: vary(410, 18, rng), share: 0.04 },
+      { pagePath: "/features", views: vary(380, 18, rng), share: 0.03 },
+      { pagePath: "/changelog", views: vary(290, 20, rng), share: 0.025 },
+      { pagePath: "/terms", views: vary(120, 25, rng), share: 0.01 },
+    ],
+    topNavigation: [
+      { from: "/", to: "/pricing", transitions: vary(640, 12, rng) },
+      { from: "/pricing", to: "/signup", transitions: vary(420, 14, rng) },
+      { from: "/", to: "/docs", transitions: vary(310, 14, rng) },
+      { from: "/docs", to: "/pricing", transitions: vary(180, 18, rng) },
+      { from: "/blog", to: "/signup", transitions: vary(95, 20, rng) },
+    ],
+    techBrowser: [
+      { browser: "Chrome", count: vary(2300, 8, rng), total: vary(3600, 8, rng) },
+      { browser: "Edge", count: vary(700, 12, rng), total: vary(3600, 8, rng) },
+      { browser: "Safari", count: vary(400, 15, rng), total: vary(3600, 8, rng) },
+      { browser: "Firefox", count: vary(200, 18, rng), total: vary(3600, 8, rng) },
+    ],
+    techOs: [
+      { os: "Windows", count: vary(1900, 8, rng), total: vary(3600, 8, rng) },
+      { os: "macOS", count: vary(900, 12, rng), total: vary(3600, 8, rng) },
+      { os: "Linux", count: vary(500, 15, rng), total: vary(3600, 8, rng) },
+      { os: "iOS", count: vary(200, 18, rng), total: vary(3600, 8, rng) },
+    ],
+    techDevice: [
+      { device: "Desktop", count: vary(2500, 8, rng), total: vary(3600, 8, rng) },
+      { device: "Mobile", count: vary(900, 12, rng), total: vary(3600, 8, rng) },
+      { device: "Tablet", count: vary(200, 20, rng), total: vary(3600, 8, rng) },
+    ],
+    performance: [
+      {
+        avgDuration: vary(248, 15, rng),
+        p95Duration: vary(810, 12, rng),
+        errorRate: Math.round((0.015 + seededRandom(sessionSeed()) * 0.02) * 1000) / 1000,
+      },
+    ],
+    slowEndpoints: [
+      { path: "/api/orders", p50: vary(320, 12, rng), p95: vary(980, 10, rng), p99: vary(2400, 10, rng), avgDuration: vary(450, 12, rng), count: vary(420, 15, rng), errorRate: 0.03 },
+      { path: "/api/login", p50: vary(210, 15, rng), p95: vary(870, 12, rng), p99: vary(1800, 10, rng), avgDuration: vary(340, 15, rng), count: vary(300, 18, rng), errorRate: 0.01 },
+      { path: "/api/products", p50: vary(180, 12, rng), p95: vary(650, 10, rng), p99: vary(1500, 10, rng), avgDuration: vary(280, 12, rng), count: vary(890, 12, rng), errorRate: 0.005 },
+      { path: "/api/search", p50: vary(250, 14, rng), p95: vary(720, 12, rng), p99: vary(1900, 10, rng), avgDuration: vary(390, 14, rng), count: vary(560, 14, rng), errorRate: 0.02 },
+      { path: "/api/checkout", p50: vary(340, 12, rng), p95: vary(1100, 10, rng), p99: vary(3200, 8, rng), avgDuration: vary(520, 12, rng), count: vary(210, 18, rng), errorRate: 0.045 },
+      { path: "/api/users/me", p50: vary(45, 20, rng), p95: vary(180, 15, rng), p99: vary(450, 12, rng), avgDuration: vary(80, 18, rng), count: vary(1200, 10, rng), errorRate: 0.002 },
+      { path: "/api/analytics", p50: vary(520, 12, rng), p95: vary(1400, 10, rng), p99: vary(3800, 8, rng), avgDuration: vary(680, 12, rng), count: vary(150, 20, rng), errorRate: 0.06 },
+    ],
+    geoDistribution: [
+      { country: "United States", count: vary(1200, 10, rng), share: 0.36 },
+      { country: "France", count: vary(450, 14, rng), share: 0.13 },
+      { country: "Germany", count: vary(380, 14, rng), share: 0.11 },
+      { country: "United Kingdom", count: vary(320, 15, rng), share: 0.10 },
+      { country: "Canada", count: vary(280, 15, rng), share: 0.08 },
+      { country: "Netherlands", count: vary(190, 18, rng), share: 0.06 },
+      { country: "Japan", count: vary(150, 20, rng), share: 0.04 },
+      { country: "Australia", count: vary(120, 20, rng), share: 0.04 },
+      { country: "Brazil", count: vary(95, 22, rng), share: 0.03 },
+      { country: "India", count: vary(80, 25, rng), share: 0.02 },
+    ],
+    browserTimings: [
+      {
+        avgNetworkDuration: vary(85, 15, rng),
+        avgSendDuration: vary(12, 20, rng),
+        avgReceiveDuration: vary(38, 18, rng),
+        avgProcessingDuration: vary(320, 12, rng),
+        avgTotalDuration: vary(480, 12, rng),
+        p95TotalDuration: vary(1200, 10, rng),
+        sampleCount: vary(900, 15, rng),
+      },
+    ],
+  };
+}
+
+// Generate baseline once per module load (stable within a server restart,
+// but varies between restarts for a realistic feel)
+const baseline = generateBaseline();
 
 /* ========== Public API ========== */
 
 /**
  * Return mock rows for a given query name, adapted to the requested time range.
- * - dailyTrend: returns hourly points for "today", 7 points for "7d", 30 for "30d"
- * - KPI and count-based queries: values scaled proportionally to the range
- * - Readiness / schema / tech / performance: returned as-is (range-independent)
  */
 export function getMockRows(queryName, timeRangeKey) {
   const rk = timeRangeKey || "7d";
@@ -199,13 +238,13 @@ export function getMockRows(queryName, timeRangeKey) {
 
   // KPIs — scale by range
   if (queryName === "uniqueVisitors") {
-    return [{ uniqueVisitors: scale(1523, rk) }];
+    return [{ uniqueVisitors: scale(baseline.uniqueVisitors[0].uniqueVisitors, rk) }];
   }
   if (queryName === "sessions") {
-    return [{ sessions: scale(1844, rk) }];
+    return [{ sessions: scale(baseline.sessions[0].sessions, rk) }];
   }
 
-  // Count-based tables — scale counts, keep shares
+  // Count-based tables — scale counts
   if (queryName === "topPages") {
     return baseline.topPages.map((r) => ({ ...r, views: scale(r.views, rk) }));
   }
@@ -221,15 +260,15 @@ export function getMockRows(queryName, timeRangeKey) {
 
   // Tech distributions — scale counts + totals
   if (queryName === "techBrowser") {
-    const t = scale(3600, rk);
+    const t = scale(baseline.techBrowser[0].total, rk);
     return baseline.techBrowser.map((r) => ({ ...r, count: scale(r.count, rk), total: t }));
   }
   if (queryName === "techOs") {
-    const t = scale(3600, rk);
+    const t = scale(baseline.techOs[0].total, rk);
     return baseline.techOs.map((r) => ({ ...r, count: scale(r.count, rk), total: t }));
   }
   if (queryName === "techDevice") {
-    const t = scale(3600, rk);
+    const t = scale(baseline.techDevice[0].total, rk);
     return baseline.techDevice.map((r) => ({ ...r, count: scale(r.count, rk), total: t }));
   }
   if (queryName === "browserTimings") {

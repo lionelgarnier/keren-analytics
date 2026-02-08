@@ -538,6 +538,33 @@ app.get("/prompts", ensureAuth, (req, res) => {
   res.json({ prompts });
 });
 
+/* ========== Preview mode (no auth required) ========== */
+
+app.get("/preview/dashboard", async (req, res) => {
+  const requestedRange = req.query.range || "7d";
+  const rangeKey = ["today", "7d", "30d"].includes(requestedRange) ? requestedRange : "7d";
+  try {
+    const result = await runOverviewPipeline({
+      tenantId: "preview-tenant",
+      rangeKey,
+      azureClient,
+      cacheTtlMs: config.cacheTtlMs[rangeKey] || config.cacheTtlMs["7d"],
+    });
+    if (result.error) {
+      return res.status(500).json(result);
+    }
+    const readinessScore = computeReadinessScore(result.readinessReport);
+    res.json({
+      dashboard: result.dashboard,
+      readiness: result.readinessReport,
+      readinessScore,
+      preview: true,
+    });
+  } catch (error) {
+    res.status(500).json({ error: "PREVIEW_ERROR", message: error.message });
+  }
+});
+
 /* ========== Server ========== */
 let server;
 if (process.env.NODE_ENV !== "test") {

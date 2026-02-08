@@ -10,9 +10,13 @@ const rangeSelect = document.getElementById("rangeSelect");
 const selectedResourceBar = document.getElementById("selectedResourceBar");
 const selectedResourceName = document.getElementById("selectedResourceName");
 const changeResourceButton = document.getElementById("changeResourceButton");
+const landingPage = document.getElementById("landingPage");
+const previewBanner = document.getElementById("previewBanner");
+const onboardingBanner = document.getElementById("onboardingBanner");
 
 let lastDiscoveredResources = [];
 let lastDashboardData = null;
+let isPreviewMode = false;
 
 /* ========== Chart instances ========== */
 const charts = {};
@@ -64,7 +68,11 @@ logoutButton.addEventListener("click", async () => {
 });
 
 rangeSelect.addEventListener("change", () => {
-  loadDashboard(rangeSelect.value);
+  if (isPreviewMode) {
+    enterPreviewMode();
+  } else {
+    loadDashboard(rangeSelect.value);
+  }
 });
 
 changeResourceButton.addEventListener("click", async () => {
@@ -85,6 +93,53 @@ changeResourceButton.addEventListener("click", async () => {
     }
   }
 });
+
+/* ========== Landing page events ========== */
+document.getElementById("landingConnectBtn").addEventListener("click", () => {
+  window.location.href = "/auth/login";
+});
+
+document.getElementById("landingPreviewBtn").addEventListener("click", () => {
+  enterPreviewMode();
+});
+
+document.getElementById("previewConnectBtn").addEventListener("click", () => {
+  window.location.href = "/auth/login";
+});
+
+document.getElementById("previewExitBtn").addEventListener("click", () => {
+  exitPreviewMode();
+});
+
+document.getElementById("onboardingDismiss").addEventListener("click", () => {
+  onboardingBanner.classList.add("hidden");
+  try { localStorage.setItem("ea_onboarding_seen", "1"); } catch {}
+});
+
+async function enterPreviewMode() {
+  isPreviewMode = true;
+  landingPage.classList.add("hidden");
+  connectButton.classList.add("hidden");
+  previewBanner.classList.remove("hidden");
+  dashboardPanel.classList.remove("hidden");
+  setStatus("Loading preview dashboard...");
+  try {
+    const data = await apiFetch(`/preview/dashboard?range=${rangeSelect.value}`);
+    renderDashboard(data);
+    setStatus("Preview loaded -- sample data.", "success");
+  } catch (error) {
+    setStatus(error.message || "Unable to load preview.", "error");
+  }
+}
+
+function exitPreviewMode() {
+  isPreviewMode = false;
+  previewBanner.classList.add("hidden");
+  dashboardPanel.classList.add("hidden");
+  landingPage.classList.remove("hidden");
+  connectButton.classList.remove("hidden");
+  statusPanel.textContent = "";
+}
 
 /* ========== API ========== */
 async function apiFetch(url, options = {}) {
@@ -809,18 +864,22 @@ async function init() {
     modeBadge.textContent = session.mode || "mock";
 
     if (!session.authenticated) {
+      // Show landing page instead of plain "Connect" button
+      landingPage.classList.remove("hidden");
+      statusPanel.textContent = "";
+
       if (session.mode === "real" && !session.oauthConfigured) {
         await showSetupInstructions();
-      } else {
-        setStatus("Connect your Azure tenant to begin.");
       }
       connectButton.textContent = session.mode === "real" ? "Sign in with Microsoft" : "Connect Azure";
+      // Keep navbar connect button visible too
       connectButton.classList.remove("hidden");
       return;
     }
 
     connectButton.classList.add("hidden");
     logoutButton.classList.remove("hidden");
+    landingPage.classList.add("hidden");
 
     if (session.user?.name) {
       logoutButton.textContent = `${session.user.name} — Logout`;
@@ -837,6 +896,13 @@ async function init() {
         showSelectedResource(discovery.selectedResource);
       }
       await loadDashboard(rangeSelect.value);
+
+      // Show onboarding banner on first load
+      try {
+        if (!localStorage.getItem("ea_onboarding_seen")) {
+          onboardingBanner.classList.remove("hidden");
+        }
+      } catch {}
     }
   } catch (error) {
     setStatus(error.message || "Unable to initialize.", "error");

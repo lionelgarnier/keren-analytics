@@ -26,6 +26,69 @@
     </nav>
 
     <main class="container">
+      <!-- ========== Landing page (shown before login) ========== -->
+      <section id="landingPage" class="hidden">
+        <div class="landing-hero">
+          <h2 class="landing-title">Your cloud telemetry,<br>transformed into insights</h2>
+          <p class="landing-subtitle">Connect your Azure tenant and get a complete analytics dashboard in under 2 minutes. No agent to deploy, no data stored, no KQL to write.</p>
+          <div class="landing-actions">
+            <button id="landingConnectBtn" class="btn btn-primary btn-lg">Connect Azure</button>
+            <button id="landingPreviewBtn" class="btn btn-ghost btn-lg">See live preview</button>
+          </div>
+        </div>
+        <div class="landing-features">
+          <div class="landing-card">
+            <div class="landing-card-icon">M</div>
+            <h3>Marketing Analytics</h3>
+            <p>Visitors, sessions, top pages, geo distribution, navigation paths, browser and device breakdown.</p>
+          </div>
+          <div class="landing-card">
+            <div class="landing-card-icon">T</div>
+            <h3>Technical Monitoring</h3>
+            <p>Response times, error rates, slow endpoints, frontend performance -- all from existing telemetry.</p>
+          </div>
+          <div class="landing-card">
+            <div class="landing-card-icon">R</div>
+            <h3>Smart Readiness</h3>
+            <p>Readiness score, signal breakdown, and AI-ready prompts to improve your telemetry coverage.</p>
+          </div>
+        </div>
+        <div class="landing-trust">
+          <div class="trust-item">
+            <strong>Zero data storage</strong>
+            <span>Your data stays in your Azure tenant</span>
+          </div>
+          <div class="trust-item">
+            <strong>SSO via Azure AD</strong>
+            <span>One-click sign-in, no forms</span>
+          </div>
+          <div class="trust-item">
+            <strong>Dashboard in 2 min</strong>
+            <span>Auto-discovery, zero configuration</span>
+          </div>
+          <div class="trust-item">
+            <strong>Multi-cloud ready</strong>
+            <span>Azure first, AWS and GCP planned</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Preview mode banner -->
+      <div id="previewBanner" class="preview-banner hidden">
+        <span>Preview mode -- viewing sample data.</span>
+        <button id="previewConnectBtn" class="btn btn-primary btn-sm">Connect your Azure to see real data</button>
+        <button id="previewExitBtn" class="btn btn-ghost btn-sm">Exit preview</button>
+      </div>
+
+      <!-- Onboarding banner (first dashboard load) -->
+      <div id="onboardingBanner" class="onboarding-banner hidden">
+        <div class="onboarding-content">
+          <strong>Welcome to Easy Analytics!</strong>
+          <span>Use the tabs above to switch between Marketing and Technical views. Check the Readiness tab to improve your telemetry coverage.</span>
+        </div>
+        <button id="onboardingDismiss" class="btn btn-ghost btn-sm">Got it</button>
+      </div>
+
       <!-- Status messages -->
       <section id="statusPanel" class="status-bar"></section>
 
