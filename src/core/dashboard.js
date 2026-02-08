@@ -355,6 +355,22 @@ export async function buildOverviewDashboard({
       })
     : emptyResult;
 
+  const referrerResult = hasPageTable
+    ? await runQuery({
+        tenantId,
+        resourceId,
+        workspaceId,
+        queryName: "referrerSources",
+        templateName: "referrer-sources",
+        params: { ...timeParams, tableName },
+        allowedValues: { tableName: ["pageViews", "requests"] },
+        timeRangeKey: timeRange.key,
+        mappingVersion: mapping.version,
+        ttlMs: cacheTtlMs,
+        azureClient,
+      })
+    : emptyResult;
+
   const browserTimingsResult = hasBrowserTimings
     ? await runQuery({
         tenantId,
@@ -384,6 +400,7 @@ export async function buildOverviewDashboard({
   const slowRows = toRows(slowEndpointsResult);
   const dailyTrendRows = toRows(dailyTrendResult);
   const geoRows = toRows(geoResult);
+  const referrerRows = toRows(referrerResult);
   const browserTimingsRows = toRows(browserTimingsResult);
 
   const totalBrowser =
@@ -468,6 +485,10 @@ export async function buildOverviewDashboard({
         country: row.country,
         count: row.count,
         share: row.share || safeDivide(row.count, totalGeo),
+      })),
+      referrerSources: referrerRows.map((row) => ({
+        source: row.source,
+        count: row.count,
       })),
       browserTimings: browserTimingsRows.length > 0
         ? {

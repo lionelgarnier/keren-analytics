@@ -511,6 +511,202 @@ function renderBrowserTimings(data) {
   });
 }
 
+/* ========== Render: Referrer sources ========== */
+function renderReferrerChart(data) {
+  const items = data || [];
+  const hasData = items.length > 0;
+  showOrHide("referrerChart", "referrerEmpty", hasData);
+  if (!hasData) return;
+
+  destroyChart("referrer");
+  const ctx = document.getElementById("referrerChart").getContext("2d");
+  const sourceColors = {
+    "Direct": "#3b82f6",
+    "Organic Search": "#10b981",
+    "Referral": "#f59e0b",
+    "Social": "#8b5cf6",
+    "Email": "#06b6d4",
+  };
+  charts.referrer = new Chart(ctx, {
+    type: "doughnut",
+    data: {
+      labels: items.map((i) => i.source),
+      datasets: [{
+        data: items.map((i) => i.count),
+        backgroundColor: items.map((i) => sourceColors[i.source] || CHART_COLORS[0]),
+        borderWidth: 0,
+        hoverOffset: 6,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: "62%",
+      plugins: {
+        legend: { position: "right", labels: { font: { size: 11 }, padding: 8 } },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+              const pct = total > 0 ? ((ctx.parsed / total) * 100).toFixed(1) : 0;
+              return `${ctx.label}: ${fmt(ctx.parsed)} (${pct}%)`;
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+/* ========== Render: Conversion Funnel ========== */
+function renderFunnel(navPaths, topPages) {
+  const container = document.getElementById("funnelContainer");
+  const emptyEl = document.getElementById("funnelEmpty");
+  container.innerHTML = "";
+
+  if (!navPaths || navPaths.length === 0 || !topPages || topPages.length === 0) {
+    container.classList.add("hidden");
+    emptyEl?.classList.remove("hidden");
+    return;
+  }
+  container.classList.remove("hidden");
+  emptyEl?.classList.add("hidden");
+
+  // Build funnel from top pages + navigation drop-offs
+  // Use: homepage views -> pricing views -> signup views
+  const pageMap = {};
+  topPages.forEach((p) => { pageMap[p.path] = p.views; });
+
+  const funnelSteps = [
+    { label: "Homepage", path: "/", count: pageMap["/"] || 0 },
+    { label: "Pricing", path: "/pricing", count: pageMap["/pricing"] || 0 },
+    { label: "Signup", path: "/signup", count: pageMap["/signup"] || 0 },
+  ].filter((s) => s.count > 0);
+
+  if (funnelSteps.length < 2) {
+    container.classList.add("hidden");
+    emptyEl?.classList.remove("hidden");
+    return;
+  }
+
+  const maxCount = funnelSteps[0].count;
+  const colors = ["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444"];
+
+  funnelSteps.forEach((step, i) => {
+    const widthPct = Math.max(15, (step.count / maxCount) * 100);
+
+    // Step bar
+    const stepEl = document.createElement("div");
+    stepEl.className = "funnel-step";
+
+    const barWrapper = document.createElement("div");
+    barWrapper.className = "funnel-bar-wrapper";
+
+    const bar = document.createElement("div");
+    bar.className = "funnel-bar";
+    bar.style.width = widthPct + "%";
+    bar.style.background = colors[i % colors.length];
+
+    const labelSpan = document.createElement("span");
+    labelSpan.className = "funnel-bar-label";
+    labelSpan.textContent = step.label;
+    bar.appendChild(labelSpan);
+
+    const countSpan = document.createElement("span");
+    countSpan.className = "funnel-bar-count";
+    countSpan.textContent = fmt(step.count);
+    bar.appendChild(countSpan);
+
+    barWrapper.appendChild(bar);
+    stepEl.appendChild(barWrapper);
+
+    const meta = document.createElement("span");
+    meta.className = "funnel-meta";
+    meta.textContent = ((step.count / maxCount) * 100).toFixed(0) + "%";
+    stepEl.appendChild(meta);
+
+    container.appendChild(stepEl);
+
+    // Drop-off indicator between steps
+    if (i < funnelSteps.length - 1) {
+      const next = funnelSteps[i + 1];
+      const dropPct = ((1 - next.count / step.count) * 100).toFixed(1);
+      const dropEl = document.createElement("div");
+      dropEl.className = "funnel-drop";
+      dropEl.innerHTML = `<span class="funnel-drop-arrow">\u25BC</span> <span class="funnel-drop-pct">-${dropPct}%</span> drop-off`;
+      container.appendChild(dropEl);
+    }
+  });
+}
+
+/* ========== Render: User Flow Diagram ========== */
+function renderFlowDiagram(navPaths) {
+  const container = document.getElementById("flowDiagram");
+  const emptyEl = document.getElementById("flowEmpty");
+  const countEl = document.getElementById("flowCount");
+  container.innerHTML = "";
+
+  if (!navPaths || navPaths.length === 0) {
+    container.classList.add("hidden");
+    emptyEl?.classList.remove("hidden");
+    return;
+  }
+  container.classList.remove("hidden");
+  emptyEl?.classList.add("hidden");
+  if (countEl) countEl.textContent = `${navPaths.length} paths`;
+
+  const maxCount = Math.max(...navPaths.map((p) => p.count));
+  const flowColors = ["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#06b6d4", "#f97316", "#ec4899"];
+
+  navPaths.forEach((path, i) => {
+    const row = document.createElement("div");
+    row.className = "flow-row";
+
+    // From node
+    const fromNode = document.createElement("span");
+    fromNode.className = "flow-node";
+    fromNode.textContent = path.from;
+    fromNode.title = path.from;
+    row.appendChild(fromNode);
+
+    // Arrow
+    const arrow = document.createElement("span");
+    arrow.className = "flow-arrow";
+    arrow.textContent = "\u2192";
+    row.appendChild(arrow);
+
+    // Band (proportional width)
+    const bandWrapper = document.createElement("div");
+    bandWrapper.className = "flow-band-wrapper";
+
+    const band = document.createElement("div");
+    band.className = "flow-band";
+    const widthPct = Math.max(8, (path.count / maxCount) * 100);
+    band.style.width = widthPct + "%";
+    band.style.background = flowColors[i % flowColors.length];
+    band.textContent = fmt(path.count);
+    band.title = `${path.from} \u2192 ${path.to}: ${path.count} transitions`;
+
+    bandWrapper.appendChild(band);
+    row.appendChild(bandWrapper);
+
+    // Arrow
+    const arrow2 = document.createElement("span");
+    arrow2.className = "flow-arrow";
+    arrow2.textContent = "\u2192";
+    row.appendChild(arrow2);
+
+    // To node
+    const toNode = document.createElement("span");
+    toNode.className = "flow-node flow-node-to";
+    toNode.textContent = path.to;
+    toNode.title = path.to;
+    row.appendChild(toNode);
+
+    container.appendChild(row);
+  });
+}
+
 /* ========== Render: Tables ========== */
 function renderTableRows(tbodyId, emptyId, countId, rows, renderFn) {
   const tbody = document.getElementById(tbodyId);
@@ -772,12 +968,14 @@ function renderDashboard(data) {
     tr.appendChild(td(fmtPct(row.errorRate), "num"));
   });
 
-  // Navigation paths table
-  renderTableRows("topNavBody", "topNavEmpty", null, dashboard.charts.topNavigationPaths, (tr, row) => {
-    tr.appendChild(td(row.from));
-    tr.appendChild(td(row.to));
-    tr.appendChild(td(fmt(row.count), "num"));
-  });
+  // User Flow diagram (replaces navigation table)
+  renderFlowDiagram(dashboard.charts.topNavigationPaths);
+
+  // Conversion Funnel
+  renderFunnel(dashboard.charts.topNavigationPaths, dashboard.charts.topPages);
+
+  // Traffic Sources
+  renderReferrerChart(dashboard.charts.referrerSources);
 
   // Readiness score
   renderReadinessScore(readinessScore, readiness);
@@ -851,7 +1049,6 @@ async function init() {
   // Init sortable tables
   initSortableTable("topPagesTable");
   initSortableTable("slowEndpointsTable");
-  initSortableTable("topNavTable");
 
   // Check for OAuth redirect errors
   if (checkAuthError()) {

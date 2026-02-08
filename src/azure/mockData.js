@@ -214,6 +214,13 @@ function generateBaseline() {
         sampleCount: vary(900, 15, rng),
       },
     ],
+    referrerSources: [
+      { source: "Direct", count: vary(1800, 10, rng) },
+      { source: "Organic Search", count: vary(1100, 12, rng) },
+      { source: "Referral", count: vary(480, 15, rng) },
+      { source: "Social", count: vary(320, 18, rng) },
+      { source: "Email", count: vary(180, 20, rng) },
+    ],
   };
 }
 
@@ -273,6 +280,9 @@ export function getMockRows(queryName, timeRangeKey) {
   }
   if (queryName === "browserTimings") {
     return baseline.browserTimings.map((r) => ({ ...r, sampleCount: scale(r.sampleCount, rk) }));
+  }
+  if (queryName === "referrerSources") {
+    return baseline.referrerSources.map((r) => ({ ...r, count: scale(r.count, rk) }));
   }
 
   // Readiness, schema, performance — range-independent

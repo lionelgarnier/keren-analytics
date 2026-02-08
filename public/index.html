@@ -187,6 +187,38 @@
             </div>
           </div>
 
+          <!-- Conversion Funnel + Traffic Sources -->
+          <div class="grid-2">
+            <div class="panel">
+              <h3>Conversion Funnel</h3>
+              <div id="funnelContainer" class="funnel-container"></div>
+              <div id="funnelEmpty" class="empty-state hidden">
+                <p>No navigation data to build funnel.</p>
+              </div>
+            </div>
+            <div class="panel">
+              <h3>Traffic Sources</h3>
+              <div class="chart-container chart-medium">
+                <canvas id="referrerChart"></canvas>
+              </div>
+              <div id="referrerEmpty" class="empty-state hidden">
+                <p>No referrer data available.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- User Flow (visual Sankey-style) -->
+          <div class="panel">
+            <div class="panel-header">
+              <h3>User Flow</h3>
+              <span id="flowCount" class="badge-count"></span>
+            </div>
+            <div id="flowDiagram" class="flow-diagram"></div>
+            <div id="flowEmpty" class="empty-state hidden">
+              <p>No navigation path data available.</p>
+            </div>
+          </div>
+
           <!-- Browser / OS / Device row -->
           <div class="grid-3">
             <div class="panel">
@@ -209,26 +241,6 @@
                 <canvas id="deviceChart"></canvas>
               </div>
               <div id="deviceEmpty" class="empty-state hidden"><p>No device data.</p></div>
-            </div>
-          </div>
-
-          <!-- Navigation paths -->
-          <div class="panel">
-            <div class="panel-header">
-              <h3>Navigation Paths</h3>
-            </div>
-            <table class="data-table sortable" id="topNavTable">
-              <thead>
-                <tr>
-                  <th data-sort="string">From</th>
-                  <th data-sort="string">To</th>
-                  <th data-sort="number">Transitions</th>
-                </tr>
-              </thead>
-              <tbody id="topNavBody"></tbody>
-            </table>
-            <div id="topNavEmpty" class="empty-state hidden">
-              <p>No navigation path data available.</p>
             </div>
           </div>
         </div>
