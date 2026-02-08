@@ -632,6 +632,39 @@ body {
   color: var(--text-secondary);
 }
 
+/* ========== FAQ ========== */
+.doc-faq {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.doc-faq-item {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.doc-faq-item:last-child {
+  border-bottom: none;
+}
+
+.doc-faq-item strong {
+  display: block;
+  font-size: 15px;
+  margin-bottom: 6px;
+  color: var(--text);
+}
+
+.doc-faq-item p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.doc-badge-green {
+  background: var(--green-bg);
+  color: var(--green);
+}
+
 /* ========== Responsive ========== */
 @media (max-width: 900px) {
   .doc-sidebar { display: none; }
