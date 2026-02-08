@@ -12,18 +12,29 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000 and click "Connect Azure". Mock mode returns sample
-dashboard data without any Azure credentials.
+Open http://localhost:3000. You'll see a landing page with two options:
+- **Connect Azure** -- sign in (mock mode auto-connects instantly)
+- **See live preview** -- view the dashboard with sample data, no login required
 
 The dashboard features three tabs:
 - **Marketing**: visitors, sessions, top pages, geo, browser/OS/device
 - **Technical**: response times, error rates, frontend perf, slow endpoints
 - **Readiness**: score (0-100), signal breakdown, LLM-ready improvement prompts
 
-## Real Azure mode (optional)
+## Docker (one-command deploy)
 
-This repo ships with a minimal Azure client that uses direct ARM and Log
-Analytics Query API calls. It expects a bearer token from your own tooling:
+```bash
+docker compose up --build
+```
+
+Open http://localhost:3000. For real Azure mode, create a `.env` file from
+`.env.example` and set your credentials.
+
+## Real Azure mode
+
+See `docs/setup-entra-id.md` for the full step-by-step guide.
+
+Quick start with a CLI token:
 
 ```bash
 export AZURE_MODE=real
@@ -31,11 +42,13 @@ export AZURE_ACCESS_TOKEN="$(az account get-access-token --resource=https://mana
 npm run dev
 ```
 
-Notes:
-- Use a tenant/user with Reader on the subscription and Log Analytics Reader on
-  the workspace.
-- The App Insights resource must be workspace-based so the linked workspace can
-  be discovered.
+For browser-based SSO (recommended), register an Entra ID app and configure
+`AZURE_CLIENT_ID` and `AZURE_CLIENT_SECRET` in `.env`.
+
+Requirements:
+- **Reader** on the subscription (resource discovery)
+- **Log Analytics Reader** on the workspace (KQL queries)
+- App Insights must be **workspace-based** (not classic)
 
 ## What is included
 
@@ -49,6 +62,10 @@ Notes:
 - Cache keys include tenant + workspace + mapping version + range
 - No raw log storage (aggregates only)
 - Cross-department expansion vision (Finance, Legal, Security, Customer Success)
+- Landing page with product pitch and live preview mode
+- Onboarding banner for first-time users
+- Docker deployment (Dockerfile + docker-compose)
+- Hardened Azure client with categorized error messages
 
 ## API endpoints
 
@@ -64,6 +81,7 @@ Notes:
 - `GET /dashboard/overview?range=7d` - full dashboard data + readiness score
 - `GET /recommendations` - improvement recommendations + score
 - `GET /prompts` - LLM-ready prompts for missing signals
+- `GET /preview/dashboard?range=7d` - preview dashboard (no auth, sample data)
 
 ## Tests
 
@@ -71,8 +89,8 @@ Notes:
 npm test
 ```
 
-18 tests covering: API flow, cache, KQL rendering, mapping, readiness,
-readiness score computation, and prompt generation.
+28 tests covering: API flow, cache, KQL rendering, mapping, readiness,
+readiness score computation, prompt generation, and Azure error handling.
 
 ## Documentation
 

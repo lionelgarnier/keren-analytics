@@ -42,6 +42,7 @@ State transitions are persisted to the metadata store for debugging.
 - GET /dashboard/overview?range=today|7d|30d (includes readinessScore)
 - GET /recommendations (includes readinessScore)
 - GET /prompts (LLM-ready prompts for missing signals)
+- GET /preview/dashboard?range=today|7d|30d (no auth, sample data)
 
 ## Configuration
 Environment variables:
@@ -117,9 +118,10 @@ No raw logs are stored.
 - Unit tests for mapping, readiness, KQL rendering, cache
 - Unit tests for readiness score computation
 - Unit tests for LLM prompt generation
+- Unit tests for Azure error categorization and response normalization
 - Integration test for API flow with mock client
 
-Total: 18 tests (11 suites)
+Total: 28 tests (14 suites)
 
 Run with:
 ```
