@@ -521,6 +521,187 @@ body {
   color: #334155;
 }
 
+/* ========== Pagination ========== */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 0 2px;
+  font-size: 12px;
+}
+
+.pagination button {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  color: #475569;
+  transition: all 0.15s ease;
+}
+
+.pagination button:hover:not(:disabled) {
+  background: #e0f2fe;
+  border-color: #93c5fd;
+  color: #1e40af;
+}
+
+.pagination button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.pagination button.active {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+}
+
+.pagination .page-info {
+  color: #94a3b8;
+  font-size: 11px;
+  margin: 0 8px;
+}
+
+/* ========== Custom range & compare ========== */
+.custom-range {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.input-date {
+  padding: 5px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 12px;
+  background: #fff;
+  color: #334155;
+}
+
+.range-sep {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.btn-sm {
+  padding: 5px 12px;
+  font-size: 12px;
+}
+
+.compare-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: #64748b;
+  cursor: pointer;
+  user-select: none;
+  margin-left: 8px;
+}
+
+.compare-toggle input[type="checkbox"] {
+  accent-color: #2563eb;
+}
+
+/* ========== KPI comparison deltas ========== */
+.kpi-delta {
+  font-size: 12px;
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+.kpi-delta.positive {
+  color: #16a34a;
+}
+
+.kpi-delta.negative {
+  color: #dc2626;
+}
+
+.kpi-delta.neutral {
+  color: #94a3b8;
+}
+
+/* ========== Modal ========== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.modal-content {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.2);
+  max-width: 800px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #0f172a;
+}
+
+.modal-body {
+  padding: 20px;
+}
+
+.endpoint-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.endpoint-kpi-card {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 12px;
+  text-align: center;
+}
+
+.endpoint-kpi-card .label {
+  font-size: 11px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.endpoint-kpi-card .value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-top: 2px;
+}
+
+/* ========== Clickable rows ========== */
+.data-table tbody tr.clickable {
+  cursor: pointer;
+}
+
+.data-table tbody tr.clickable:hover {
+  background: #eff6ff;
+}
+
 /* ========== Scrollbar ========== */
 ::-webkit-scrollbar {
   width: 6px;

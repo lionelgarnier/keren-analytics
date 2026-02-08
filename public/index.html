@@ -42,7 +42,18 @@
               <option value="today">Today</option>
               <option value="7d" selected>Last 7 days</option>
               <option value="30d">Last 30 days</option>
+              <option value="custom">Custom range</option>
             </select>
+            <div id="customRangeInputs" class="custom-range hidden">
+              <input type="date" id="customStart" class="input-date" />
+              <span class="range-sep">to</span>
+              <input type="date" id="customEnd" class="input-date" />
+              <button id="customRangeApply" class="btn btn-primary btn-sm">Apply</button>
+            </div>
+            <label class="compare-toggle" id="compareToggleLabel">
+              <input type="checkbox" id="compareToggle" />
+              <span>Compare previous period</span>
+            </label>
           </div>
         </div>
 
@@ -100,6 +111,7 @@
               </thead>
               <tbody id="topPagesBody"></tbody>
             </table>
+            <div id="topPagesPagination" class="pagination hidden"></div>
             <div id="topPagesEmpty" class="empty-state hidden">
               <p>No page view data. Enable frontend tracking in Application Insights.</p>
             </div>
@@ -180,6 +192,7 @@
               </thead>
               <tbody id="slowEndpointsBody"></tbody>
             </table>
+            <div id="slowEndpointsPagination" class="pagination hidden"></div>
             <div id="slowEndpointsEmpty" class="empty-state hidden">
               <p>No request data. Enable backend request tracking.</p>
             </div>
@@ -201,6 +214,7 @@
             </thead>
             <tbody id="topNavBody"></tbody>
           </table>
+          <div id="topNavPagination" class="pagination hidden"></div>
           <div id="topNavEmpty" class="empty-state hidden">
             <p>No navigation path data available.</p>
           </div>
@@ -219,6 +233,25 @@
         <ul id="readinessActions" class="readiness-actions"></ul>
       </aside>
     </main>
+
+    <!-- Endpoint drill-down modal -->
+    <div id="endpointModal" class="modal-overlay hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 id="endpointModalTitle">Endpoint Detail</h3>
+          <button id="endpointModalClose" class="btn btn-ghost-sm">Close</button>
+        </div>
+        <div class="modal-body">
+          <div class="endpoint-kpis" id="endpointKpis"></div>
+          <div class="chart-container chart-wide">
+            <canvas id="endpointTrendChart"></canvas>
+          </div>
+          <div class="chart-container chart-medium" style="margin-top:16px">
+            <canvas id="endpointErrorChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="/app.js"></script>

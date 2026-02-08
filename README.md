@@ -15,10 +15,9 @@ npm run dev
 Open http://localhost:3000 and click "Connect Azure". Mock mode returns sample
 dashboard data without any Azure credentials.
 
-## Real Azure mode (optional)
+## Real Azure mode
 
-This repo ships with a minimal Azure client that uses direct ARM and Log
-Analytics Query API calls. It expects a bearer token from your own tooling:
+### Option A: Bearer token (quick start)
 
 ```bash
 export AZURE_MODE=real
@@ -26,11 +25,39 @@ export AZURE_ACCESS_TOKEN="$(az account get-access-token --resource=https://mana
 npm run dev
 ```
 
-Notes:
-- Use a tenant/user with Reader on the subscription and Log Analytics Reader on
-  the workspace.
-- The App Insights resource must be workspace-based so the linked workspace can
-  be discovered.
+### Option B: OAuth browser sign-in
+
+Register an Entra ID app (see /auth/setup once the server is running), then:
+
+```bash
+export AZURE_MODE=real
+export AZURE_CLIENT_ID=<your-client-id>
+export AZURE_CLIENT_SECRET=<your-client-secret>
+npm run dev
+```
+
+### Option C: Service Principal (automated / CI)
+
+```bash
+# One-time setup
+az ad sp create-for-rbac --name "easy-analytics-sp" --role "Reader" \
+  --scopes /subscriptions/<SUB_ID>
+az role assignment create --assignee <SP_APP_ID> \
+  --role "Log Analytics Reader" --scope <WORKSPACE_RESOURCE_ID>
+
+# Run
+export AZURE_MODE=real
+export AZURE_ACCESS_TOKEN=$(az account get-access-token \
+  --resource https://management.azure.com --query accessToken -o tsv)
+npm run dev
+```
+
+Required RBAC roles:
+- **Reader** on the subscription (resource discovery)
+- **Log Analytics Reader** on the workspace (KQL queries)
+
+The App Insights resource must be workspace-based so the linked workspace can
+be discovered.
 
 ## What is included
 
@@ -40,17 +67,25 @@ Notes:
 - KQL templates stored in versioned files
 - Cache keys include tenant + workspace + mapping version + range
 - No raw log storage (aggregates only)
-- Minimal Overview dashboard (KPIs, top pages, navigation, tech, perf)
+- Overview dashboard with KPIs, trend charts, geo, tech, and performance
+- Paginated tables (top pages, slow endpoints, navigation paths)
+- Custom time range picker (up to 90 days) with period comparison
+- Endpoint drill-down with response time trend and error rate charts
+- OAuth Code + PKCE for browser sign-in (Entra ID)
+- Service Principal support for automated/CI use
 
 ## API endpoints
 
-- `GET /auth/login` - mock login flow
+- `GET /auth/login` - login flow (mock or OAuth)
 - `GET /auth/callback`
 - `GET /auth/session`
+- `GET /auth/setup` - OAuth setup instructions
 - `GET /azure/discover`
 - `POST /azure/select`
+- `POST /azure/select/clear`
 - `GET /readiness`
-- `GET /dashboard/overview?range=7d`
+- `GET /dashboard/overview?range=7d` (also: today, 30d, custom with start/end)
+- `GET /dashboard/endpoint-detail?path=/api/example&range=7d`
 - `GET /recommendations`
 
 ## Tests

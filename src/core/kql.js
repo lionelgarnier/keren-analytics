@@ -44,8 +44,15 @@ export function renderTemplate(template, params, allowedValues = {}) {
     }
     if (allowedValues[placeholder]) {
       const allowed = allowedValues[placeholder];
-      if (!allowed.includes(value)) {
+      // "any" bypasses whitelist — value is sanitized below instead
+      if (allowed !== "any" && !allowed.includes(value)) {
         throw new Error(`KQL param ${placeholder} is not allowed`);
+      }
+      // Sanitize user-supplied values: strip characters that could break KQL
+      if (allowed === "any") {
+        if (/[;|&\r\n]/.test(value)) {
+          throw new Error(`KQL param ${placeholder} contains disallowed characters`);
+        }
       }
     }
   }
