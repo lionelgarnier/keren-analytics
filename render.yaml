@@ -8,6 +8,7 @@ services:
   - type: web
     name: easy-analytics
     runtime: node
+    branch: main
     plan: free
     buildCommand: npm ci --omit=dev
     startCommand: node src/server.js
