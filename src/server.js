@@ -28,6 +28,12 @@ const TOKEN_EXPIRY_BUFFER_MS = 5 * 60 * 1000; // refresh 5 min before expiry
 /** True when the app has an Entra ID client ID configured for OAuth */
 const oauthConfigured = Boolean(config.azureClientId);
 
+/* ========== Reverse proxy trust (Render, Railway, Heroku, etc.) ========== */
+const isProduction = process.env.NODE_ENV === "production";
+if (isProduction) {
+  app.set("trust proxy", 1);
+}
+
 /* ========== Security headers ========== */
 app.use(
   helmet({
@@ -45,7 +51,6 @@ app.use(
 
 app.use(express.json({ limit: "1mb" }));
 
-const isProduction = process.env.NODE_ENV === "production";
 app.use(
   session({
     secret: config.sessionSecret,

@@ -1,0 +1,31 @@
+# Render.com Blueprint — deploy with one click
+# https://render.com/docs/blueprint-spec
+#
+# Click "New" > "Blueprint" in Render dashboard, point to this repo,
+# and Render will create the service automatically.
+
+services:
+  - type: web
+    name: easy-analytics
+    runtime: node
+    plan: free
+    buildCommand: npm ci --omit=dev
+    startCommand: node src/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: AZURE_MODE
+        value: mock
+      - key: SESSION_SECRET
+        generateValue: true
+      # --- Uncomment for real Azure mode ---
+      # - key: AZURE_MODE
+      #   value: real
+      # - key: AZURE_CLIENT_ID
+      #   sync: false
+      # - key: AZURE_CLIENT_SECRET
+      #   sync: false
+      # - key: AZURE_REDIRECT_URI
+      #   value: https://easy-analytics-XXXX.onrender.com/auth/callback
+      # - key: AZURE_TENANT_ID
+      #   value: organizations
