@@ -230,6 +230,171 @@ function generateUserFlow(rng) {
   return { nodes, links };
 }
 
+/* ========== A/B Test auto-detection ========== */
+
+function generateAbTests(rng) {
+  return [
+    {
+      param: "ab_test",
+      testName: "pricing_v2",
+      variants: [
+        { name: "control", visitors: vary(310, 12, rng), sessions: vary(380, 12, rng), conversions: vary(18, 20, rng), avgDuration: vary(4200, 15, rng), bounceRate: vary(42, 12, rng) / 100 },
+        { name: "pricing_v2", visitors: vary(305, 12, rng), sessions: vary(370, 12, rng), conversions: vary(28, 18, rng), avgDuration: vary(5100, 15, rng), bounceRate: vary(35, 14, rng) / 100 },
+      ],
+      detectedAt: new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString(),
+      status: "running",
+    },
+    {
+      param: "ab_test",
+      testName: "cta_green",
+      variants: [
+        { name: "control", visitors: vary(290, 14, rng), sessions: vary(340, 14, rng), conversions: vary(22, 18, rng), avgDuration: vary(3800, 15, rng), bounceRate: vary(38, 12, rng) / 100 },
+        { name: "cta_green", visitors: vary(288, 14, rng), sessions: vary(335, 14, rng), conversions: vary(31, 16, rng), avgDuration: vary(4500, 15, rng), bounceRate: vary(33, 14, rng) / 100 },
+      ],
+      detectedAt: new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString(),
+      status: "running",
+    },
+  ];
+}
+
+/* ========== KPI sparklines with anomaly detection ========== */
+
+function generateKpiSparklines(rng) {
+  // 7 data points for each KPI (last 7 periods)
+  function sparkline(base, volatility, trend) {
+    const points = [];
+    for (let i = 6; i >= 0; i--) {
+      const trendVal = trend ? (6 - i) * trend : 0;
+      points.push(vary(base + trendVal, volatility, rng));
+    }
+    return points;
+  }
+
+  function detectAnomaly(points) {
+    if (points.length < 4) return null;
+    const recent = points[points.length - 1];
+    const prev = points.slice(0, -1);
+    const avg = prev.reduce((a, b) => a + b, 0) / prev.length;
+    const stddev = Math.sqrt(prev.reduce((s, v) => s + (v - avg) ** 2, 0) / prev.length);
+    if (stddev === 0) return null;
+    const zScore = (recent - avg) / stddev;
+    if (Math.abs(zScore) > 1.8) {
+      const pctChange = ((recent - avg) / avg * 100).toFixed(0);
+      return {
+        direction: zScore > 0 ? "up" : "down",
+        pctChange: Number(pctChange),
+        zScore: Math.round(zScore * 10) / 10,
+      };
+    }
+    return null;
+  }
+
+  const visitors = sparkline(220, 15, 3);
+  const sessions = sparkline(260, 12, 4);
+  const errorRate = [0.018, 0.021, 0.019, 0.022, 0.020, 0.019, 0.032].map(v => vary(Math.round(v * 1000), 10, rng) / 1000);
+  const avgResponse = sparkline(248, 10, 0);
+
+  return {
+    visitors: { points: visitors, anomaly: detectAnomaly(visitors) },
+    sessions: { points: sessions, anomaly: detectAnomaly(sessions) },
+    errorRate: { points: errorRate, anomaly: detectAnomaly(errorRate.map(v => Math.round(v * 1000))) },
+    avgResponse: { points: avgResponse, anomaly: detectAnomaly(avgResponse) },
+  };
+}
+
+/* ========== Session replay timelines ========== */
+
+function generateSessionReplays(rng) {
+  const now = Date.now();
+  return [
+    {
+      sessionId: "sess-" + vary(84210, 5, rng),
+      startedAt: new Date(now - vary(1800, 30, rng) * 1000).toISOString(),
+      duration: vary(342, 20, rng),
+      pageCount: 6,
+      converted: true,
+      device: "Desktop",
+      country: "United States",
+      events: [
+        { type: "pageView", path: "/", duration: vary(12, 25, rng), timestamp: 0 },
+        { type: "pageView", path: "/pricing", duration: vary(45, 20, rng), timestamp: vary(15, 20, rng) },
+        { type: "click", label: "View plans", timestamp: vary(35, 20, rng) },
+        { type: "pageView", path: "/pricing#enterprise", duration: vary(62, 18, rng), timestamp: vary(60, 15, rng) },
+        { type: "pageView", path: "/signup", duration: vary(38, 22, rng), timestamp: vary(130, 15, rng) },
+        { type: "click", label: "Create account", timestamp: vary(168, 12, rng) },
+        { type: "pageView", path: "/signup/confirm", duration: vary(8, 30, rng), timestamp: vary(172, 12, rng) },
+        { type: "conversion", label: "Signup completed", timestamp: vary(180, 12, rng) },
+      ],
+    },
+    {
+      sessionId: "sess-" + vary(77503, 5, rng),
+      startedAt: new Date(now - vary(3600, 20, rng) * 1000).toISOString(),
+      duration: vary(185, 20, rng),
+      pageCount: 4,
+      converted: false,
+      device: "Mobile",
+      country: "France",
+      events: [
+        { type: "pageView", path: "/blog/getting-started", duration: vary(65, 20, rng), timestamp: 0 },
+        { type: "pageView", path: "/docs", duration: vary(42, 22, rng), timestamp: vary(68, 15, rng) },
+        { type: "pageView", path: "/pricing", duration: vary(25, 25, rng), timestamp: vary(115, 14, rng) },
+        { type: "pageView", path: "/about", duration: vary(18, 28, rng), timestamp: vary(145, 14, rng) },
+        { type: "exit", label: "Left site", timestamp: vary(165, 14, rng) },
+      ],
+    },
+    {
+      sessionId: "sess-" + vary(91847, 5, rng),
+      startedAt: new Date(now - vary(7200, 15, rng) * 1000).toISOString(),
+      duration: vary(520, 18, rng),
+      pageCount: 8,
+      converted: true,
+      device: "Desktop",
+      country: "Germany",
+      events: [
+        { type: "pageView", path: "/", duration: vary(8, 30, rng), timestamp: 0 },
+        { type: "pageView", path: "/features", duration: vary(55, 18, rng), timestamp: vary(10, 20, rng) },
+        { type: "pageView", path: "/docs", duration: vary(120, 15, rng), timestamp: vary(70, 14, rng) },
+        { type: "pageView", path: "/docs/api-reference", duration: vary(95, 18, rng), timestamp: vary(195, 12, rng) },
+        { type: "click", label: "Compare plans", timestamp: vary(295, 12, rng) },
+        { type: "pageView", path: "/pricing", duration: vary(80, 16, rng), timestamp: vary(300, 12, rng) },
+        { type: "pageView", path: "/signup", duration: vary(45, 20, rng), timestamp: vary(385, 10, rng) },
+        { type: "click", label: "Start free trial", timestamp: vary(430, 10, rng) },
+        { type: "conversion", label: "Trial started", timestamp: vary(435, 10, rng) },
+      ],
+    },
+    {
+      sessionId: "sess-" + vary(63298, 5, rng),
+      startedAt: new Date(now - vary(5400, 18, rng) * 1000).toISOString(),
+      duration: vary(42, 25, rng),
+      pageCount: 1,
+      converted: false,
+      device: "Mobile",
+      country: "United Kingdom",
+      events: [
+        { type: "pageView", path: "/blog/analytics-best-practices", duration: vary(38, 22, rng), timestamp: 0 },
+        { type: "exit", label: "Bounced", timestamp: vary(40, 22, rng) },
+      ],
+    },
+    {
+      sessionId: "sess-" + vary(55102, 5, rng),
+      startedAt: new Date(now - vary(9000, 12, rng) * 1000).toISOString(),
+      duration: vary(280, 18, rng),
+      pageCount: 5,
+      converted: false,
+      device: "Desktop",
+      country: "Canada",
+      events: [
+        { type: "pageView", path: "/", duration: vary(15, 22, rng), timestamp: 0 },
+        { type: "pageView", path: "/docs", duration: vary(85, 16, rng), timestamp: vary(18, 18, rng) },
+        { type: "pageView", path: "/docs/setup", duration: vary(60, 18, rng), timestamp: vary(108, 14, rng) },
+        { type: "error", label: "404 /docs/old-page", timestamp: vary(172, 14, rng) },
+        { type: "pageView", path: "/contact", duration: vary(25, 25, rng), timestamp: vary(180, 14, rng) },
+        { type: "exit", label: "Left site", timestamp: vary(210, 14, rng) },
+      ],
+    },
+  ];
+}
+
 /* ========== Peak hours heatmap ========== */
 
 function generatePeakHours(rng) {
@@ -471,6 +636,12 @@ function generateBaseline() {
     userFlow: generateUserFlow(rng),
     // Peak hours heatmap (day-of-week x hour)
     peakHours: generatePeakHours(rng),
+    // A/B Test auto-detected variants comparison
+    abTests: generateAbTests(rng),
+    // KPI sparklines (7 data points for mini trend)
+    kpiSparklines: generateKpiSparklines(rng),
+    // Session replay timelines (sample sessions)
+    sessionReplays: generateSessionReplays(rng),
     // Auto-detected URL parameters with top values
     urlParams: generateUrlParams(rng),
     // Campaign (UTM) breakdown with metrics
@@ -537,6 +708,27 @@ export function getMockRows(queryName, timeRangeKey) {
   }
   if (queryName === "referrerSources") {
     return baseline.referrerSources.map((r) => ({ ...r, count: scale(r.count, rk) }));
+  }
+
+  // A/B tests
+  if (queryName === "abTests") {
+    return baseline.abTests.map((t) => ({
+      ...t,
+      variants: t.variants.map((v) => ({
+        ...v,
+        visitors: scale(v.visitors, rk),
+        sessions: scale(v.sessions, rk),
+        conversions: scale(v.conversions, rk),
+      })),
+    }));
+  }
+  // KPI sparklines
+  if (queryName === "kpiSparklines") {
+    return baseline.kpiSparklines;
+  }
+  // Session replays
+  if (queryName === "sessionReplays") {
+    return baseline.sessionReplays;
   }
 
   // Peak hours heatmap

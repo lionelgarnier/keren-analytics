@@ -652,6 +652,266 @@ function renderGeoMap(data) {
   }
 }
 
+/* ========== Render: KPI Sparklines ========== */
+function renderSparkline(svgId, points, color, invertAnomaly) {
+  const svg = document.getElementById(svgId);
+  if (!svg || !points || points.length < 2) return;
+  svg.innerHTML = "";
+  const ns = "http://www.w3.org/2000/svg";
+  const w = 60, h = 20, pad = 2;
+  const min = Math.min(...points);
+  const max = Math.max(...points);
+  const range = max - min || 1;
+
+  const coords = points.map((v, i) => ({
+    x: pad + (i / (points.length - 1)) * (w - 2 * pad),
+    y: pad + (1 - (v - min) / range) * (h - 2 * pad),
+  }));
+
+  // Area fill
+  const areaPath = document.createElementNS(ns, "path");
+  const lineParts = coords.map((c, i) => (i === 0 ? `M${c.x},${c.y}` : `L${c.x},${c.y}`)).join(" ");
+  areaPath.setAttribute("d", `${lineParts} L${coords[coords.length - 1].x},${h} L${coords[0].x},${h} Z`);
+  areaPath.setAttribute("fill", color);
+  areaPath.classList.add("sparkline-area");
+  svg.appendChild(areaPath);
+
+  // Line
+  const line = document.createElementNS(ns, "polyline");
+  line.setAttribute("points", coords.map((c) => `${c.x},${c.y}`).join(" "));
+  line.setAttribute("stroke", color);
+  line.classList.add("sparkline-line");
+  svg.appendChild(line);
+
+  // Last dot
+  const last = coords[coords.length - 1];
+  const dot = document.createElementNS(ns, "circle");
+  dot.setAttribute("cx", last.x);
+  dot.setAttribute("cy", last.y);
+  dot.setAttribute("fill", color);
+  dot.classList.add("sparkline-dot");
+  svg.appendChild(dot);
+}
+
+function renderAnomalyBadge(badgeId, anomaly, invertBad) {
+  const badge = document.getElementById(badgeId);
+  if (!badge) return;
+  if (!anomaly) {
+    badge.classList.add("hidden");
+    return;
+  }
+  badge.classList.remove("hidden");
+  const arrow = anomaly.direction === "up" ? "\u2191" : "\u2193";
+  const pct = Math.abs(anomaly.pctChange);
+  badge.textContent = `${arrow} ${pct}% vs avg`;
+
+  // For error rate / response time, "up" is bad. For visitors, "up" is good.
+  const isGood = invertBad ? anomaly.direction === "down" : anomaly.direction === "up";
+  badge.className = `anomaly-badge ${isGood ? "anomaly-up" : anomaly.direction === "up" ? "anomaly-warning" : "anomaly-down"}`;
+}
+
+function renderAllSparklines(sparklines) {
+  if (!sparklines) return;
+  if (sparklines.visitors) {
+    renderSparkline("sparkVisitors", sparklines.visitors.points, "#3b82f6");
+    renderAnomalyBadge("anomalyVisitors", sparklines.visitors.anomaly, false);
+  }
+  if (sparklines.sessions) {
+    renderSparkline("sparkSessions", sparklines.sessions.points, "#10b981");
+    renderAnomalyBadge("anomalySessions", sparklines.sessions.anomaly, false);
+  }
+  if (sparklines.errorRate) {
+    renderSparkline("sparkErrorRate", sparklines.errorRate.points.map((v) => v * 100), "#ef4444");
+    renderAnomalyBadge("anomalyErrorRate", sparklines.errorRate.anomaly, true);
+  }
+  if (sparklines.avgResponse) {
+    renderSparkline("sparkAvgResponse", sparklines.avgResponse.points, "#f59e0b");
+    renderAnomalyBadge("anomalyAvgResponse", sparklines.avgResponse.anomaly, true);
+  }
+}
+
+/* ========== Render: A/B Test Monitor ========== */
+function renderAbTests(tests) {
+  const panel = document.getElementById("abTestPanel");
+  const container = document.getElementById("abTestContainer");
+  container.innerHTML = "";
+
+  if (!tests || tests.length === 0) {
+    panel.classList.add("hidden");
+    return;
+  }
+  panel.classList.remove("hidden");
+
+  tests.forEach((test) => {
+    const card = document.createElement("div");
+    card.className = "ab-test-card";
+
+    // Header
+    const header = document.createElement("div");
+    header.className = "ab-test-header";
+    header.innerHTML = `<span class="ab-test-name">${test.testName}</span><span class="ab-test-status">${test.status}</span>`;
+    card.appendChild(header);
+
+    // Determine winner by conversion rate
+    const convRates = test.variants.map((v) => v.visitors > 0 ? v.conversions / v.visitors : 0);
+    const winnerIdx = convRates.indexOf(Math.max(...convRates));
+
+    // Variants grid
+    const grid = document.createElement("div");
+    grid.className = "ab-test-variants";
+
+    test.variants.forEach((variant, idx) => {
+      const vEl = document.createElement("div");
+      vEl.className = `ab-variant${idx === winnerIdx ? " winner" : ""}`;
+
+      const nameEl = document.createElement("div");
+      nameEl.className = "ab-variant-name";
+      nameEl.textContent = variant.name;
+      vEl.appendChild(nameEl);
+
+      if (idx === winnerIdx && test.variants.length > 1) {
+        const badge = document.createElement("span");
+        badge.className = "ab-winner-badge";
+        badge.textContent = "WINNER";
+        vEl.appendChild(badge);
+      }
+
+      const convRate = variant.visitors > 0 ? variant.conversions / variant.visitors : 0;
+      const metrics = [
+        { label: "Visitors", value: fmt(variant.visitors) },
+        { label: "Conversions", value: fmt(variant.conversions) },
+        { label: "Conv. Rate", value: fmtPct(convRate), highlight: true },
+        { label: "Bounce Rate", value: fmtPct(variant.bounceRate) },
+        { label: "Avg Duration", value: `${Math.round(variant.avgDuration / 1000)}s` },
+      ];
+
+      const metricsEl = document.createElement("div");
+      metricsEl.className = "ab-metrics";
+      metrics.forEach((m) => {
+        const row = document.createElement("div");
+        row.className = "ab-metric";
+        const labelSpan = document.createElement("span");
+        labelSpan.className = "ab-metric-label";
+        labelSpan.textContent = m.label;
+        const valueSpan = document.createElement("span");
+        valueSpan.className = "ab-metric-value";
+        valueSpan.textContent = m.value;
+        if (m.highlight && idx === winnerIdx && test.variants.length > 1) {
+          valueSpan.classList.add("better");
+        }
+        row.appendChild(labelSpan);
+        row.appendChild(valueSpan);
+        metricsEl.appendChild(row);
+      });
+      vEl.appendChild(metricsEl);
+      grid.appendChild(vEl);
+    });
+
+    card.appendChild(grid);
+    container.appendChild(card);
+  });
+}
+
+/* ========== Render: Session Replay Timelines ========== */
+function renderSessionReplays(sessions) {
+  const container = document.getElementById("sessionReplays");
+  const emptyEl = document.getElementById("sessionReplaysEmpty");
+  container.innerHTML = "";
+
+  if (!sessions || sessions.length === 0) {
+    container.classList.add("hidden");
+    emptyEl?.classList.remove("hidden");
+    return;
+  }
+  container.classList.remove("hidden");
+  emptyEl?.classList.add("hidden");
+
+  const eventIcons = {
+    pageView: "\u25CF",
+    click: "\u25B6",
+    conversion: "\u2713",
+    error: "\u2716",
+    exit: "\u25CB",
+  };
+
+  sessions.forEach((session, sIdx) => {
+    const card = document.createElement("div");
+    card.className = "session-card";
+
+    // Header
+    const header = document.createElement("div");
+    header.className = "session-header";
+    header.addEventListener("click", () => card.classList.toggle("open"));
+
+    const meta = document.createElement("div");
+    meta.className = "session-meta";
+
+    const idSpan = document.createElement("span");
+    idSpan.className = "session-id";
+    idSpan.textContent = session.sessionId;
+    meta.appendChild(idSpan);
+
+    const tag = document.createElement("span");
+    tag.className = `session-tag ${session.converted ? "converted" : session.pageCount === 1 ? "bounced" : "exited"}`;
+    tag.textContent = session.converted ? "Converted" : session.pageCount === 1 ? "Bounced" : "Exited";
+    meta.appendChild(tag);
+
+    const info = document.createElement("span");
+    info.textContent = `${session.pageCount} pages \u00B7 ${Math.round(session.duration)}s \u00B7 ${session.device} \u00B7 ${session.country}`;
+    meta.appendChild(info);
+
+    header.appendChild(meta);
+
+    const arrow = document.createElement("span");
+    arrow.className = "session-arrow";
+    arrow.textContent = "\u25BC";
+    header.appendChild(arrow);
+    card.appendChild(header);
+
+    // Auto-open first session
+    if (sIdx === 0) card.classList.add("open");
+
+    // Timeline
+    const timeline = document.createElement("div");
+    timeline.className = "session-timeline";
+
+    session.events.forEach((event) => {
+      const eventEl = document.createElement("div");
+      eventEl.className = "timeline-event";
+
+      const dot = document.createElement("span");
+      dot.className = `timeline-dot ${event.type}`;
+      dot.textContent = eventIcons[event.type] || "\u25CF";
+      eventEl.appendChild(dot);
+
+      const content = document.createElement("div");
+      content.className = "timeline-content";
+      const label = document.createElement("div");
+      label.className = "timeline-label";
+      label.textContent = event.type === "pageView" ? event.path : event.label;
+      content.appendChild(label);
+
+      if (event.type === "pageView" && event.duration) {
+        const detail = document.createElement("div");
+        detail.className = "timeline-detail";
+        detail.textContent = `${event.duration}s on page`;
+        content.appendChild(detail);
+      }
+      eventEl.appendChild(content);
+
+      const time = document.createElement("span");
+      time.className = "timeline-time";
+      time.textContent = `+${event.timestamp}s`;
+      eventEl.appendChild(time);
+
+      timeline.appendChild(eventEl);
+    });
+
+    card.appendChild(timeline);
+    container.appendChild(card);
+  });
+}
+
 /* ========== Render: Smart Insights ========== */
 function renderInsights(dashboard) {
   const panel = document.getElementById("insightsPanel");
@@ -1677,6 +1937,9 @@ function renderDashboard(data) {
   const btData = dashboard.charts.browserTimings;
   document.getElementById("kpiFrontendAvg").textContent = btData ? fmtMs(btData.avgTotal) : "-";
 
+  // KPI Sparklines with anomaly detection
+  renderAllSparklines(dashboard.charts.kpiSparklines);
+
   // Smart Insights (auto-generated from all data)
   renderInsights(dashboard);
 
@@ -1720,6 +1983,9 @@ function renderDashboard(data) {
     tr.appendChild(td(fmt(row.count), "num"));
   });
 
+  // A/B Test Monitor
+  renderAbTests(dashboard.charts.abTests);
+
   // Peak Hours heatmap
   renderPeakHours(dashboard.charts.peakHours);
 
@@ -1735,6 +2001,9 @@ function renderDashboard(data) {
 
   // Traffic Sources
   renderReferrerChart(dashboard.charts.referrerSources);
+
+  // Session Replay Timelines (Technical tab)
+  renderSessionReplays(dashboard.charts.sessionReplays);
 
   // Readiness score
   renderReadinessScore(readinessScore, readiness);

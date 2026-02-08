@@ -11,7 +11,7 @@ export function createMockClient() {
     },
     async queryWorkspace({ queryName, timeRangeKey }) {
       // Structured data queries (not table format)
-      if (["userFlow", "urlParams", "campaignBreakdown", "peakHours"].includes(queryName)) {
+      if (["userFlow", "urlParams", "campaignBreakdown", "peakHours", "abTests", "kpiSparklines", "sessionReplays"].includes(queryName)) {
         return { _raw: getMockRows(queryName, timeRangeKey) };
       }
       const rows = getMockRows(queryName, timeRangeKey);

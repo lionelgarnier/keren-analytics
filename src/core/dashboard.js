@@ -355,6 +355,18 @@ export async function buildOverviewDashboard({
       })
     : emptyResult;
 
+  const abTestsResult = hasPageTable
+    ? await runQuery({ tenantId, resourceId, workspaceId, queryName: "abTests", templateName: "top-pages", params: { ...timeParams, tableName, pagePathExpr }, allowedValues: { tableName: ["pageViews", "requests"], pagePathExpr: allowedExpr.pagePathExpr }, timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient })
+    : { _raw: null };
+
+  const kpiSparklinesResult = hasPageTable
+    ? await runQuery({ tenantId, resourceId, workspaceId, queryName: "kpiSparklines", templateName: "top-pages", params: { ...timeParams, tableName, pagePathExpr }, allowedValues: { tableName: ["pageViews", "requests"], pagePathExpr: allowedExpr.pagePathExpr }, timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient })
+    : { _raw: null };
+
+  const sessionReplaysResult = hasPageTable
+    ? await runQuery({ tenantId, resourceId, workspaceId, queryName: "sessionReplays", templateName: "top-pages", params: { ...timeParams, tableName, pagePathExpr }, allowedValues: { tableName: ["pageViews", "requests"], pagePathExpr: allowedExpr.pagePathExpr }, timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient })
+    : { _raw: null };
+
   const peakHoursResult = hasPageTable
     ? await runQuery({
         tenantId, resourceId, workspaceId,
@@ -545,6 +557,9 @@ export async function buildOverviewDashboard({
         share: row.share || safeDivide(row.count, totalGeo),
       })),
       userFlow: userFlowResult?._raw || null,
+      abTests: abTestsResult?._raw || null,
+      kpiSparklines: kpiSparklinesResult?._raw || null,
+      sessionReplays: sessionReplaysResult?._raw || null,
       peakHours: peakHoursResult?._raw || null,
       urlParams: urlParamsResult?._raw || null,
       campaignBreakdown: campaignResult?._raw || null,
