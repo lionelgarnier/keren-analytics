@@ -75,6 +75,21 @@ body {
   letter-spacing: -0.3px;
 }
 
+.nav-link {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s ease;
+}
+
+.nav-link:hover {
+  color: var(--text-primary);
+  background: var(--border-light);
+}
+
 .navbar-right {
   display: flex;
   align-items: center;
@@ -1945,6 +1960,23 @@ body {
   color: var(--text-secondary);
   margin: 0;
   line-height: 1.5;
+}
+
+.landing-docs-link {
+  text-align: center;
+  margin-top: 24px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.landing-docs-link a {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.landing-docs-link a:hover {
+  text-decoration: underline;
 }
 
 .landing-trust {
