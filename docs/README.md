@@ -4,6 +4,7 @@
 - Product overview : [product.md](product.md) - features, audiences, acceptance criteria
 - Technical design : [technical.md](technical.md) - architecture, API, pipeline
 - Multi-cloud architecture : [architecture-multicloud.md](architecture-multicloud.md) - provider abstraction, AWS/GCP design
+- **Auth architecture** : [architecture-auth.md](architecture-auth.md) - auth vs. data access separation, provider comparison
 - **Entra ID setup** : [setup-entra-id.md](setup-entra-id.md) - step-by-step OAuth configuration guide
 
 ### Delivery backlog
