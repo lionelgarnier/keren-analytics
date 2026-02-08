@@ -1,0 +1,5 @@
+let start={{timeStart}};
+let end={{timeEnd}};
+union isfuzzy=true withsource=tableName pageViews, requests, customEvents, dependencies, exceptions, traces, browserTimings
+| where timestamp between (start..end)
+| summarize count = count() by tableName

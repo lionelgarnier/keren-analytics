@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Easy Analytics</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <!-- ========== Top navbar ========== -->
+    <nav class="navbar">
+      <div class="navbar-inner">
+        <div class="navbar-left">
+          <span class="logo">Easy Analytics</span>
+          <span class="badge" id="modeBadge"></span>
+        </div>
+        <div class="navbar-right">
+          <a href="/docs" class="nav-link">Docs</a>
+          <div id="selectedResourceBar" class="resource-pill hidden">
+            <span id="selectedResourceName" class="resource-pill-name"></span>
+            <button id="changeResourceButton" class="resource-pill-change">Change</button>
+          </div>
+          <button id="connectButton" class="btn btn-primary">Connect Azure</button>
+          <button id="logoutButton" class="btn btn-ghost hidden">Logout</button>
+        </div>
+      </div>
+    </nav>
+
+    <main class="container">
+      <!-- ========== Landing page (shown before login) ========== -->
+      <section id="landingPage" class="hidden">
+        <div class="landing-hero">
+          <h2 class="landing-title">Your cloud telemetry,<br>transformed into insights</h2>
+          <p class="landing-subtitle">Connect your Azure tenant and get a complete analytics dashboard in under 2 minutes. No agent to deploy, no data stored, no KQL to write.</p>
+          <div class="landing-actions">
+            <button id="landingConnectBtn" class="btn btn-primary btn-lg">Connect Azure</button>
+            <button id="landingPreviewBtn" class="btn btn-ghost btn-lg">See live preview</button>
+          </div>
+        </div>
+        <div class="landing-features">
+          <div class="landing-card">
+            <div class="landing-card-icon">M</div>
+            <h3>Marketing Analytics</h3>
+            <p>Visitors, sessions, top pages, geo distribution, navigation paths, browser and device breakdown.</p>
+          </div>
+          <div class="landing-card">
+            <div class="landing-card-icon">T</div>
+            <h3>Technical Monitoring</h3>
+            <p>Response times, error rates, slow endpoints, frontend performance -- all from existing telemetry.</p>
+          </div>
+          <div class="landing-card">
+            <div class="landing-card-icon">R</div>
+            <h3>Smart Readiness</h3>
+            <p>Readiness score, signal breakdown, and AI-ready prompts to improve your telemetry coverage.</p>
+          </div>
+        </div>
+        <div class="landing-docs-link">
+          <a href="/docs">Read the documentation</a> -- setup guides, campaign tracking, A/B tests, API reference
+        </div>
+        <div class="landing-trust">
+          <div class="trust-item">
+            <strong>Zero data storage</strong>
+            <span>Your data stays in your Azure tenant</span>
+          </div>
+          <div class="trust-item">
+            <strong>SSO via Azure AD</strong>
+            <span>One-click sign-in, no forms</span>
+          </div>
+          <div class="trust-item">
+            <strong>Dashboard in 2 min</strong>
+            <span>Auto-discovery, zero configuration</span>
+          </div>
+          <div class="trust-item">
+            <strong>Multi-cloud ready</strong>
+            <span>Azure first, AWS and GCP planned</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Preview mode banner -->
+      <div id="previewBanner" class="preview-banner hidden">
+        <span>Preview mode -- viewing sample data.</span>
+        <button id="previewConnectBtn" class="btn btn-primary btn-sm">Connect your Azure to see real data</button>
+        <button id="previewExitBtn" class="btn btn-ghost btn-sm">Exit preview</button>
+      </div>
+
+      <!-- Onboarding banner (first dashboard load) -->
+      <div id="onboardingBanner" class="onboarding-banner hidden">
+        <div class="onboarding-content">
+          <strong>Welcome to Easy Analytics!</strong>
+          <span>Use the tabs above to switch between Marketing and Technical views. Check the Readiness tab to improve your telemetry coverage.</span>
+        </div>
+        <button id="onboardingDismiss" class="btn btn-ghost btn-sm">Got it</button>
+      </div>
+
+      <!-- Status messages -->
+      <section id="statusPanel" class="status-bar"></section>
+
+      <!-- Resource selection -->
+      <section id="resourcePanel" class="panel hidden">
+        <h2>Select Application Insights Resource</h2>
+        <p class="text-muted">Choose the resource to analyze. If you have only one, it will be selected automatically.</p>
+        <div id="resourceList" class="resource-list"></div>
+      </section>
+
+      <!-- ========== Dashboard ========== -->
+      <section id="dashboardPanel" class="hidden">
+
+        <!-- Tab bar + time range -->
+        <div class="tab-toolbar">
+          <div class="tab-bar" role="tablist">
+            <button class="tab active" data-tab="marketing" role="tab" aria-selected="true">Marketing</button>
+            <button class="tab" data-tab="technical" role="tab" aria-selected="false">Technical</button>
+            <button class="tab" data-tab="readiness" role="tab" aria-selected="false">
+              Readiness
+              <span id="scoreMiniBadge" class="score-mini-badge hidden"></span>
+            </button>
+          </div>
+          <div class="toolbar-right">
+            <select id="rangeSelect" class="select">
+              <option value="today">Today</option>
+              <option value="7d" selected>Last 7 days</option>
+              <option value="30d">Last 30 days</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- ==================== MARKETING TAB ==================== -->
+        <div id="tab-marketing" class="tab-content active">
+
+          <!-- KPI row with sparklines -->
+          <div class="kpi-grid kpi-grid-4">
+            <div class="kpi-card">
+              <span class="kpi-label">Unique Visitors</span>
+              <div class="kpi-value-row">
+                <span id="kpiVisitors" class="kpi-value">-</span>
+                <svg id="sparkVisitors" class="sparkline" viewBox="0 0 60 20"></svg>
+              </div>
+              <span id="anomalyVisitors" class="anomaly-badge hidden"></span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-label">Sessions</span>
+              <div class="kpi-value-row">
+                <span id="kpiSessions" class="kpi-value">-</span>
+                <svg id="sparkSessions" class="sparkline" viewBox="0 0 60 20"></svg>
+              </div>
+              <span id="anomalySessions" class="anomaly-badge hidden"></span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-label">Page Views</span>
+              <span id="kpiPageViews" class="kpi-value">-</span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-label">Avg Pages / Session</span>
+              <span id="kpiPagesPerSession" class="kpi-value">-</span>
+            </div>
+          </div>
+
+          <!-- Smart Insights (auto-generated) -->
+          <div id="insightsPanel" class="insights-panel hidden">
+            <div id="insightsList" class="insights-list"></div>
+          </div>
+
+          <!-- Traffic trend (full width) -->
+          <div class="panel">
+            <h3>Traffic Trend</h3>
+            <div class="chart-container chart-wide">
+              <canvas id="dailyTrendChart"></canvas>
+            </div>
+            <div id="dailyTrendEmpty" class="empty-state hidden">
+              <p>No trend data available for this period.</p>
+            </div>
+          </div>
+
+          <!-- Top Pages (full width) -->
+          <div class="panel">
+            <div class="panel-header">
+              <h3>Top Pages</h3>
+              <span id="topPagesCount" class="badge-count"></span>
+            </div>
+            <table class="data-table sortable" id="topPagesTable">
+              <thead>
+                <tr>
+                  <th data-sort="string">Path</th>
+                  <th data-sort="number">Views</th>
+                  <th data-sort="number">Share</th>
+                </tr>
+              </thead>
+              <tbody id="topPagesBody"></tbody>
+            </table>
+            <div id="topPagesEmpty" class="empty-state hidden">
+              <p>No page view data. Enable frontend tracking.</p>
+            </div>
+          </div>
+
+          <!-- Geo Distribution (map + chart toggle) -->
+          <div class="panel">
+            <div class="panel-header">
+              <h3>Geo Distribution</h3>
+              <div class="view-toggle" data-toggle-group="geo">
+                <button class="view-toggle-btn active" data-view="map">Map</button>
+                <button class="view-toggle-btn" data-view="chart">Chart</button>
+              </div>
+            </div>
+            <div id="geoMapView" class="toggle-view active">
+              <div id="geoMap" class="map-container"></div>
+            </div>
+            <div id="geoChartView" class="toggle-view">
+              <div class="chart-container chart-medium">
+                <canvas id="geoChart"></canvas>
+              </div>
+            </div>
+            <div id="geoEmpty" class="empty-state hidden">
+              <p>No geo data available.</p>
+            </div>
+          </div>
+
+          <!-- Peak Hours + Content Performance -->
+          <div class="grid-2">
+            <div class="panel">
+              <h3>Peak Hours</h3>
+              <div id="peakHoursGrid" class="peak-hours-grid"></div>
+              <div id="peakHoursEmpty" class="empty-state hidden">
+                <p>No hourly data available.</p>
+              </div>
+            </div>
+            <div class="panel">
+              <div class="panel-header">
+                <h3>Content Performance</h3>
+                <span class="badge-count">conversion contribution</span>
+              </div>
+              <div id="contentScoring" class="content-scoring"></div>
+              <div id="contentScoringEmpty" class="empty-state hidden">
+                <p>No navigation data to compute content scores.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Campaigns & URL Parameters -->
+          <div class="panel">
+            <div class="panel-header">
+              <h3>Campaigns & URL Parameters</h3>
+              <div class="panel-header-right">
+                <span id="paramScanCount" class="badge-count"></span>
+                <div class="view-toggle" data-toggle-group="campaign">
+                  <button class="view-toggle-btn active" data-view="overview">Campaigns</button>
+                  <button class="view-toggle-btn" data-view="params">Parameters</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Campaign overview (UTM breakdown table) -->
+            <div id="campaignOverviewView" class="toggle-view active">
+              <table class="data-table sortable" id="campaignTable">
+                <thead>
+                  <tr>
+                    <th data-sort="string">Source</th>
+                    <th data-sort="string">Medium</th>
+                    <th data-sort="string">Campaign</th>
+                    <th data-sort="number">Visitors</th>
+                    <th data-sort="number">Sessions</th>
+                    <th data-sort="number">Conv.</th>
+                    <th data-sort="number">Conv%</th>
+                  </tr>
+                </thead>
+                <tbody id="campaignBody"></tbody>
+              </table>
+              <div id="campaignEmpty" class="empty-state hidden">
+                <p>No UTM campaign data detected in URLs. Add utm_source, utm_medium, utm_campaign parameters to your marketing links.</p>
+              </div>
+            </div>
+
+            <!-- Auto-detected URL parameters -->
+            <div id="campaignParamsView" class="toggle-view">
+              <p class="text-muted" style="margin-top:0">Auto-detected URL parameters from your telemetry. Pin any parameter to add it as a dashboard filter.</p>
+              <div id="paramChips" class="param-chips"></div>
+              <div id="paramDetail" class="param-detail hidden">
+                <div class="param-detail-header">
+                  <h4 id="paramDetailName"></h4>
+                  <button id="paramDetailClose" class="btn btn-ghost btn-sm">Close</button>
+                </div>
+                <div id="paramDetailValues" class="param-values"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Active filters bar -->
+          <div id="filterBar" class="filter-bar hidden">
+            <span class="filter-bar-label">Filters:</span>
+            <div id="filterChips" class="filter-chips"></div>
+            <button id="clearFilters" class="btn btn-ghost btn-sm">Clear all</button>
+          </div>
+
+          <!-- A/B Test Monitor -->
+          <div id="abTestPanel" class="panel hidden">
+            <div class="panel-header">
+              <h3>A/B Tests Detected</h3>
+              <span class="badge">auto-detected</span>
+            </div>
+            <div id="abTestContainer" class="ab-tests"></div>
+          </div>
+
+          <!-- Conversion Funnel + Traffic Sources -->
+          <div class="grid-2">
+            <div class="panel">
+              <h3>Conversion Funnel</h3>
+              <div id="funnelContainer" class="funnel-container"></div>
+              <div id="funnelEmpty" class="empty-state hidden">
+                <p>No navigation data to build funnel.</p>
+              </div>
+            </div>
+            <div class="panel">
+              <h3>Traffic Sources</h3>
+              <div class="chart-container chart-medium">
+                <canvas id="referrerChart"></canvas>
+              </div>
+              <div id="referrerEmpty" class="empty-state hidden">
+                <p>No referrer data available.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- User Flow (sankey + table toggle) -->
+          <div class="panel">
+            <div class="panel-header">
+              <h3>User Flow</h3>
+              <div class="panel-header-right">
+                <span id="flowCount" class="badge-count"></span>
+                <div class="view-toggle" data-toggle-group="flow">
+                  <button class="view-toggle-btn active" data-view="sankey">Flow</button>
+                  <button class="view-toggle-btn" data-view="table">Table</button>
+                </div>
+              </div>
+            </div>
+            <div id="flowSankeyView" class="toggle-view active">
+              <div id="flowDiagram" class="flow-diagram"></div>
+            </div>
+            <div id="flowTableView" class="toggle-view">
+              <table class="data-table sortable" id="topNavTable">
+                <thead>
+                  <tr>
+                    <th data-sort="string">From</th>
+                    <th data-sort="string">To</th>
+                    <th data-sort="number">Transitions</th>
+                  </tr>
+                </thead>
+                <tbody id="topNavBody"></tbody>
+              </table>
+            </div>
+            <div id="flowEmpty" class="empty-state hidden">
+              <p>No navigation path data available.</p>
+            </div>
+          </div>
+
+          <!-- Browser / OS / Device row -->
+          <div class="grid-3">
+            <div class="panel">
+              <h3>Browser</h3>
+              <div class="chart-container chart-small">
+                <canvas id="browserChart"></canvas>
+              </div>
+              <div id="browserEmpty" class="empty-state hidden"><p>No browser data.</p></div>
+            </div>
+            <div class="panel">
+              <h3>OS</h3>
+              <div class="chart-container chart-small">
+                <canvas id="osChart"></canvas>
+              </div>
+              <div id="osEmpty" class="empty-state hidden"><p>No OS data.</p></div>
+            </div>
+            <div class="panel">
+              <h3>Device</h3>
+              <div class="chart-container chart-small">
+                <canvas id="deviceChart"></canvas>
+              </div>
+              <div id="deviceEmpty" class="empty-state hidden"><p>No device data.</p></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==================== TECHNICAL TAB ==================== -->
+        <div id="tab-technical" class="tab-content">
+
+          <!-- Tech KPIs with sparklines -->
+          <div class="kpi-grid kpi-grid-4">
+            <div class="kpi-card kpi-card-neutral">
+              <span class="kpi-label">Avg Response</span>
+              <div class="kpi-value-row">
+                <span id="kpiAvg" class="kpi-value">-</span>
+                <svg id="sparkAvgResponse" class="sparkline" viewBox="0 0 60 20"></svg>
+              </div>
+              <span class="kpi-unit">ms</span>
+              <span id="anomalyAvgResponse" class="anomaly-badge hidden"></span>
+            </div>
+            <div class="kpi-card kpi-card-neutral">
+              <span class="kpi-label">P95 Response</span>
+              <span id="kpiP95" class="kpi-value">-</span>
+              <span class="kpi-unit">ms</span>
+            </div>
+            <div class="kpi-card" id="kpiErrorCard">
+              <span class="kpi-label">Error Rate</span>
+              <div class="kpi-value-row">
+                <span id="kpiErrors" class="kpi-value">-</span>
+                <svg id="sparkErrorRate" class="sparkline" viewBox="0 0 60 20"></svg>
+              </div>
+              <span id="anomalyErrorRate" class="anomaly-badge hidden"></span>
+            </div>
+            <div class="kpi-card kpi-card-neutral">
+              <span class="kpi-label">Frontend Avg</span>
+              <span id="kpiFrontendAvg" class="kpi-value">-</span>
+              <span class="kpi-unit">ms</span>
+            </div>
+          </div>
+
+          <!-- Browser timings + Slow endpoints -->
+          <div class="grid-2">
+            <div class="panel">
+              <h3>Frontend Performance</h3>
+              <div class="chart-container chart-medium">
+                <canvas id="browserTimingsChart"></canvas>
+              </div>
+              <div id="browserTimingsKpis" class="timing-kpis hidden">
+                <span class="timing-kpi">Avg: <strong id="btAvgTotal">-</strong> ms</span>
+                <span class="timing-kpi">P95: <strong id="btP95Total">-</strong> ms</span>
+                <span class="timing-kpi">Samples: <strong id="btSamples">-</strong></span>
+              </div>
+              <div id="browserTimingsEmpty" class="empty-state hidden">
+                <p>No browser timing data. Enable the JS SDK.</p>
+              </div>
+            </div>
+            <div class="panel">
+              <div class="panel-header">
+                <h3>Slow Endpoints</h3>
+                <span id="slowEndpointsCount" class="badge-count"></span>
+              </div>
+              <table class="data-table sortable" id="slowEndpointsTable">
+                <thead>
+                  <tr>
+                    <th data-sort="string">Path</th>
+                    <th data-sort="number">P50</th>
+                    <th data-sort="number">P95</th>
+                    <th data-sort="number">P99</th>
+                    <th data-sort="number">Calls</th>
+                    <th data-sort="number">Err%</th>
+                  </tr>
+                </thead>
+                <tbody id="slowEndpointsBody"></tbody>
+              </table>
+              <div id="slowEndpointsEmpty" class="empty-state hidden">
+                <p>No request data. Enable backend request tracking.</p>
+              </div>
+            </div>
+          </div>
+          <!-- Session Replay Timelines -->
+          <div class="panel">
+            <div class="panel-header">
+              <h3>Session Timelines</h3>
+              <span class="badge-count">recent sessions</span>
+            </div>
+            <p class="text-muted" style="margin-top:0">Reconstructed user journeys from telemetry events. No screen recording needed.</p>
+            <div id="sessionReplays" class="session-replays"></div>
+            <div id="sessionReplaysEmpty" class="empty-state hidden">
+              <p>No session data available.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==================== READINESS TAB ==================== -->
+        <div id="tab-readiness" class="tab-content">
+
+          <!-- Score hero -->
+          <div class="score-hero">
+            <div class="score-ring-container">
+              <svg class="score-ring" viewBox="0 0 120 120">
+                <circle class="score-ring-bg" cx="60" cy="60" r="52" />
+                <circle id="scoreRingFill" class="score-ring-fill" cx="60" cy="60" r="52" />
+              </svg>
+              <div class="score-ring-label">
+                <span id="scoreValue" class="score-number">0</span>
+                <span class="score-of">/100</span>
+              </div>
+            </div>
+            <div class="score-meta">
+              <h2>Readiness Score</h2>
+              <p id="scoreGradeText" class="score-grade-text">Analyzing your telemetry coverage...</p>
+              <div id="readinessStatusBar" class="readiness-bar">
+                <span id="readinessStatusBadge" class="readiness-badge"></span>
+                <span id="readinessConfidence" class="readiness-confidence"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Signal breakdown -->
+          <div class="panel">
+            <h3>Signal Breakdown</h3>
+            <div id="scoreBreakdown" class="score-breakdown"></div>
+          </div>
+
+          <!-- Recommended actions with prompts -->
+          <div class="panel">
+            <h3>Improve Your Score</h3>
+            <p class="text-muted">Each missing signal below includes a ready-to-use prompt. Copy it into your AI code assistant (Cursor, Copilot, ChatGPT) to get the exact implementation code.</p>
+            <div id="promptCards" class="prompt-cards"></div>
+            <div id="noPromptsMessage" class="empty-state hidden">
+              <p>All signals are active. Your telemetry coverage is excellent.</p>
+            </div>
+          </div>
+
+          <!-- Cross-department teaser -->
+          <div class="panel panel-teaser">
+            <h3>Coming Soon: Cross-Department Views</h3>
+            <p class="text-muted">Easy Analytics is expanding beyond Marketing and Engineering. Here's what's on the roadmap:</p>
+            <div class="dept-grid">
+              <div class="dept-card">
+                <span class="dept-icon">F</span>
+                <div>
+                  <strong>Finance</strong>
+                  <p>Revenue per session, conversion funnel cost analysis, infrastructure cost per user segment</p>
+                </div>
+              </div>
+              <div class="dept-card">
+                <span class="dept-icon">L</span>
+                <div>
+                  <strong>Legal & Compliance</strong>
+                  <p>Consent tracking compliance, data residency monitoring, GDPR request volume, audit trail dashboard</p>
+                </div>
+              </div>
+              <div class="dept-card">
+                <span class="dept-icon">S</span>
+                <div>
+                  <strong>Security</strong>
+                  <p>Anomalous access patterns, failed auth attempts, geographic access anomalies, dependency vulnerability signals</p>
+                </div>
+              </div>
+              <div class="dept-card">
+                <span class="dept-icon">C</span>
+                <div>
+                  <strong>Customer Success</strong>
+                  <p>User engagement scores, feature adoption rates, churn risk signals, support ticket correlation</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </section>
+    </main>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="/app.js"></script>
+  </body>
+</html>

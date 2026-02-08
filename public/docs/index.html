@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Easy Analytics — Documentation</title>
+  <link rel="stylesheet" href="/docs/docs.css" />
+</head>
+<body>
+  <!-- ========== Top bar ========== -->
+  <header class="doc-topbar">
+    <div class="doc-topbar-inner">
+      <a href="/" class="doc-logo">Easy Analytics</a>
+      <nav class="doc-topnav">
+        <a href="#getting-started" class="doc-topnav-link">Guides</a>
+        <a href="#api-reference" class="doc-topnav-link">API</a>
+        <a href="/" class="doc-topnav-link">Dashboard</a>
+      </nav>
+      <button class="doc-search-trigger" id="searchTrigger">
+        <span class="doc-search-icon">&#x2315;</span>
+        <span>Search docs...</span>
+        <kbd>Ctrl K</kbd>
+      </button>
+      <button class="doc-mobile-toggle" id="mobileToggle">&#9776;</button>
+    </div>
+  </header>
+
+  <!-- ========== Search modal ========== -->
+  <div class="doc-search-overlay hidden" id="searchOverlay">
+    <div class="doc-search-modal">
+      <input class="doc-search-input" id="searchInput" type="text" placeholder="Search documentation..." autofocus />
+      <div class="doc-search-results" id="searchResults"></div>
+      <div class="doc-search-footer">
+        <kbd>Enter</kbd> to select &middot; <kbd>Esc</kbd> to close
+      </div>
+    </div>
+  </div>
+
+  <div class="doc-layout">
+    <!-- ========== Sidebar ========== -->
+    <aside class="doc-sidebar" id="sidebar">
+      <nav class="doc-sidebar-nav">
+        <div class="doc-sidebar-section">
+          <div class="doc-sidebar-title">Getting Started</div>
+          <a href="#getting-started" class="doc-sidebar-link active">Welcome</a>
+          <a href="#connect" class="doc-sidebar-link">Connect Your App</a>
+          <a href="#first-dashboard" class="doc-sidebar-link">Your First Dashboard</a>
+        </div>
+        <div class="doc-sidebar-section">
+          <div class="doc-sidebar-title">Reading Your Data</div>
+          <a href="#marketing-metrics" class="doc-sidebar-link">Marketing Metrics</a>
+          <a href="#technical-metrics" class="doc-sidebar-link">Technical Metrics</a>
+          <a href="#readiness-score" class="doc-sidebar-link">Readiness Score</a>
+        </div>
+        <div class="doc-sidebar-section">
+          <div class="doc-sidebar-title">Improve Your Analytics</div>
+          <a href="#improve-telemetry" class="doc-sidebar-link">Improve Telemetry</a>
+          <a href="#track-campaigns" class="doc-sidebar-link">Track Campaigns (UTM)</a>
+          <a href="#setup-ab-tests" class="doc-sidebar-link">Set Up A/B Tests</a>
+          <a href="#track-conversions" class="doc-sidebar-link">Track Conversions</a>
+          <a href="#custom-params" class="doc-sidebar-link">Custom Parameters</a>
+        </div>
+        <div class="doc-sidebar-section">
+          <div class="doc-sidebar-title">API</div>
+          <a href="#api-reference" class="doc-sidebar-link">Overview</a>
+          <a href="#api-dashboard" class="doc-sidebar-link">Dashboard Data</a>
+          <a href="#api-prompts" class="doc-sidebar-link">Prompts &amp; Recommendations</a>
+          <a href="#api-webhooks" class="doc-sidebar-link">Integrate in Your Tools</a>
+        </div>
+        <div class="doc-sidebar-section">
+          <div class="doc-sidebar-title">FAQ</div>
+          <a href="#faq-security" class="doc-sidebar-link">Security &amp; Privacy</a>
+          <a href="#faq-troubleshooting" class="doc-sidebar-link">Troubleshooting</a>
+        </div>
+      </nav>
+    </aside>
+
+    <!-- ========== Main content ========== -->
+    <main class="doc-main">
+      <div class="doc-content">
+
+        <!-- ==================== GETTING STARTED ==================== -->
+        <section id="getting-started">
+          <div class="doc-hero">
+            <h1>Easy Analytics Documentation</h1>
+            <p class="doc-hero-sub">Get actionable insights from your application's existing telemetry. No new SDK to deploy, no data duplication, dashboard ready in 2 minutes.</p>
+            <div class="doc-hero-cards">
+              <a href="#connect" class="doc-hero-card">
+                <strong>Connect Your App</strong>
+                <span>Link your Azure account in one click</span>
+              </a>
+              <a href="#improve-telemetry" class="doc-hero-card">
+                <strong>Improve Your Score</strong>
+                <span>Get better data with AI-ready prompts</span>
+              </a>
+              <a href="#track-campaigns" class="doc-hero-card">
+                <strong>Track Campaigns</strong>
+                <span>Add UTM params, we do the rest</span>
+              </a>
+            </div>
+          </div>
+        </section>
+
+        <section id="connect">
+          <h2>Connect Your Application</h2>
+          <p>Easy Analytics works with your existing Azure Application Insights telemetry. There's nothing to install in your app to get started.</p>
+
+          <h3>What you need</h3>
+          <ul>
+            <li>An Azure account with at least one <strong>Application Insights</strong> resource</li>
+            <li>The App Insights resource must be <strong>workspace-based</strong> (not classic)</li>
+            <li><strong>Reader</strong> access on the subscription + <strong>Log Analytics Reader</strong> on the workspace</li>
+          </ul>
+
+          <div class="doc-steps">
+            <div class="doc-step">
+              <span class="doc-step-num">1</span>
+              <div>
+                <strong>Sign in</strong>
+                <p>Click <em>Connect Azure</em> and sign in with your Microsoft work account. Easy Analytics uses your existing permissions — no admin setup needed.</p>
+              </div>
+            </div>
+            <div class="doc-step">
+              <span class="doc-step-num">2</span>
+              <div>
+                <strong>Select your resource</strong>
+                <p>If you have multiple App Insights resources, pick the one you want to analyze. If you only have one, it's selected automatically.</p>
+              </div>
+            </div>
+            <div class="doc-step">
+              <span class="doc-step-num">3</span>
+              <div>
+                <strong>See your dashboard</strong>
+                <p>That's it. Your Marketing and Technical dashboards are generated from your existing telemetry in under 2 minutes.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="doc-callout doc-callout-info">
+            <strong>No access yet?</strong> Ask your Azure admin to grant you <em>Reader</em> on the subscription and <em>Log Analytics Reader</em> on the workspace. These are read-only roles — Easy Analytics never writes to your Azure tenant.
+          </div>
+        </section>
+
+        <section id="first-dashboard">
+          <h2>Your First Dashboard</h2>
+          <p>Once connected, your dashboard has three tabs:</p>
+          <div class="doc-feature-grid">
+            <div class="doc-feature"><strong>Marketing</strong><span>Visitors, sessions, top pages, geo distribution, traffic sources, campaigns, user flow, conversion funnel, peak hours</span></div>
+            <div class="doc-feature"><strong>Technical</strong><span>Response times, error rates, slow endpoints, frontend performance, session timelines</span></div>
+            <div class="doc-feature"><strong>Readiness</strong><span>Telemetry coverage score (0-100), what's missing, how to fix it with AI-ready prompts</span></div>
+          </div>
+          <p>The dashboard auto-refreshes when you change the time range (Today, 7 days, 30 days). All data comes directly from your Azure Log Analytics workspace — nothing is stored on our side.</p>
+        </section>
+
+        <!-- ==================== READING YOUR DATA ==================== -->
+        <section id="marketing-metrics">
+          <h2>Marketing Metrics</h2>
+          <p>The Marketing tab gives you a Google Analytics-like view of your application's traffic. Here's what each metric means and where the data comes from.</p>
+
+          <h3>KPIs</h3>
+          <div class="doc-table-wrapper">
+            <table class="doc-table">
+              <thead><tr><th>Metric</th><th>What it measures</th><th>Source</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Unique Visitors</strong></td><td>Distinct users in the period</td><td><code>user_AuthenticatedId</code> or <code>user_Id</code></td></tr>
+                <tr><td><strong>Sessions</strong></td><td>Distinct browsing sessions</td><td><code>session_Id</code></td></tr>
+                <tr><td><strong>Page Views</strong></td><td>Total page loads</td><td><code>pageViews</code> table</td></tr>
+                <tr><td><strong>Pages / Session</strong></td><td>Average engagement depth</td><td>Computed from above</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Each KPI card shows a <strong>sparkline</strong> (mini trend chart) and an <strong>anomaly badge</strong> if the latest value is significantly different from the average. Green = good change, red = concerning change.</p>
+
+          <h3>Visualizations</h3>
+          <div class="doc-table-wrapper">
+            <table class="doc-table">
+              <thead><tr><th>Chart</th><th>What it shows</th><th>How to use it</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Traffic Trend</strong></td><td>Visitors + page views over time</td><td>Spot growth patterns, weekend dips, launch impact</td></tr>
+                <tr><td><strong>Geo Map</strong></td><td>Visitor locations on a world map</td><td>Identify your strongest markets. Toggle Map/Chart view</td></tr>
+                <tr><td><strong>Conversion Funnel</strong></td><td>Drop-off from homepage to signup</td><td>Find where you lose users in the conversion path</td></tr>
+                <tr><td><strong>Traffic Sources</strong></td><td>Direct, Organic, Referral, Social, Email</td><td>Understand how users find you</td></tr>
+                <tr><td><strong>User Flow</strong></td><td>Multi-step Sankey showing navigation paths</td><td>See the actual paths users take. Toggle Flow/Table view</td></tr>
+                <tr><td><strong>Peak Hours</strong></td><td>Day-of-week &times; hour heatmap</td><td>Know when to post, send emails, or avoid deploys</td></tr>
+                <tr><td><strong>Content Performance</strong></td><td>Which pages drive conversions</td><td>Prioritize content investment</td></tr>
+                <tr><td><strong>Campaigns</strong></td><td>UTM breakdown with conversion rates</td><td>Measure marketing ROI by campaign</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="technical-metrics">
+          <h2>Technical Metrics</h2>
+          <p>The Technical tab helps dev teams monitor application health without writing KQL queries.</p>
+
+          <h3>KPIs</h3>
+          <div class="doc-table-wrapper">
+            <table class="doc-table">
+              <thead><tr><th>Metric</th><th>What it measures</th><th>Healthy range</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Avg Response</strong></td><td>Mean server response time</td><td>&lt; 300ms</td></tr>
+                <tr><td><strong>P95 Response</strong></td><td>95th percentile response time</td><td>&lt; 1000ms</td></tr>
+                <tr><td><strong>Error Rate</strong></td><td>% of requests returning 5xx</td><td>&lt; 3% <span class="doc-badge doc-badge-green">green</span> &lt; 5% <span class="doc-badge doc-badge-yellow">yellow</span></td></tr>
+                <tr><td><strong>Frontend Avg</strong></td><td>Mean browser page load time</td><td>&lt; 500ms</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Session Timelines</h3>
+          <p>See exactly what a user experienced — page by page, click by click, including errors. No screen recording needed. Easy Analytics reconstructs the journey from your telemetry events.</p>
+          <p>Each timeline shows: pages visited with time on page, clicks, conversions, errors, and exit points. Useful for debugging user-reported issues or understanding conversion paths.</p>
+        </section>
+
+        <section id="readiness-score">
+          <h2>Readiness Score</h2>
+          <p>Your Readiness Score (0-100) measures how complete your telemetry coverage is. A higher score means more insights available in your dashboards.</p>
+
+          <div class="doc-table-wrapper">
+            <table class="doc-table">
+              <thead><tr><th>Signal</th><th>Points</th><th>Priority</th><th>What it unlocks</th></tr></thead>
+              <tbody>
+                <tr><td>Page Views</td><td>20</td><td><span class="doc-badge doc-badge-red">required</span></td><td>Top pages, traffic trends, navigation flow</td></tr>
+                <tr><td>Backend Requests</td><td>15</td><td><span class="doc-badge doc-badge-red">required</span></td><td>Response times, error rates, slow endpoints</td></tr>
+                <tr><td>Session Tracking</td><td>15</td><td><span class="doc-badge doc-badge-red">required</span></td><td>Sessions count, pages per session, user flow</td></tr>
+                <tr><td>User Identity</td><td>15</td><td><span class="doc-badge doc-badge-yellow">recommended</span></td><td>Accurate unique visitors (instead of anonymous IDs)</td></tr>
+                <tr><td>Device &amp; Browser</td><td>10</td><td><span class="doc-badge doc-badge-yellow">recommended</span></td><td>Browser, OS, device breakdown charts</td></tr>
+                <tr><td>Geo Location</td><td>10</td><td><span class="doc-badge doc-badge-gray">optional</span></td><td>World map, country distribution</td></tr>
+                <tr><td>Frontend Perf</td><td>15</td><td><span class="doc-badge doc-badge-gray">optional</span></td><td>Browser timing breakdown, page load analysis</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="doc-callout doc-callout-info">
+            <strong>Don't know where to start?</strong> Go to the Readiness tab. For each missing signal, click the prompt card to get a copy-paste prompt for your AI coding assistant (Cursor, Copilot, ChatGPT). It will generate the exact code you need for your stack.
+          </div>
+        </section>
+
+        <!-- ==================== IMPROVE YOUR ANALYTICS ==================== -->
+        <section id="improve-telemetry">
+          <h2>Improve Your Telemetry</h2>
+          <p>Easy Analytics detects what's missing and generates implementation prompts tailored to your detected tech stack. Here's the process:</p>
+
+          <div class="doc-steps">
+            <div class="doc-step">
+              <span class="doc-step-num">1</span>
+              <div>
+                <strong>Check your Readiness Score</strong>
+                <p>Open the <em>Readiness</em> tab. You'll see your score, which signals are active (green) and which are missing (gray).</p>
+              </div>
+            </div>
+            <div class="doc-step">
+              <span class="doc-step-num">2</span>
+              <div>
+                <strong>Open a prompt card</strong>
+                <p>Under <em>Improve Your Score</em>, click on any missing signal. You'll see a ready-to-use prompt that includes your app's context (resource name, detected framework).</p>
+              </div>
+            </div>
+            <div class="doc-step">
+              <span class="doc-step-num">3</span>
+              <div>
+                <strong>Copy it into your AI assistant</strong>
+                <p>Click <em>Copy prompt</em> and paste it into Cursor, GitHub Copilot Chat, or ChatGPT. The AI will generate the implementation code for your specific stack.</p>
+              </div>
+            </div>
+            <div class="doc-step">
+              <span class="doc-step-num">4</span>
+              <div>
+                <strong>Deploy and re-check</strong>
+                <p>Deploy the changes. Within 24 hours, your new signals will appear and your Readiness Score will increase. The dashboard automatically shows more data as signals become available.</p>
+              </div>
+            </div>
+          </div>
+
+          <h3>Common improvements</h3>
+          <div class="doc-table-wrapper">
+            <table class="doc-table">
+              <thead><tr><th>Missing signal</th><th>Typical fix</th><th>Impact</th></tr></thead>
+              <tbody>
+                <tr><td>Page Views</td><td>Add the Application Insights JavaScript SDK</td><td>Unlocks top pages, traffic trends, geo map, user flow</td></tr>
+                <tr><td>User Identity</td><td>Set <code>user_AuthenticatedId</code> after login</td><td>Accurate unique visitors instead of anonymous IDs</td></tr>
+                <tr><td>Browser Timings</td><td>Enable <code>enableAutoRouteTracking</code> in JS SDK</td><td>Frontend performance breakdown + page load metrics</td></tr>
+                <tr><td>Geo Location</td><td>Ensure client IPs are forwarded (proxy config)</td><td>Interactive world map with visitor distribution</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="track-campaigns">
+          <h2>Track Campaigns (UTM Parameters)</h2>
+          <p>Easy Analytics <strong>automatically detects</strong> UTM parameters in your URLs. No setup needed — just add standard UTM parameters to your marketing links and the dashboard picks them up.</p>
+
+          <h3>How to add UTM parameters</h3>
+          <p>Append these query parameters to any link pointing to your application:</p>
+          <div class="doc-code"><pre><code>https://yourapp.com/pricing?utm_source=google&amp;utm_medium=cpc&amp;utm_campaign=spring_launch</code></pre><button class="doc-copy" data-code="https://yourapp.com/pricing?utm_source=google&utm_medium=cpc&utm_campaign=spring_launch">Copy</button></div>
+
+          <div class="doc-table-wrapper">
+            <table class="doc-table">
+              <thead><tr><th>Parameter</th><th>Purpose</th><th>Examples</th></tr></thead>
+              <tbody>
+                <tr><td><code>utm_source</code></td><td>Where the traffic comes from</td><td><code>google</code>, <code>linkedin</code>, <code>newsletter</code></td></tr>
+                <tr><td><code>utm_medium</code></td><td>Marketing channel</td><td><code>cpc</code>, <code>social</code>, <code>email</code>, <code>referral</code></td></tr>
+                <tr><td><code>utm_campaign</code></td><td>Specific campaign name</td><td><code>spring_launch</code>, <code>black_friday</code></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>What you get</h3>
+          <ul>
+            <li>A <strong>campaign breakdown table</strong> showing visitors, sessions, and conversion rate per source/medium/campaign</li>
+            <li>Conversion rates are <strong>color-coded</strong>: green (&gt;8%), default (4-8%), red (&lt;4%)</li>
+            <li>Click any campaign row to <strong>filter the entire dashboard</strong> by that campaign</li>
+          </ul>
+
+          <div class="doc-callout doc-callout-info">
+            <strong>Tip:</strong> Use a UTM builder tool (like <a href="https://ga-dev-tools.google/campaign-url-builder/" target="_blank" rel="noopener">Google's Campaign URL Builder</a>) to generate consistent UTM links for your team.
+          </div>
+        </section>
+
+        <section id="setup-ab-tests">
+          <h2>Set Up A/B Tests</h2>
+          <p>Easy Analytics auto-detects A/B test variants from URL parameters. Add a parameter like <code>ab_test</code> to your experiment URLs and the dashboard compares variants automatically.</p>
+
+          <h3>How it works</h3>
+          <div class="doc-steps">
+            <div class="doc-step">
+              <span class="doc-step-num">1</span>
+              <div>
+                <strong>Add the parameter to your URLs</strong>
+                <p>When a user enters your experiment, append the variant name:</p>
+                <div class="doc-code"><pre><code>// Control group
+https://yourapp.com/pricing?ab_test=control
+
+// Variant
+https://yourapp.com/pricing?ab_test=new_pricing_v2</code></pre><button class="doc-copy" data-code="https://yourapp.com/pricing?ab_test=new_pricing_v2">Copy</button></div>
+              </div>
+            </div>
+            <div class="doc-step">
+              <span class="doc-step-num">2</span>
+              <div>
+                <strong>Easy Analytics detects it</strong>
+                <p>The <em>A/B Tests Detected</em> panel appears automatically in your Marketing tab, showing a side-by-side comparison of all variants.</p>
+              </div>
+            </div>
+            <div class="doc-step">
+              <span class="doc-step-num">3</span>
+              <div>
+                <strong>Read the results</strong>
+                <p>The dashboard compares: visitors, conversions, conversion rate, bounce rate, and average session duration. The leading variant is marked as <strong>WINNER</strong>.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="doc-callout doc-callout-warning">
+            <strong>Statistical significance:</strong> Currently, winner detection is based on raw conversion rate. For production decisions, ensure you have sufficient sample size (typically 1000+ visitors per variant). Statistical significance testing is on the roadmap.
+          </div>
+        </section>
+
+        <section id="track-conversions">
+          <h2>Track Conversions</h2>
+          <p>Conversions are detected from navigation paths. Pages like <code>/signup</code>, <code>/checkout</code>, and <code>/signup/confirm</code> are recognized as funnel pages.</p>
+          <p>For better conversion tracking, ensure your application's conversion pages have distinct URL paths. The <strong>Conversion Funnel</strong> visualizes the drop-off at each step of your funnel (e.g., Homepage &rarr; Pricing &rarr; Signup).</p>
+
+          <h3>Custom conversion events</h3>
+          <p>For more granular tracking (button clicks, form submissions), add custom events using the Application Insights SDK:</p>
+          <div class="doc-code"><pre><code>// Track a conversion event
+appInsights.trackEvent({
+  name: "SignupCompleted",
+  properties: { plan: "enterprise", source: "pricing_page" }
+});</code></pre><button class="doc-copy" data-code='appInsights.trackEvent({ name: "SignupCompleted", properties: { plan: "enterprise" } });'>Copy</button></div>
+          <p>These custom events will appear in your telemetry and contribute to richer analytics.</p>
+        </section>
+
+        <section id="custom-params">
+          <h2>Custom URL Parameters</h2>
+          <p>Beyond UTM parameters, Easy Analytics auto-detects <strong>any</strong> query parameter in your URLs. Common use cases:</p>
+          <div class="doc-table-wrapper">
+            <table class="doc-table">
+              <thead><tr><th>Parameter</th><th>Use case</th><th>Example</th></tr></thead>
+              <tbody>
+                <tr><td><code>ref</code></td><td>Internal link tracking</td><td><code>?ref=homepage_banner</code></td></tr>
+                <tr><td><code>promo</code></td><td>Promo code tracking</td><td><code>?promo=SPRING20</code></td></tr>
+                <tr><td><code>ab_test</code></td><td>A/B test variants</td><td><code>?ab_test=new_pricing</code></td></tr>
+                <tr><td><code>partner</code></td><td>Partner attribution</td><td><code>?partner=acme_corp</code></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Detected parameters appear as <strong>interactive chips</strong> in the <em>Parameters</em> view. Click any chip to see its top values, and use the <strong>Pin</strong> button to keep it permanently visible on your dashboard.</p>
+          <p>Click <strong>Filter</strong> on any value to filter the entire dashboard by that parameter — for example, see all metrics for visitors who came with <code>promo=SPRING20</code>.</p>
+        </section>
+
+        <!-- ==================== API ==================== -->
+        <section id="api-reference">
+          <h2>API Reference</h2>
+          <p>Access your analytics data programmatically. All endpoints return JSON and require authentication via session cookie (set by the login flow).</p>
+          <p>Use the API to build custom integrations: Slack bots, weekly reports, CI/CD quality gates, or embedded dashboards in your internal tools.</p>
+        </section>
+
+        <section id="api-dashboard">
+          <h3>Dashboard Data</h3>
+
+          <div class="doc-endpoint">
+            <span class="doc-method doc-method-get">GET</span>
+            <code>/dashboard/overview?range=7d</code>
+            <p>Returns the complete dashboard data: KPIs, all charts, readiness score, campaigns, user flow, and more.</p>
+            <div class="doc-params">
+              <div class="doc-param">
+                <code>range</code>
+                <span><code>today</code>, <code>7d</code> (default), <code>30d</code></span>
+              </div>
+            </div>
+            <div class="doc-code"><pre><code>// Example: fetch dashboard data
+const response = await fetch('/dashboard/overview?range=7d', {
+  credentials: 'same-origin'
+});
+const data = await response.json();
+
+console.log(data.dashboard.kpis);
+// { uniqueVisitors: 1523, sessions: 1844, avgResponseTimeMs: 248, ... }
+
+console.log(data.readinessScore);
+// { score: 85, grade: "B", breakdown: [...] }</code></pre><button class="doc-copy" data-code="const response = await fetch('/dashboard/overview?range=7d', { credentials: 'same-origin' });\nconst data = await response.json();">Copy</button></div>
+          </div>
+
+          <div class="doc-endpoint">
+            <span class="doc-method doc-method-get">GET</span>
+            <code>/preview/dashboard?range=7d</code>
+            <p>Same as above but with sample data. <strong>No authentication needed.</strong> Useful for testing integrations.</p>
+          </div>
+        </section>
+
+        <section id="api-prompts">
+          <h3>Prompts &amp; Recommendations</h3>
+
+          <div class="doc-endpoint">
+            <span class="doc-method doc-method-get">GET</span>
+            <code>/prompts</code>
+            <p>Returns AI-ready prompts for each missing telemetry signal. Use this to build custom notification flows (e.g., "send a Slack message when a signal is missing").</p>
+            <div class="doc-code"><pre><code>// Response
+{
+  "prompts": [
+    {
+      "signal": "pageViews",
+      "label": "Page View Tracking",
+      "detectedStack": "React (SPA)",
+      "prompt": "I need to add page view tracking to my React app..."
+    }
+  ]
+}</code></pre><button class="doc-copy" data-code="">Copy</button></div>
+          </div>
+
+          <div class="doc-endpoint">
+            <span class="doc-method doc-method-get">GET</span>
+            <code>/recommendations</code>
+            <p>Returns improvement recommendations with the readiness score.</p>
+          </div>
+        </section>
+
+        <section id="api-webhooks">
+          <h3>Integrate in Your Tools</h3>
+          <p>Use the API to embed Easy Analytics data in your existing workflows:</p>
+
+          <h4>Slack weekly digest</h4>
+          <div class="doc-code"><pre><code>// Fetch KPIs and post to Slack
+const data = await fetch('/dashboard/overview?range=7d').then(r => r.json());
+const { uniqueVisitors, sessions, errorRate } = data.dashboard.kpis;
+
+await fetch(SLACK_WEBHOOK_URL, {
+  method: 'POST',
+  body: JSON.stringify({
+    text: `Weekly report: ${uniqueVisitors} visitors, ${sessions} sessions, ${(errorRate*100).toFixed(1)}% errors`
+  })
+});</code></pre><button class="doc-copy" data-code="">Copy</button></div>
+
+          <h4>CI/CD quality gate</h4>
+          <div class="doc-code"><pre><code>// Check error rate before deploying
+const data = await fetch('/dashboard/overview?range=today').then(r => r.json());
+if (data.dashboard.kpis.errorRate > 0.05) {
+  console.error('Error rate too high, aborting deploy');
+  process.exit(1);
+}</code></pre><button class="doc-copy" data-code="">Copy</button></div>
+
+          <h4>Notion / Confluence embed</h4>
+          <p>Use the <code>/preview/dashboard</code> endpoint (no auth required) to build simple embed widgets that display current metrics.</p>
+        </section>
+
+        <!-- ==================== FAQ ==================== -->
+        <section id="faq-security">
+          <h2>Security &amp; Privacy</h2>
+          <div class="doc-faq">
+            <div class="doc-faq-item">
+              <strong>Does Easy Analytics store my data?</strong>
+              <p>No. Easy Analytics only stores metadata (which resource you selected, your mapping configuration). All analytics data stays in your Azure Log Analytics workspace. We query it in real-time and cache aggregated results for 5-15 minutes.</p>
+            </div>
+            <div class="doc-faq-item">
+              <strong>Can Easy Analytics see my users' personal data?</strong>
+              <p>No. All queries return aggregated counts — never individual user records. PII is never extracted or stored.</p>
+            </div>
+            <div class="doc-faq-item">
+              <strong>What permissions does Easy Analytics need?</strong>
+              <p>Read-only access: <em>Reader</em> on the subscription (to find resources) and <em>Log Analytics Reader</em> on the workspace (to run queries). Easy Analytics cannot write, modify, or delete anything in your Azure tenant.</p>
+            </div>
+            <div class="doc-faq-item">
+              <strong>Is the connection secure?</strong>
+              <p>Yes. Authentication uses OAuth 2.0 with PKCE via Microsoft Entra ID. Tokens are stored in encrypted server-side sessions and auto-refreshed. All communication uses HTTPS.</p>
+            </div>
+          </div>
+        </section>
+
+        <section id="faq-troubleshooting">
+          <h2>Troubleshooting</h2>
+          <div class="doc-faq">
+            <div class="doc-faq-item">
+              <strong>My dashboard shows "No data available"</strong>
+              <p>This means your App Insights resource has no telemetry in the selected time range. Try selecting "Last 30 days" for a wider window. If still empty, your application may not be sending telemetry — check the Readiness tab for guidance.</p>
+            </div>
+            <div class="doc-faq-item">
+              <strong>"Authorization failed" error</strong>
+              <p>You don't have the required Azure roles. Ask your admin to grant you <em>Reader</em> on the subscription and <em>Log Analytics Reader</em> on the workspace.</p>
+            </div>
+            <div class="doc-faq-item">
+              <strong>My App Insights resource doesn't appear</strong>
+              <p>Easy Analytics requires <strong>workspace-based</strong> App Insights resources. Classic (non-workspace) resources are not supported. You can migrate in the Azure Portal (App Insights &rarr; Properties &rarr; Migrate to Workspace-based).</p>
+            </div>
+            <div class="doc-faq-item">
+              <strong>Session expired / "Sign in again"</strong>
+              <p>Azure tokens expire after ~1 hour. Easy Analytics auto-refreshes them, but if refresh fails, you'll be asked to sign in again. This is normal.</p>
+            </div>
+            <div class="doc-faq-item">
+              <strong>Some charts are missing (Geo, Browser Timings...)</strong>
+              <p>These charts only appear when the relevant telemetry exists. Check your Readiness Score — missing signals explain why certain charts are hidden. The dashboard always shows everything available and guides you to fill the gaps.</p>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="/docs/docs.js"></script>
+</body>
+</html>

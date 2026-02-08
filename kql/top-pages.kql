@@ -1,0 +1,16 @@
+let start={{timeStart}};
+let end={{timeEnd}};
+let total = toscalar(
+  {{tableName}}
+  | where timestamp between (start..end)
+  | extend pagePath = {{pagePathExpr}}
+  | where isnotempty(pagePath)
+  | summarize count()
+);
+{{tableName}}
+| where timestamp between (start..end)
+| extend pagePath = {{pagePathExpr}}
+| where isnotempty(pagePath)
+| summarize viewCount = count() by pagePath
+| top 10 by viewCount desc
+| extend share = iif(total == 0, 0.0, viewCount * 1.0 / total)

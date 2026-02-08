@@ -1,0 +1,21 @@
+// Auto-detect URL parameters from telemetry
+// Scans pageView URLs, extracts query string parameters, and counts their frequency
+let startTime = datetime('{{timeStart}}');
+let endTime = datetime('{{timeEnd}}');
+{{tableName}}
+| where timestamp between (startTime .. endTime)
+| extend parsedUrl = parse_url(url)
+| extend queryString = tostring(parsedUrl.["Query Parameters"])
+| where isnotempty(queryString)
+| mv-expand param = split(queryString, "&")
+| extend paramName = tostring(split(tostring(param), "=")[0])
+| extend paramValue = tostring(split(tostring(param), "=")[1])
+| where isnotempty(paramName)
+| summarize
+    frequency = count(),
+    distinctValues = dcount(paramValue),
+    topValue = any(paramValue)
+  by paramName
+| extend isUtm = paramName startswith "utm_"
+| order by frequency desc
+| take 20

@@ -1,0 +1,16 @@
+// Referrer source breakdown
+// Groups traffic by referrer origin: Direct, Organic Search, Referral, Social, Email
+let startTime = datetime('{{timeStart}}');
+let endTime = datetime('{{timeEnd}}');
+{{tableName}}
+| where timestamp between (startTime .. endTime)
+| extend referrerHost = tostring(parse_url(tostring(customDimensions["referrer"])).Host)
+| extend source = case(
+    isempty(referrerHost) or referrerHost == "", "Direct",
+    referrerHost has_any ("google", "bing", "yahoo", "duckduckgo", "baidu"), "Organic Search",
+    referrerHost has_any ("facebook", "twitter", "linkedin", "instagram", "reddit", "tiktok", "youtube"), "Social",
+    referrerHost has_any ("mail", "outlook", "gmail"), "Email",
+    "Referral"
+  )
+| summarize count=count() by source
+| order by count desc

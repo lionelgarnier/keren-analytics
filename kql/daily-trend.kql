@@ -1,0 +1,11 @@
+let start={{timeStart}};
+let end={{timeEnd}};
+{{tableName}}
+| where timestamp between (start..end)
+| extend pagePath = {{pagePathExpr}}
+| where isnotempty(pagePath)
+| summarize
+    visitors = dcount({{sessionIdExpr}}),
+    pageViews = count()
+  by period = bin(timestamp, {{binSize}})
+| order by period asc

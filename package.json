@@ -1,0 +1,35 @@
+{
+  "name": "easy-analytics-for-azure",
+  "version": "0.1.0",
+  "description": "Azure GA-like analytics dashboard (plug-and-play)",
+  "type": "module",
+  "main": "src/server.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node src/server.js",
+    "test": "node --env-file=.env.test --test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lionelgarnier/easy-analytics-for-azure.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/lionelgarnier/easy-analytics-for-azure/issues"
+  },
+  "homepage": "https://github.com/lionelgarnier/easy-analytics-for-azure#readme",
+  "dependencies": {
+    "dotenv": "^17.2.4",
+    "express": "^5.2.1",
+    "express-session": "^1.19.0",
+    "helmet": "^8.1.0"
+  },
+  "devDependencies": {
+    "supertest": "^7.2.2"
+  }
+}
