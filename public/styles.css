@@ -1008,86 +1008,49 @@ body {
   flex-shrink: 0;
 }
 
-/* ========== User Flow Diagram ========== */
+/* ========== Sankey User Flow ========== */
 .flow-diagram {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  position: relative;
   padding: 8px 0;
+  min-height: 200px;
 }
 
-.flow-row {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  height: 36px;
-}
-
-.flow-node {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 90px;
-  text-align: right;
-  padding-right: 10px;
-}
-
-.flow-node-to {
-  text-align: left;
-  padding-left: 10px;
-  padding-right: 0;
-}
-
-.flow-band-wrapper {
-  flex: 1;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  position: relative;
-}
-
-.flow-band {
-  height: 100%;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 600;
-  color: #fff;
-  min-width: 40px;
-  transition: opacity 0.2s ease;
-  cursor: default;
-  position: relative;
-}
-
-.flow-band:hover {
-  opacity: 0.8;
-}
-
-.flow-band-label {
+.sankey-tooltip {
   position: absolute;
-  right: -4px;
-  top: 50%;
-  transform: translate(100%, -50%);
-  font-size: 11px;
+  z-index: 10;
+  background: #1e293b;
+  color: #f1f5f9;
+  font-size: 12px;
   font-weight: 500;
-  color: var(--text-muted);
+  padding: 5px 10px;
+  border-radius: 5px;
+  pointer-events: none;
   white-space: nowrap;
-  padding-left: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
 }
 
-.flow-arrow {
-  width: 20px;
+.sankey-legend {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  padding-top: 12px;
+  flex-wrap: wrap;
+}
+
+.sankey-legend-item {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 5px;
+  font-size: 11px;
   color: var(--text-muted);
-  font-size: 14px;
-  flex-shrink: 0;
+  font-weight: 500;
+}
+
+.sankey-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  display: inline-block;
 }
 
 /* ========== Browser timings KPIs ========== */

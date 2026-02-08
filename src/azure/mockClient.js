@@ -10,6 +10,10 @@ export function createMockClient() {
       return { ok: true };
     },
     async queryWorkspace({ queryName, timeRangeKey }) {
+      // userFlow returns a structured object, not a table
+      if (queryName === "userFlow") {
+        return { _raw: getMockRows(queryName, timeRangeKey) };
+      }
       const rows = getMockRows(queryName, timeRangeKey);
       return buildTable(rows);
     },

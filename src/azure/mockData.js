@@ -105,6 +105,131 @@ function generateDailyTrend(numDays) {
   return days;
 }
 
+/* ========== Multi-step user flow (Sankey data) ========== */
+
+const PAGE_CATEGORIES = {
+  "/": "funnel",
+  "/pricing": "funnel",
+  "/signup": "funnel",
+  "/checkout": "funnel",
+  "/docs": "info",
+  "/blog": "info",
+  "/about": "info",
+  "/features": "info",
+  "/changelog": "info",
+  "/contact": "other",
+  "/terms": "other",
+  "/settings": "other",
+};
+
+function categorize(path) {
+  return PAGE_CATEGORIES[path] || "other";
+}
+
+function generateUserFlow(rng) {
+  // Build a realistic 5-step user flow with nodes and links
+  // Each step is a column, nodes are pages/groups, links connect steps
+  const nodes = [];
+  const links = [];
+
+  // Step 0: Entry pages (where users land)
+  const step0 = [
+    { id: "s0-/", label: "/", step: 0, group: "funnel", value: vary(1800, 10, rng) },
+    { id: "s0-/blog", label: "/blog", step: 0, group: "info", value: vary(600, 14, rng) },
+    { id: "s0-/docs", label: "/docs", step: 0, group: "info", value: vary(420, 15, rng) },
+    { id: "s0-/about", label: "/about", step: 0, group: "other", value: vary(180, 18, rng) },
+  ];
+
+  // Step 1: 2nd page
+  const step1 = [
+    { id: "s1-/pricing", label: "/pricing", step: 1, group: "funnel", value: vary(920, 12, rng) },
+    { id: "s1-/docs", label: "/docs", step: 1, group: "info", value: vary(480, 14, rng) },
+    { id: "s1-/features", label: "/features", step: 1, group: "info", value: vary(260, 16, rng) },
+    { id: "s1-/blog", label: "/blog", step: 1, group: "info", value: vary(150, 18, rng) },
+    { id: "s1-exit", label: "Exit", step: 1, group: "exit", value: vary(380, 12, rng) },
+  ];
+
+  // Step 2: 3rd page
+  const step2 = [
+    { id: "s2-/pricing", label: "/pricing", step: 2, group: "funnel", value: vary(580, 12, rng) },
+    { id: "s2-/signup", label: "/signup", step: 2, group: "funnel", value: vary(420, 14, rng) },
+    { id: "s2-/docs", label: "/docs", step: 2, group: "info", value: vary(280, 15, rng) },
+    { id: "s2-/about", label: "/about", step: 2, group: "other", value: vary(90, 20, rng) },
+    { id: "s2-exit", label: "Exit", step: 2, group: "exit", value: vary(440, 12, rng) },
+  ];
+
+  // Step 3: 4th page
+  const step3 = [
+    { id: "s3-/signup", label: "/signup", step: 3, group: "funnel", value: vary(380, 14, rng) },
+    { id: "s3-/pricing", label: "/pricing", step: 3, group: "funnel", value: vary(200, 16, rng) },
+    { id: "s3-/docs", label: "/docs", step: 3, group: "info", value: vary(140, 18, rng) },
+    { id: "s3-exit", label: "Exit", step: 3, group: "exit", value: vary(520, 10, rng) },
+  ];
+
+  // Step 4: 5th page (mostly exits and conversions)
+  const step4 = [
+    { id: "s4-/signup", label: "/signup", step: 4, group: "funnel", value: vary(180, 16, rng) },
+    { id: "s4-/checkout", label: "/checkout", step: 4, group: "funnel", value: vary(120, 18, rng) },
+    { id: "s4-exit", label: "Exit", step: 4, group: "exit", value: vary(580, 10, rng) },
+  ];
+
+  nodes.push(...step0, ...step1, ...step2, ...step3, ...step4);
+
+  // Links: connect steps with realistic flow proportions
+  // Step 0 → Step 1
+  links.push(
+    { source: "s0-/", target: "s1-/pricing", value: vary(640, 12, rng) },
+    { source: "s0-/", target: "s1-/docs", value: vary(280, 14, rng) },
+    { source: "s0-/", target: "s1-/features", value: vary(200, 16, rng) },
+    { source: "s0-/", target: "s1-exit", value: vary(180, 14, rng) },
+    { source: "s0-/blog", target: "s1-/pricing", value: vary(140, 16, rng) },
+    { source: "s0-/blog", target: "s1-/docs", value: vary(80, 20, rng) },
+    { source: "s0-/blog", target: "s1-exit", value: vary(120, 15, rng) },
+    { source: "s0-/docs", target: "s1-/pricing", value: vary(120, 18, rng) },
+    { source: "s0-/docs", target: "s1-/features", value: vary(60, 22, rng) },
+    { source: "s0-/docs", target: "s1-exit", value: vary(60, 20, rng) },
+    { source: "s0-/about", target: "s1-/pricing", value: vary(40, 22, rng) },
+    { source: "s0-/about", target: "s1-/blog", value: vary(30, 25, rng) },
+    { source: "s0-/about", target: "s1-exit", value: vary(30, 22, rng) },
+  );
+  // Step 1 → Step 2
+  links.push(
+    { source: "s1-/pricing", target: "s2-/signup", value: vary(380, 12, rng) },
+    { source: "s1-/pricing", target: "s2-/docs", value: vary(140, 16, rng) },
+    { source: "s1-/pricing", target: "s2-exit", value: vary(200, 14, rng) },
+    { source: "s1-/docs", target: "s2-/pricing", value: vary(180, 14, rng) },
+    { source: "s1-/docs", target: "s2-/about", value: vary(50, 22, rng) },
+    { source: "s1-/docs", target: "s2-exit", value: vary(100, 16, rng) },
+    { source: "s1-/features", target: "s2-/pricing", value: vary(140, 16, rng) },
+    { source: "s1-/features", target: "s2-exit", value: vary(60, 20, rng) },
+    { source: "s1-/blog", target: "s2-/pricing", value: vary(50, 20, rng) },
+    { source: "s1-/blog", target: "s2-exit", value: vary(40, 22, rng) },
+  );
+  // Step 2 → Step 3
+  links.push(
+    { source: "s2-/signup", target: "s3-/signup", value: vary(200, 14, rng) },
+    { source: "s2-/signup", target: "s3-exit", value: vary(120, 16, rng) },
+    { source: "s2-/pricing", target: "s3-/signup", value: vary(180, 14, rng) },
+    { source: "s2-/pricing", target: "s3-/pricing", value: vary(80, 18, rng) },
+    { source: "s2-/pricing", target: "s3-exit", value: vary(180, 14, rng) },
+    { source: "s2-/docs", target: "s3-/pricing", value: vary(100, 18, rng) },
+    { source: "s2-/docs", target: "s3-/docs", value: vary(60, 20, rng) },
+    { source: "s2-/docs", target: "s3-exit", value: vary(60, 18, rng) },
+    { source: "s2-/about", target: "s3-exit", value: vary(50, 22, rng) },
+  );
+  // Step 3 → Step 4
+  links.push(
+    { source: "s3-/signup", target: "s4-/checkout", value: vary(120, 16, rng) },
+    { source: "s3-/signup", target: "s4-exit", value: vary(160, 14, rng) },
+    { source: "s3-/pricing", target: "s4-/signup", value: vary(100, 18, rng) },
+    { source: "s3-/pricing", target: "s4-exit", value: vary(60, 20, rng) },
+    { source: "s3-/docs", target: "s4-/signup", value: vary(40, 22, rng) },
+    { source: "s3-/docs", target: "s4-exit", value: vary(60, 20, rng) },
+  );
+
+  return { nodes, links };
+}
+
 /* ========== Baseline data (30d) with variance ========== */
 
 function generateBaseline() {
@@ -221,6 +346,7 @@ function generateBaseline() {
       { source: "Social", count: vary(320, 18, rng) },
       { source: "Email", count: vary(180, 20, rng) },
     ],
+    userFlow: generateUserFlow(rng),
   };
 }
 
@@ -283,6 +409,15 @@ export function getMockRows(queryName, timeRangeKey) {
   }
   if (queryName === "referrerSources") {
     return baseline.referrerSources.map((r) => ({ ...r, count: scale(r.count, rk) }));
+  }
+
+  // User flow — scale all values by range
+  if (queryName === "userFlow") {
+    const flow = baseline.userFlow;
+    return {
+      nodes: flow.nodes.map((n) => ({ ...n, value: scale(n.value, rk) })),
+      links: flow.links.map((l) => ({ ...l, value: scale(l.value, rk) })),
+    };
   }
 
   // Readiness, schema, performance — range-independent

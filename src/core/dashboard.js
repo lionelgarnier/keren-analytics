@@ -355,6 +355,31 @@ export async function buildOverviewDashboard({
       })
     : emptyResult;
 
+  const userFlowResult = hasPageTable
+    ? await runQuery({
+        tenantId,
+        resourceId,
+        workspaceId,
+        queryName: "userFlow",
+        templateName: "top-navigation",
+        params: {
+          ...timeParams,
+          tableName,
+          pagePathExpr,
+          sessionIdExpr: sessionExpr,
+        },
+        allowedValues: {
+          tableName: ["pageViews", "requests"],
+          pagePathExpr: allowedExpr.pagePathExpr,
+          sessionIdExpr: allowedExpr.sessionIdExpr,
+        },
+        timeRangeKey: timeRange.key,
+        mappingVersion: mapping.version,
+        ttlMs: cacheTtlMs,
+        azureClient,
+      })
+    : { _raw: null };
+
   const referrerResult = hasPageTable
     ? await runQuery({
         tenantId,
@@ -486,6 +511,7 @@ export async function buildOverviewDashboard({
         count: row.count,
         share: row.share || safeDivide(row.count, totalGeo),
       })),
+      userFlow: userFlowResult?._raw || null,
       referrerSources: referrerRows.map((row) => ({
         source: row.source,
         count: row.count,

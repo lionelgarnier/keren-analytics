@@ -639,72 +639,224 @@ function renderFunnel(navPaths, topPages) {
   });
 }
 
-/* ========== Render: User Flow Diagram ========== */
-function renderFlowDiagram(navPaths) {
+/* ========== Render: Sankey User Flow ========== */
+const SANKEY_GROUP_COLORS = {
+  funnel: "#f97316",
+  info: "#3b82f6",
+  other: "#94a3b8",
+  exit: "#fbbf80",
+};
+const SANKEY_LINK_COLOR = "rgba(148,163,184,0.25)";
+const SANKEY_LINK_HOVER = "rgba(148,163,184,0.45)";
+
+function renderSankeyFlow(flowData) {
   const container = document.getElementById("flowDiagram");
   const emptyEl = document.getElementById("flowEmpty");
   const countEl = document.getElementById("flowCount");
   container.innerHTML = "";
 
-  if (!navPaths || navPaths.length === 0) {
+  if (!flowData || !flowData.nodes || flowData.nodes.length === 0) {
     container.classList.add("hidden");
     emptyEl?.classList.remove("hidden");
     return;
   }
   container.classList.remove("hidden");
   emptyEl?.classList.add("hidden");
-  if (countEl) countEl.textContent = `${navPaths.length} paths`;
+  if (countEl) countEl.textContent = `${flowData.links.length} flows`;
 
-  const maxCount = Math.max(...navPaths.map((p) => p.count));
-  const flowColors = ["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#06b6d4", "#f97316", "#ec4899"];
+  // Layout constants
+  const W = container.clientWidth || 900;
+  const nodeWidth = 18;
+  const nodePadding = 6;
+  const stepCount = Math.max(...flowData.nodes.map((n) => n.step)) + 1;
+  const stepSpacing = (W - nodeWidth) / (stepCount - 1 || 1);
+  const groupOrder = ["funnel", "info", "other", "exit"];
 
-  navPaths.forEach((path, i) => {
-    const row = document.createElement("div");
-    row.className = "flow-row";
-
-    // From node
-    const fromNode = document.createElement("span");
-    fromNode.className = "flow-node";
-    fromNode.textContent = path.from;
-    fromNode.title = path.from;
-    row.appendChild(fromNode);
-
-    // Arrow
-    const arrow = document.createElement("span");
-    arrow.className = "flow-arrow";
-    arrow.textContent = "\u2192";
-    row.appendChild(arrow);
-
-    // Band (proportional width)
-    const bandWrapper = document.createElement("div");
-    bandWrapper.className = "flow-band-wrapper";
-
-    const band = document.createElement("div");
-    band.className = "flow-band";
-    const widthPct = Math.max(8, (path.count / maxCount) * 100);
-    band.style.width = widthPct + "%";
-    band.style.background = flowColors[i % flowColors.length];
-    band.textContent = fmt(path.count);
-    band.title = `${path.from} \u2192 ${path.to}: ${path.count} transitions`;
-
-    bandWrapper.appendChild(band);
-    row.appendChild(bandWrapper);
-
-    // Arrow
-    const arrow2 = document.createElement("span");
-    arrow2.className = "flow-arrow";
-    arrow2.textContent = "\u2192";
-    row.appendChild(arrow2);
-
-    // To node
-    const toNode = document.createElement("span");
-    toNode.className = "flow-node flow-node-to";
-    toNode.textContent = path.to;
-    toNode.title = path.to;
-    row.appendChild(toNode);
-
-    container.appendChild(row);
+  // Build node map
+  const nodeMap = new Map();
+  flowData.nodes.forEach((n) => nodeMap.set(n.id, { ...n, y: 0, h: 0, sourceLinks: [], targetLinks: [] }));
+  flowData.links.forEach((l) => {
+    const sn = nodeMap.get(l.source);
+    const tn = nodeMap.get(l.target);
+    if (sn) sn.sourceLinks.push(l);
+    if (tn) tn.targetLinks.push(l);
   });
+
+  // Layout: group nodes by step, sort by group order, compute y positions
+  const steps = [];
+  for (let s = 0; s < stepCount; s++) {
+    const stepNodes = flowData.nodes
+      .filter((n) => n.step === s)
+      .map((n) => nodeMap.get(n.id))
+      .sort((a, b) => groupOrder.indexOf(a.group) - groupOrder.indexOf(b.group));
+    steps.push(stepNodes);
+  }
+
+  // Compute heights proportional to value
+  const maxStepValue = Math.max(...steps.map((s) => s.reduce((sum, n) => sum + n.value, 0)));
+  const maxH = 300;
+  const scaleFactor = maxH / (maxStepValue || 1);
+
+  steps.forEach((stepNodes) => {
+    let y = 0;
+    stepNodes.forEach((node) => {
+      node.h = Math.max(4, node.value * scaleFactor);
+      node.y = y;
+      node.x = node.step * stepSpacing;
+      y += node.h + nodePadding;
+    });
+  });
+
+  const totalH = Math.max(...steps.map((s) => {
+    const last = s[s.length - 1];
+    return last ? last.y + last.h : 0;
+  })) + 20;
+
+  // Create SVG
+  const svgNS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${totalH}`);
+  svg.setAttribute("width", "100%");
+  svg.setAttribute("height", totalH);
+  svg.style.display = "block";
+  svg.style.overflow = "visible";
+
+  // Tooltip element
+  const tooltip = document.createElement("div");
+  tooltip.className = "sankey-tooltip hidden";
+  container.appendChild(tooltip);
+
+  // Draw links first (behind nodes)
+  const linkGroup = document.createElementNS(svgNS, "g");
+  flowData.links.forEach((link) => {
+    const sn = nodeMap.get(link.source);
+    const tn = nodeMap.get(link.target);
+    if (!sn || !tn) return;
+
+    // Compute vertical positions within source/target nodes
+    const sOutTotal = sn.sourceLinks.reduce((s, l) => s + l.value, 0);
+    const tInTotal = tn.targetLinks.reduce((s, l) => s + l.value, 0);
+
+    let sOffset = 0;
+    for (const sl of sn.sourceLinks) {
+      if (sl === link) break;
+      sOffset += sl.value;
+    }
+    let tOffset = 0;
+    for (const tl of tn.targetLinks) {
+      if (tl === link) break;
+      tOffset += tl.value;
+    }
+
+    const linkH = Math.max(1.5, (link.value / (sOutTotal || 1)) * sn.h);
+    const linkHt = Math.max(1.5, (link.value / (tInTotal || 1)) * tn.h);
+    const sy = sn.y + (sOffset / (sOutTotal || 1)) * sn.h;
+    const ty = tn.y + (tOffset / (tInTotal || 1)) * tn.h;
+
+    const x0 = sn.x + nodeWidth;
+    const x1 = tn.x;
+    const cx = (x0 + x1) / 2;
+
+    const path = document.createElementNS(svgNS, "path");
+    const d = `M${x0},${sy} C${cx},${sy} ${cx},${ty} ${x1},${ty} L${x1},${ty + linkHt} C${cx},${ty + linkHt} ${cx},${sy + linkH} ${x0},${sy + linkH} Z`;
+    path.setAttribute("d", d);
+    path.setAttribute("fill", SANKEY_LINK_COLOR);
+    path.style.cursor = "pointer";
+    path.style.transition = "fill 0.15s ease";
+
+    path.addEventListener("mouseenter", (e) => {
+      path.setAttribute("fill", SANKEY_LINK_HOVER);
+      tooltip.textContent = `${sn.label} \u2192 ${tn.label}: ${fmt(link.value)}`;
+      tooltip.classList.remove("hidden");
+      const rect = container.getBoundingClientRect();
+      tooltip.style.left = (e.clientX - rect.left + 10) + "px";
+      tooltip.style.top = (e.clientY - rect.top - 28) + "px";
+    });
+    path.addEventListener("mousemove", (e) => {
+      const rect = container.getBoundingClientRect();
+      tooltip.style.left = (e.clientX - rect.left + 10) + "px";
+      tooltip.style.top = (e.clientY - rect.top - 28) + "px";
+    });
+    path.addEventListener("mouseleave", () => {
+      path.setAttribute("fill", SANKEY_LINK_COLOR);
+      tooltip.classList.add("hidden");
+    });
+
+    linkGroup.appendChild(path);
+  });
+  svg.appendChild(linkGroup);
+
+  // Draw nodes
+  const nodeGroup = document.createElementNS(svgNS, "g");
+  nodeMap.forEach((node) => {
+    const rect = document.createElementNS(svgNS, "rect");
+    rect.setAttribute("x", node.x);
+    rect.setAttribute("y", node.y);
+    rect.setAttribute("width", nodeWidth);
+    rect.setAttribute("height", Math.max(4, node.h));
+    rect.setAttribute("rx", 3);
+    rect.setAttribute("fill", SANKEY_GROUP_COLORS[node.group] || "#94a3b8");
+    rect.style.cursor = "pointer";
+
+    rect.addEventListener("mouseenter", (e) => {
+      tooltip.textContent = `${node.label}: ${fmt(node.value)}`;
+      tooltip.classList.remove("hidden");
+      const cr = container.getBoundingClientRect();
+      tooltip.style.left = (e.clientX - cr.left + 10) + "px";
+      tooltip.style.top = (e.clientY - cr.top - 28) + "px";
+    });
+    rect.addEventListener("mouseleave", () => {
+      tooltip.classList.add("hidden");
+    });
+
+    nodeGroup.appendChild(rect);
+
+    // Label
+    if (node.h > 12) {
+      const text = document.createElementNS(svgNS, "text");
+      text.setAttribute("x", node.x + nodeWidth + 4);
+      text.setAttribute("y", node.y + node.h / 2 + 4);
+      text.setAttribute("font-size", "11");
+      text.setAttribute("font-family", "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif");
+      text.setAttribute("fill", "#374151");
+      text.textContent = node.label;
+      nodeGroup.appendChild(text);
+    }
+  });
+  svg.appendChild(nodeGroup);
+
+  // Step labels
+  const labelGroup = document.createElementNS(svgNS, "g");
+  for (let s = 0; s < stepCount; s++) {
+    const text = document.createElementNS(svgNS, "text");
+    text.setAttribute("x", s * stepSpacing + nodeWidth / 2);
+    text.setAttribute("y", totalH - 2);
+    text.setAttribute("text-anchor", "middle");
+    text.setAttribute("font-size", "10");
+    text.setAttribute("font-family", "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif");
+    text.setAttribute("fill", "#9ca3af");
+    text.textContent = s === 0 ? "Entry" : `Step ${s}`;
+    labelGroup.appendChild(text);
+  }
+  svg.appendChild(labelGroup);
+
+  container.appendChild(svg);
+
+  // Legend
+  const legend = document.createElement("div");
+  legend.className = "sankey-legend";
+  [
+    { group: "funnel", label: "Funnel Pages" },
+    { group: "info", label: "Informational" },
+    { group: "other", label: "Other Pages" },
+    { group: "exit", label: "Exit" },
+  ].forEach((item) => {
+    const span = document.createElement("span");
+    span.className = "sankey-legend-item";
+    span.innerHTML = `<span class="sankey-legend-dot" style="background:${SANKEY_GROUP_COLORS[item.group]}"></span>${item.label}`;
+    legend.appendChild(span);
+  });
+  container.appendChild(legend);
 }
 
 /* ========== Render: Tables ========== */
@@ -968,8 +1120,8 @@ function renderDashboard(data) {
     tr.appendChild(td(fmtPct(row.errorRate), "num"));
   });
 
-  // User Flow diagram (replaces navigation table)
-  renderFlowDiagram(dashboard.charts.topNavigationPaths);
+  // Sankey User Flow
+  renderSankeyFlow(dashboard.charts.userFlow);
 
   // Conversion Funnel
   renderFunnel(dashboard.charts.topNavigationPaths, dashboard.charts.topPages);
