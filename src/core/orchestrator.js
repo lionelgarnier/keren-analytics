@@ -12,8 +12,10 @@ export async function runOverviewPipeline({
   rangeKey,
   azureClient,
   cacheTtlMs,
+  customStart,
+  customEnd,
 }) {
-  const timeRange = resolveTimeRange(rangeKey);
+  const timeRange = resolveTimeRange(rangeKey, customStart, customEnd);
   const now = new Date();
   let readinessWindow = {
     start: new Date(now.getTime() - 24 * 60 * 60 * 1000),

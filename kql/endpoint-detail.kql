@@ -1,0 +1,12 @@
+requests
+| where timestamp >= {{timeStart}} and timestamp < {{timeEnd}}
+| where url has "{{endpointPath}}" or name has "{{endpointPath}}"
+| summarize
+    avgDuration = avg(duration),
+    p50 = percentile(duration, 50),
+    p95 = percentile(duration, 95),
+    p99 = percentile(duration, 99),
+    count = count(),
+    errorRate = countif(success == false) * 1.0 / count()
+  by period = bin(timestamp, {{binSize}})
+| order by period asc
