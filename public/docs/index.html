@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Easy Analytics — Documentation</title>
+  <link rel="stylesheet" href="/docs/docs.css" />
+</head>
+<body>
+  <!-- ========== Top bar ========== -->
+  <header class="doc-topbar">
+    <div class="doc-topbar-inner">
+      <a href="/" class="doc-logo">Easy Analytics</a>
+      <nav class="doc-topnav">
+        <a href="#getting-started" class="doc-topnav-link">Docs</a>
+        <a href="#api-reference" class="doc-topnav-link">API</a>
+        <a href="/" class="doc-topnav-link">Dashboard</a>
+      </nav>
+      <button class="doc-search-trigger" id="searchTrigger">
+        <span class="doc-search-icon">&#x2315;</span>
+        <span>Search docs...</span>
+        <kbd>Ctrl K</kbd>
+      </button>
+      <button class="doc-mobile-toggle" id="mobileToggle">&#9776;</button>
+    </div>
+  </header>
+
+  <!-- ========== Search modal ========== -->
+  <div class="doc-search-overlay hidden" id="searchOverlay">
+    <div class="doc-search-modal">
+      <input class="doc-search-input" id="searchInput" type="text" placeholder="Search documentation..." autofocus />
+      <div class="doc-search-results" id="searchResults"></div>
+      <div class="doc-search-footer">
+        <kbd>Enter</kbd> to select &middot; <kbd>Esc</kbd> to close
+      </div>
+    </div>
+  </div>
+
+  <div class="doc-layout">
+    <!-- ========== Sidebar ========== -->
+    <aside class="doc-sidebar" id="sidebar">
+      <nav class="doc-sidebar-nav">
+        <div class="doc-sidebar-section">
+          <div class="doc-sidebar-title">Getting Started</div>
+          <a href="#getting-started" class="doc-sidebar-link active">Introduction</a>
+          <a href="#quick-start" class="doc-sidebar-link">Quick Start</a>
+          <a href="#docker-deploy" class="doc-sidebar-link">Docker Deploy</a>
+          <a href="#azure-setup" class="doc-sidebar-link">Azure Setup</a>
+        </div>
+        <div class="doc-sidebar-section">
+          <div class="doc-sidebar-title">Features</div>
+          <a href="#marketing-tab" class="doc-sidebar-link">Marketing Dashboard</a>
+          <a href="#technical-tab" class="doc-sidebar-link">Technical Dashboard</a>
+          <a href="#readiness" class="doc-sidebar-link">Readiness Score</a>
+          <a href="#campaigns" class="doc-sidebar-link">Campaigns & UTM</a>
+          <a href="#ab-testing" class="doc-sidebar-link">A/B Test Monitor</a>
+          <a href="#session-replay" class="doc-sidebar-link">Session Timelines</a>
+          <a href="#smart-insights" class="doc-sidebar-link">Smart Insights</a>
+          <a href="#llm-prompts" class="doc-sidebar-link">LLM Prompts</a>
+        </div>
+        <div class="doc-sidebar-section">
+          <div class="doc-sidebar-title">API Reference</div>
+          <a href="#api-reference" class="doc-sidebar-link">Overview</a>
+          <a href="#api-auth" class="doc-sidebar-link">Authentication</a>
+          <a href="#api-dashboard" class="doc-sidebar-link">Dashboard</a>
+          <a href="#api-prompts" class="doc-sidebar-link">Prompts</a>
+          <a href="#api-preview" class="doc-sidebar-link">Preview</a>
+        </div>
+        <div class="doc-sidebar-section">
+          <div class="doc-sidebar-title">Architecture</div>
+          <a href="#architecture" class="doc-sidebar-link">Overview</a>
+          <a href="#pipeline" class="doc-sidebar-link">Pipeline</a>
+          <a href="#multicloud" class="doc-sidebar-link">Multi-Cloud</a>
+          <a href="#auth-design" class="doc-sidebar-link">Auth Design</a>
+        </div>
+        <div class="doc-sidebar-section">
+          <div class="doc-sidebar-title">Configuration</div>
+          <a href="#env-vars" class="doc-sidebar-link">Environment Variables</a>
+          <a href="#kql-templates" class="doc-sidebar-link">KQL Templates</a>
+        </div>
+      </nav>
+    </aside>
+
+    <!-- ========== Main content ========== -->
+    <main class="doc-main">
+      <div class="doc-content">
+
+        <!-- ==================== GETTING STARTED ==================== -->
+        <section id="getting-started">
+          <div class="doc-hero">
+            <h1>Easy Analytics Documentation</h1>
+            <p class="doc-hero-sub">Transform your cloud telemetry into actionable dashboards in under 2 minutes. Zero agent, zero data storage, zero KQL.</p>
+            <div class="doc-hero-cards">
+              <a href="#quick-start" class="doc-hero-card">
+                <strong>Quick Start</strong>
+                <span>Up and running in 30 seconds</span>
+              </a>
+              <a href="#api-reference" class="doc-hero-card">
+                <strong>API Reference</strong>
+                <span>All endpoints documented</span>
+              </a>
+              <a href="#architecture" class="doc-hero-card">
+                <strong>Architecture</strong>
+                <span>How it works under the hood</span>
+              </a>
+            </div>
+          </div>
+        </section>
+
+        <section id="quick-start">
+          <h2>Quick Start</h2>
+          <p>Get Easy Analytics running locally in mock mode (sample data, no Azure required).</p>
+
+          <div class="doc-steps">
+            <div class="doc-step">
+              <span class="doc-step-num">1</span>
+              <div>
+                <strong>Install dependencies</strong>
+                <div class="doc-code"><pre><code>npm install</code></pre><button class="doc-copy" data-code="npm install">Copy</button></div>
+              </div>
+            </div>
+            <div class="doc-step">
+              <span class="doc-step-num">2</span>
+              <div>
+                <strong>Start the server</strong>
+                <div class="doc-code"><pre><code>npm run dev</code></pre><button class="doc-copy" data-code="npm run dev">Copy</button></div>
+              </div>
+            </div>
+            <div class="doc-step">
+              <span class="doc-step-num">3</span>
+              <div>
+                <strong>Open the dashboard</strong>
+                <p>Navigate to <code>http://localhost:3000</code>. Click <strong>Connect Azure</strong> (auto-connects in mock mode) or <strong>See live preview</strong> to view sample data without login.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="docker-deploy">
+          <h2>Docker Deploy</h2>
+          <p>Deploy with a single command using Docker Compose.</p>
+          <div class="doc-code"><pre><code>docker compose up --build</code></pre><button class="doc-copy" data-code="docker compose up --build">Copy</button></div>
+          <p>For <strong>Render.com</strong>, the repository includes a <code>render.yaml</code> blueprint. Click <em>New &gt; Blueprint</em> in the Render dashboard and point to your repo.</p>
+          <div class="doc-callout doc-callout-info">
+            <strong>Tip:</strong> The free Render tier sleeps after 15 minutes of inactivity. First load takes ~30s for cold start.
+          </div>
+        </section>
+
+        <section id="azure-setup">
+          <h2>Azure Setup (Real Mode)</h2>
+          <p>To connect real Azure telemetry, you need an Entra ID (Azure AD) app registration.</p>
+
+          <h3>Prerequisites</h3>
+          <ul>
+            <li><strong>Reader</strong> role on the Azure subscription</li>
+            <li><strong>Log Analytics Reader</strong> on the workspace</li>
+            <li>App Insights must be <strong>workspace-based</strong> (not classic)</li>
+          </ul>
+
+          <h3>Quick start with CLI token</h3>
+          <div class="doc-code"><pre><code>export AZURE_MODE=real
+export AZURE_ACCESS_TOKEN="$(az account get-access-token \
+  --resource=https://management.azure.com \
+  --query accessToken -o tsv)"
+npm run dev</code></pre><button class="doc-copy" data-code='export AZURE_MODE=real\nexport AZURE_ACCESS_TOKEN="$(az account get-access-token --resource=https://management.azure.com --query accessToken -o tsv)"\nnpm run dev'>Copy</button></div>
+
+          <h3>Browser SSO (recommended)</h3>
+          <p>Register an Entra ID app and configure environment variables:</p>
+          <div class="doc-code"><pre><code>AZURE_MODE=real
+AZURE_CLIENT_ID=your-client-id
+AZURE_CLIENT_SECRET=your-secret
+AZURE_REDIRECT_URI=http://localhost:3000/auth/callback
+SESSION_SECRET=random-secure-string</code></pre><button class="doc-copy" data-code="AZURE_MODE=real\nAZURE_CLIENT_ID=your-client-id\nAZURE_CLIENT_SECRET=your-secret\nAZURE_REDIRECT_URI=http://localhost:3000/auth/callback\nSESSION_SECRET=random-secure-string">Copy</button></div>
+          <div class="doc-callout doc-callout-warning">
+            <strong>Security:</strong> Never commit secrets to git. Use <code>.env</code> files or your platform's secret management.
+          </div>
+        </section>
+
+        <!-- ==================== FEATURES ==================== -->
+        <section id="marketing-tab">
+          <h2>Marketing Dashboard</h2>
+          <p>The Marketing tab provides GA-like analytics from existing Azure telemetry.</p>
+          <div class="doc-feature-grid">
+            <div class="doc-feature"><strong>KPIs</strong><span>Visitors, sessions, page views, pages/session with anomaly sparklines</span></div>
+            <div class="doc-feature"><strong>Traffic Trend</strong><span>Line chart with visitor and page view trends</span></div>
+            <div class="doc-feature"><strong>Top Pages</strong><span>Sortable table with path, views, and share</span></div>
+            <div class="doc-feature"><strong>Geo Map</strong><span>Interactive Leaflet world map with proportional bubbles</span></div>
+            <div class="doc-feature"><strong>Conversion Funnel</strong><span>Visual funnel from homepage to signup with drop-off rates</span></div>
+            <div class="doc-feature"><strong>Traffic Sources</strong><span>Doughnut chart: Direct, Organic, Referral, Social, Email</span></div>
+            <div class="doc-feature"><strong>User Flow</strong><span>Multi-step Sankey diagram showing navigation paths</span></div>
+            <div class="doc-feature"><strong>Peak Hours</strong><span>Day × hour heatmap showing traffic intensity</span></div>
+          </div>
+        </section>
+
+        <section id="technical-tab">
+          <h2>Technical Dashboard</h2>
+          <p>The Technical tab provides performance monitoring for dev and SRE teams.</p>
+          <div class="doc-feature-grid">
+            <div class="doc-feature"><strong>Performance KPIs</strong><span>Avg response, P95, error rate, frontend avg with sparklines</span></div>
+            <div class="doc-feature"><strong>Browser Timings</strong><span>Stacked bar chart: network, send, receive, processing</span></div>
+            <div class="doc-feature"><strong>Slow Endpoints</strong><span>P50/P95/P99 percentiles with call count and error rate</span></div>
+            <div class="doc-feature"><strong>Session Timelines</strong><span>Reconstructed user journeys with color-coded event dots</span></div>
+          </div>
+        </section>
+
+        <section id="readiness">
+          <h2>Readiness Score</h2>
+          <p>A gamified 0-100 score that measures telemetry coverage quality.</p>
+          <div class="doc-table-wrapper">
+            <table class="doc-table">
+              <thead><tr><th>Signal</th><th>Points</th><th>Category</th></tr></thead>
+              <tbody>
+                <tr><td>Page Views</td><td>20</td><td><span class="doc-badge doc-badge-red">required</span></td></tr>
+                <tr><td>Backend Requests</td><td>15</td><td><span class="doc-badge doc-badge-red">required</span></td></tr>
+                <tr><td>Session Tracking</td><td>15</td><td><span class="doc-badge doc-badge-red">required</span></td></tr>
+                <tr><td>User Identity</td><td>15</td><td><span class="doc-badge doc-badge-yellow">recommended</span></td></tr>
+                <tr><td>Device &amp; Browser</td><td>10</td><td><span class="doc-badge doc-badge-yellow">recommended</span></td></tr>
+                <tr><td>Geo Location</td><td>10</td><td><span class="doc-badge doc-badge-gray">optional</span></td></tr>
+                <tr><td>Frontend Perf</td><td>15</td><td><span class="doc-badge doc-badge-gray">optional</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="campaigns">
+          <h2>Campaigns &amp; URL Parameters</h2>
+          <p>Auto-detects UTM and custom URL parameters from your telemetry. No configuration needed — if your URLs contain <code>?utm_source=google</code>, Easy Analytics finds it automatically.</p>
+          <h3>How it works</h3>
+          <ol>
+            <li>Every page view URL is scanned for query parameters</li>
+            <li>Standard UTM parameters (<code>utm_source</code>, <code>utm_medium</code>, <code>utm_campaign</code>) get special treatment</li>
+            <li>Custom parameters (<code>ref</code>, <code>promo</code>, <code>ab_test</code>) are also detected</li>
+            <li>Pin any parameter to make it a permanent dashboard element</li>
+          </ol>
+        </section>
+
+        <section id="ab-testing">
+          <h2>A/B Test Monitor</h2>
+          <p>Automatically detects A/B tests from URL parameters and compares variant performance side-by-side. Add <code>?ab_test=variant_name</code> to your URLs — Easy Analytics does the rest.</p>
+          <div class="doc-callout doc-callout-info">
+            <strong>Zero config:</strong> No test setup required. Just add the URL parameter to your experiment URLs and the dashboard auto-detects and compares variants.
+          </div>
+        </section>
+
+        <section id="session-replay">
+          <h2>Session Timelines</h2>
+          <p>Reconstructed user journeys from telemetry events. No screen recording needed — Easy Analytics builds a timeline from page views, clicks, conversions, and errors.</p>
+          <p>Each session shows: pages visited (with time on page), click events, conversion events, errors, and exit points.</p>
+        </section>
+
+        <section id="smart-insights">
+          <h2>Smart Insights</h2>
+          <p>Auto-generated natural language highlights. No LLM required — insights are derived from data patterns.</p>
+          <ul>
+            <li>Best converting campaign and conversion rate</li>
+            <li>Peak traffic day and hour</li>
+            <li>Top traffic source percentage</li>
+            <li>Error rate health check</li>
+            <li>URL parameter detection coverage</li>
+            <li>Page view concentration analysis</li>
+          </ul>
+        </section>
+
+        <section id="llm-prompts">
+          <h2>LLM-Ready Prompts</h2>
+          <p>For each missing telemetry signal, Easy Analytics generates a copy-paste prompt tailored to your detected stack. Paste it into Cursor, Copilot, or ChatGPT to get implementation code.</p>
+          <div class="doc-code"><pre><code>GET /prompts
+
+Response:
+{
+  "prompts": [
+    {
+      "signal": "pageViews",
+      "label": "Page View Tracking",
+      "detectedStack": "React (SPA)",
+      "prompt": "I need to add page view tracking..."
+    }
+  ]
+}</code></pre><button class="doc-copy" data-code='GET /prompts'>Copy</button></div>
+        </section>
+
+        <!-- ==================== API REFERENCE ==================== -->
+        <section id="api-reference">
+          <h2>API Reference</h2>
+          <p>All endpoints return JSON. Authentication is handled via session cookies (set by the login flow).</p>
+        </section>
+
+        <section id="api-auth">
+          <h3>Authentication</h3>
+          <div class="doc-endpoint">
+            <span class="doc-method doc-method-get">GET</span>
+            <code>/auth/login</code>
+            <p>Initiates the login flow. In mock mode, auto-redirects. In real mode, redirects to Microsoft Entra ID.</p>
+          </div>
+          <div class="doc-endpoint">
+            <span class="doc-method doc-method-get">GET</span>
+            <code>/auth/session</code>
+            <p>Returns current session status.</p>
+            <div class="doc-code"><pre><code>{
+  "authenticated": true,
+  "tenantId": "mock-tenant",
+  "mode": "mock",
+  "oauthConfigured": false,
+  "user": null
+}</code></pre><button class="doc-copy" data-code='{ "authenticated": true, "tenantId": "mock-tenant" }'>Copy</button></div>
+          </div>
+          <div class="doc-endpoint">
+            <span class="doc-method doc-method-post">POST</span>
+            <code>/auth/logout</code>
+            <p>Destroys the current session.</p>
+          </div>
+        </section>
+
+        <section id="api-dashboard">
+          <h3>Dashboard</h3>
+          <div class="doc-endpoint">
+            <span class="doc-method doc-method-get">GET</span>
+            <code>/dashboard/overview?range=7d</code>
+            <p>Returns the complete dashboard data including KPIs, charts, readiness score, and all visualizations.</p>
+            <div class="doc-params">
+              <div class="doc-param">
+                <code>range</code>
+                <span>Time range: <code>today</code>, <code>7d</code> (default), <code>30d</code></span>
+              </div>
+            </div>
+          </div>
+          <div class="doc-endpoint">
+            <span class="doc-method doc-method-get">GET</span>
+            <code>/azure/discover</code>
+            <p>Discovers App Insights resources in the connected Azure tenant.</p>
+          </div>
+          <div class="doc-endpoint">
+            <span class="doc-method doc-method-post">POST</span>
+            <code>/azure/select</code>
+            <p>Selects an App Insights resource for dashboard queries.</p>
+            <div class="doc-code"><pre><code>// Request body
+{
+  "resourceId": "/subscriptions/.../components/myapp",
+  "workspaceId": "/subscriptions/.../workspaces/mylaw"
+}</code></pre><button class="doc-copy" data-code='{ "resourceId": "...", "workspaceId": "..." }'>Copy</button></div>
+          </div>
+        </section>
+
+        <section id="api-prompts">
+          <h3>Prompts &amp; Recommendations</h3>
+          <div class="doc-endpoint">
+            <span class="doc-method doc-method-get">GET</span>
+            <code>/prompts</code>
+            <p>Returns LLM-ready prompts for each missing telemetry signal. Prompts are contextualized with the detected stack and resource name.</p>
+          </div>
+          <div class="doc-endpoint">
+            <span class="doc-method doc-method-get">GET</span>
+            <code>/recommendations</code>
+            <p>Returns improvement recommendations with readiness score.</p>
+          </div>
+        </section>
+
+        <section id="api-preview">
+          <h3>Preview</h3>
+          <div class="doc-endpoint">
+            <span class="doc-method doc-method-get">GET</span>
+            <code>/preview/dashboard?range=7d</code>
+            <p>Returns dashboard data with sample mock data. No authentication required. Useful for demos and testing.</p>
+          </div>
+        </section>
+
+        <!-- ==================== ARCHITECTURE ==================== -->
+        <section id="architecture">
+          <h2>Architecture</h2>
+          <p>Easy Analytics is a lightweight Node.js service with a static frontend that orchestrates a deterministic pipeline.</p>
+          <div class="doc-code"><pre><code>src/
+  server.js              # Express API server
+  config.js              # Environment configuration
+  core/
+    orchestrator.js      # Pipeline state machine
+    dashboard.js         # Dashboard query builder
+    mapping.js           # Field mapping (userId, sessionId, pagePath)
+    readiness.js         # Readiness probe analysis
+    readinessScore.js    # Gamified 0-100 score
+    promptGenerator.js   # LLM prompt generation
+    cache.js             # In-memory cache with TTL
+  azure/
+    client.js            # Provider factory
+    realClient.js        # Real Azure ARM + Log Analytics client
+    mockClient.js        # Mock client for development
+  providers/             # (planned) Multi-cloud abstraction
+kql/                     # KQL query templates (19 templates)
+public/                  # Static frontend</code></pre><button class="doc-copy" data-code="">Copy</button></div>
+        </section>
+
+        <section id="pipeline">
+          <h3>Pipeline</h3>
+          <p>The orchestrator runs a deterministic state machine for each dashboard request:</p>
+          <div class="doc-code"><pre><code>AUTHENTICATING
+  → DISCOVERING_RESOURCES
+  → SELECTING_RESOURCE
+  → CHECKING_ACCESS
+  → READINESS_PROBES
+  → SCHEMA_PROFILING
+  → MAPPING_BUILD
+  → DASHBOARD_BUILD
+  → CACHING_RESULTS
+  → READY</code></pre><button class="doc-copy" data-code="">Copy</button></div>
+          <p>Each state transition is persisted for debugging. Error states: <code>NO_ACCESS</code>, <code>NO_DATA</code>, <code>PARTIAL_DATA</code>, <code>FAILED</code>.</p>
+        </section>
+
+        <section id="multicloud">
+          <h3>Multi-Cloud Design</h3>
+          <p>The architecture is designed for multi-cloud from day one. A <code>CloudProvider</code> interface abstracts all cloud-specific operations.</p>
+          <div class="doc-feature-grid">
+            <div class="doc-feature"><strong>Azure</strong><span>App Insights + Log Analytics (implemented)</span></div>
+            <div class="doc-feature"><strong>AWS</strong><span>CloudWatch + X-Ray (planned)</span></div>
+            <div class="doc-feature"><strong>GCP</strong><span>Cloud Logging + Trace (planned)</span></div>
+          </div>
+        </section>
+
+        <section id="auth-design">
+          <h3>Auth Design</h3>
+          <p>Currently, Entra ID OAuth handles both authentication (identity) and data access (Azure token) in a single flow. For multi-cloud, these will be decoupled:</p>
+          <ul>
+            <li><strong>Layer 1 (Identity):</strong> Supabase Auth / Entra ID / Google — who is the user?</li>
+            <li><strong>Layer 2 (Data Access):</strong> Per-cloud OAuth — what can they access?</li>
+          </ul>
+          <p>For Azure users, the experience stays identical (one click). Non-Azure users get a "Connect your cloud" step after login.</p>
+        </section>
+
+        <!-- ==================== CONFIGURATION ==================== -->
+        <section id="env-vars">
+          <h2>Environment Variables</h2>
+          <div class="doc-table-wrapper">
+            <table class="doc-table">
+              <thead><tr><th>Variable</th><th>Default</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>AZURE_MODE</code></td><td><code>mock</code></td><td>Mode: <code>mock</code> or <code>real</code></td></tr>
+                <tr><td><code>PORT</code></td><td><code>3000</code></td><td>Server port</td></tr>
+                <tr><td><code>SESSION_SECRET</code></td><td><em>dev default</em></td><td>Session cookie secret</td></tr>
+                <tr><td><code>AZURE_CLIENT_ID</code></td><td></td><td>Entra ID app client ID</td></tr>
+                <tr><td><code>AZURE_CLIENT_SECRET</code></td><td></td><td>Entra ID app secret</td></tr>
+                <tr><td><code>AZURE_REDIRECT_URI</code></td><td><code>http://localhost:3000/auth/callback</code></td><td>OAuth redirect</td></tr>
+                <tr><td><code>AZURE_TENANT_ID</code></td><td><code>organizations</code></td><td>Entra tenant</td></tr>
+                <tr><td><code>AZURE_ACCESS_TOKEN</code></td><td></td><td>CLI token (alternative to OAuth)</td></tr>
+                <tr><td><code>MOCK_RESOURCES</code></td><td></td><td>Set to <code>multiple</code> to simulate multiple resources</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="kql-templates">
+          <h2>KQL Templates</h2>
+          <p>All Azure queries are stored as parameterized KQL templates in the <code>kql/</code> directory. Parameters are whitelisted to prevent injection.</p>
+          <div class="doc-table-wrapper">
+            <table class="doc-table">
+              <thead><tr><th>Template</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>readiness-probes.kql</code></td><td>Signal availability check</td></tr>
+                <tr><td><code>unique-visitors-user.kql</code></td><td>Unique visitors by authenticated ID</td></tr>
+                <tr><td><code>unique-visitors-session.kql</code></td><td>Unique visitors by session</td></tr>
+                <tr><td><code>sessions.kql</code></td><td>Session count</td></tr>
+                <tr><td><code>daily-trend.kql</code></td><td>Daily/hourly visitor + pageview trend</td></tr>
+                <tr><td><code>top-pages.kql</code></td><td>Top pages by view count</td></tr>
+                <tr><td><code>top-navigation.kql</code></td><td>Page-to-page transitions</td></tr>
+                <tr><td><code>geo-distribution.kql</code></td><td>Visitor count by country</td></tr>
+                <tr><td><code>performance.kql</code></td><td>Avg/P95 response time + error rate</td></tr>
+                <tr><td><code>slow-endpoints.kql</code></td><td>Slowest endpoints with percentiles</td></tr>
+                <tr><td><code>browser-timings.kql</code></td><td>Frontend load time breakdown</td></tr>
+                <tr><td><code>campaign-breakdown.kql</code></td><td>UTM source/medium/campaign aggregation</td></tr>
+                <tr><td><code>url-parameters.kql</code></td><td>Auto-detect URL query parameters</td></tr>
+                <tr><td><code>referrer-sources.kql</code></td><td>Traffic source classification</td></tr>
+                <tr><td><code>tech-browser.kql</code></td><td>Browser distribution</td></tr>
+                <tr><td><code>tech-os.kql</code></td><td>OS distribution</td></tr>
+                <tr><td><code>tech-device.kql</code></td><td>Device type distribution</td></tr>
+                <tr><td><code>schema-tables.kql</code></td><td>Available telemetry tables</td></tr>
+                <tr><td><code>schema-custom-dimensions.kql</code></td><td>Custom dimension keys</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="/docs/docs.js"></script>
+</body>
+</html>
