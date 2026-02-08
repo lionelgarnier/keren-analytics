@@ -1,9 +1,9 @@
-# Easy Analytics for Azure
+# Easy Analytics
 
-Plug-and-play, GA-like analytics for Azure-hosted apps using Application Insights
-and Log Analytics telemetry. This project implements the E2E MVP described in the
-spec: readiness probes, deterministic mapping, KQL templates, caching, and a
-single overview dashboard UI.
+Plug-and-play analytics platform that transforms existing cloud telemetry into
+actionable dashboards in under 2 minutes. Starting with Azure Application Insights,
+it provides separate Marketing and Technical views with zero agent deployment,
+zero raw data storage, and intelligent recommendations to improve telemetry coverage.
 
 ## Quick start (mock mode)
 
@@ -14,6 +14,11 @@ npm run dev
 
 Open http://localhost:3000 and click "Connect Azure". Mock mode returns sample
 dashboard data without any Azure credentials.
+
+The dashboard features three tabs:
+- **Marketing**: visitors, sessions, top pages, geo, browser/OS/device
+- **Technical**: response times, error rates, frontend perf, slow endpoints
+- **Readiness**: score (0-100), signal breakdown, LLM-ready improvement prompts
 
 ## Real Azure mode (optional)
 
@@ -34,24 +39,31 @@ Notes:
 
 ## What is included
 
+- Tab-based dashboard (Marketing / Technical / Readiness)
 - Deterministic orchestration state machine with persisted transitions
+- Readiness score (0-100) with gamified signal breakdown
+- LLM-ready prompts for improving telemetry (copy-paste into Cursor/Copilot)
 - Readiness probes (last 24h/7d fallback via range selector)
 - Schema profiling and on-the-fly mapping (userId/sessionId/pagePath)
 - KQL templates stored in versioned files
 - Cache keys include tenant + workspace + mapping version + range
 - No raw log storage (aggregates only)
-- Minimal Overview dashboard (KPIs, top pages, navigation, tech, perf)
+- Cross-department expansion vision (Finance, Legal, Security, Customer Success)
 
 ## API endpoints
 
-- `GET /auth/login` - mock login flow
-- `GET /auth/callback`
-- `GET /auth/session`
-- `GET /azure/discover`
-- `POST /azure/select`
-- `GET /readiness`
-- `GET /dashboard/overview?range=7d`
-- `GET /recommendations`
+- `GET /auth/login` - login flow (mock or Entra ID OAuth)
+- `GET /auth/callback` - OAuth callback
+- `GET /auth/session` - current session info
+- `GET /auth/setup` - OAuth setup instructions
+- `POST /auth/logout` - end session
+- `GET /azure/discover` - discover App Insights resources
+- `POST /azure/select` - select a resource
+- `POST /azure/select/clear` - clear resource selection
+- `GET /readiness` - readiness report
+- `GET /dashboard/overview?range=7d` - full dashboard data + readiness score
+- `GET /recommendations` - improvement recommendations + score
+- `GET /prompts` - LLM-ready prompts for missing signals
 
 ## Tests
 
@@ -59,13 +71,24 @@ Notes:
 npm test
 ```
 
+18 tests covering: API flow, cache, KQL rendering, mapping, readiness,
+readiness score computation, and prompt generation.
+
 ## Documentation
 
-See `docs/README.md` for product, technical, and phased backlog docs.
+See `docs/README.md` for the full documentation index:
+- Product vision and strategy
+- Technical architecture
+- Multi-cloud design
+- Phased delivery backlog
 
 ## Environment variables
 
 - `AZURE_MODE` - `mock` (default) or `real`
 - `AZURE_ACCESS_TOKEN` - required for real Azure mode
+- `AZURE_CLIENT_ID` - Entra ID app client ID (for OAuth)
+- `AZURE_CLIENT_SECRET` - Entra ID app client secret
+- `AZURE_REDIRECT_URI` - OAuth redirect URI
+- `AZURE_TENANT_ID` - Entra ID tenant (default: "organizations")
 - `SESSION_SECRET` - session cookie secret
 - `MOCK_RESOURCES=multiple` - simulate multiple resources in mock mode

@@ -6,9 +6,13 @@ deterministic pipeline that discovers resources, checks readiness, builds mappin
 and runs KQL templates to render the Overview dashboard.
 
 Key components:
-- Frontend: static HTML/CSS/JS in `public/`
+- Frontend: static HTML/CSS/JS in `public/` (tab-based: Marketing/Technical/Readiness)
 - API server: Express app in `src/server.js`
 - Orchestrator: `src/core/orchestrator.js`
+- Dashboard builder: `src/core/dashboard.js`
+- Readiness score: `src/core/readinessScore.js` (gamified 0-100 score)
+- Prompt generator: `src/core/promptGenerator.js` (LLM-ready prompts)
+- Recommendations: `src/core/recommendations.js`
 - Azure clients: `src/azure/mockClient.js` and `src/azure/realClient.js`
 - KQL templates: `kql/*.kql`
 - Metadata store: file-backed JSON (MVP) in `src/core/metadataStore.js`
@@ -29,12 +33,15 @@ State transitions are persisted to the metadata store for debugging.
 - GET /auth/login
 - GET /auth/callback
 - GET /auth/session
+- GET /auth/setup
 - POST /auth/logout
 - GET /azure/discover
 - POST /azure/select
+- POST /azure/select/clear
 - GET /readiness
-- GET /dashboard/overview?range=today|7d|30d
-- GET /recommendations
+- GET /dashboard/overview?range=today|7d|30d (includes readinessScore)
+- GET /recommendations (includes readinessScore)
+- GET /prompts (LLM-ready prompts for missing signals)
 
 ## Configuration
 Environment variables:
@@ -108,7 +115,11 @@ No raw logs are stored.
 
 ## Tests
 - Unit tests for mapping, readiness, KQL rendering, cache
+- Unit tests for readiness score computation
+- Unit tests for LLM prompt generation
 - Integration test for API flow with mock client
+
+Total: 18 tests (11 suites)
 
 Run with:
 ```

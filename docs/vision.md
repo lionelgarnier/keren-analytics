@@ -187,9 +187,52 @@ Genere le code complet avec les fichiers a modifier.
 
 ---
 
-## 4. Strategie d'Adoption Exponentielle
+## 4. Au-dela de Marketing et Tech : Vision Cross-Departement
 
-### 4.1 Le "Hook" : Time-to-Value instantane
+### 4.1 Pourquoi elargir ?
+
+La telemetrie cloud contient bien plus que des metriques de trafic ou de performance.
+Les memes donnees, vues sous un angle different, servent d'autres equipes. C'est la
+clef pour transformer Easy Analytics d'un outil d'equipe en une plateforme d'entreprise.
+
+### 4.2 Departements cibles
+
+| Departement | Metriques derivees de la telemetrie existante | Source |
+|-------------|----------------------------------------------|--------|
+| **Finance** | Revenue par session (croise avec events e-commerce), cout infra par segment utilisateur, conversion funnel cost analysis | customEvents + requests |
+| **Legal & Compliance** | Volume de requetes GDPR, monitoring de consentement, data residency (geo des requetes), audit trail des acces | requests + geo + audit logs |
+| **Security** | Patterns d'acces anormaux, tentatives d'auth echouees, anomalies geographiques, signaux de vulnerabilite dependencies | requests + exceptions + dependencies |
+| **Customer Success** | Score d'engagement par utilisateur, taux d'adoption des features, signaux de churn (baisse d'activite), correlation avec tickets support | customEvents + pageViews + sessions |
+| **Product Management** | Feature usage heatmap, funnel d'adoption, A/B test monitoring, time-to-value par feature | customEvents + pageViews |
+
+### 4.3 Comment ca marche techniquement ?
+
+Les donnees sont deja la dans Application Insights / Log Analytics. Easy Analytics
+ajoute des "lenses" (vues) par departement :
+
+```
+Meme telemetrie  -->  Lens Marketing   = comportement utilisateur
+                 -->  Lens Technical   = performance et erreurs
+                 -->  Lens Finance     = revenue et couts
+                 -->  Lens Security    = anomalies et acces
+                 -->  Lens Compliance  = audit et conformite
+```
+
+Chaque lens utilise les memes KQL templates sous-jacents, mais avec des mappings
+et des agregations differents. Pas de duplication de donnees.
+
+### 4.4 Strategie de rollout
+
+1. **Phase 2 (actuelle)** : Marketing + Tech + Readiness. Teaser cross-departement dans l'UI.
+2. **Phase 3** : Customer Success lens (engagement et adoption metrics)
+3. **Phase 4** : Finance lens (requiert customEvents e-commerce), Security lens
+4. **Phase 5** : Legal/Compliance lens, Product Management lens
+
+---
+
+## 5. Strategie d'Adoption Exponentielle
+
+### 5.1 Le "Hook" : Time-to-Value instantane
 
 ```
 Connexion AD  -->  Dashboard en 2 min  -->  "Wow, j'ai un GA pour Azure!"
@@ -204,7 +247,7 @@ Connexion AD  -->  Dashboard en 2 min  -->  "Wow, j'ai un GA pour Azure!"
                                          "On peut avoir un mode tech aussi?"
 ```
 
-### 4.2 Mecanismes de viralite
+### 5.2 Mecanismes de viralite
 
 | Mecanisme | Comment |
 |-----------|---------|
@@ -215,7 +258,7 @@ Connexion AD  -->  Dashboard en 2 min  -->  "Wow, j'ai un GA pour Azure!"
 | **Onboarding in-product** | "Invitez 3 collegues" apres le premier dashboard |
 | **Readiness score** | Score gamifie (ex: "Votre app est a 72% de couverture analytics") |
 
-### 4.3 Le "Readiness Score" comme moteur d'engagement
+### 5.3 Le "Readiness Score" comme moteur d'engagement
 
 Le score de readiness n'est pas seulement informatif, il devient un mecanisme
 de gamification et d'engagement :
@@ -237,7 +280,7 @@ de gamification et d'engagement :
 +-------------------------------------------+
 ```
 
-### 4.4 Strategie de pricing (reflexion)
+### 5.4 Strategie de pricing (reflexion)
 
 | Tier | Cible | Fonctionnalites |
 |------|-------|-----------------|
@@ -250,9 +293,9 @@ avant de monetiser.
 
 ---
 
-## 5. Mes Recommandations Supplementaires
+## 6. Mes Recommandations Supplementaires
 
-### 5.1 Ce qui peut faire de ce produit un "killer"
+### 6.1 Ce qui peut faire de ce produit un "killer"
 
 **A. Le "1-Click Deploy" narratif**
 
@@ -292,7 +335,7 @@ Au lieu de configurer des seuils manuellement :
 - Jira/Azure DevOps : creation automatique de tickets depuis les alertes
 - CI/CD : check de performance avant deployment (quality gate)
 
-### 5.2 Ce qu'il faut absolument eviter
+### 6.2 Ce qu'il faut absolument eviter
 
 | Anti-pattern | Pourquoi |
 |-------------|----------|
@@ -302,7 +345,7 @@ Au lieu de configurer des seuils manuellement :
 | Dependance a un LLM externe pour le core | Les prompts sont generes, pas le dashboard |
 | Multi-cloud trop tot | Azure d'abord, prouver la valeur, puis etendre |
 
-### 5.3 North Star Metrics
+### 6.3 North Star Metrics
 
 Pour mesurer le succes du produit :
 
@@ -316,7 +359,7 @@ Pour mesurer le succes du produit :
 
 ---
 
-## 6. Roadmap Strategique
+## 7. Roadmap Strategique
 
 ```
 Q1 2026 : Azure MVP + Marketing Dashboard
@@ -345,7 +388,7 @@ Q4 2026 : Scale
 
 ---
 
-## 7. Resume : Pourquoi ca va marcher
+## 8. Resume : Pourquoi ca va marcher
 
 1. **Besoin universel** : Tout le monde veut du GA-like mais personne ne veut
    configurer Azure Monitor/KQL
