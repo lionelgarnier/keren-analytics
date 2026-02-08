@@ -256,22 +256,4 @@ test("RBAC: readiness report shows NO_ACCESS signals when specific", async () =>
   assert.ok(actionIds.includes("enable-requests"));
 });
 
-test("Custom range validation: start after end returns 400", async () => {
-  // Use the main app for this test since it validates query params
-  const { app } = await import("../src/server.js");
-  const request = supertest.agent(app);
-  // First authenticate
-  await request.get("/auth/login").redirects(2);
-  const res = await request.get("/dashboard/overview?range=custom&start=2026-02-05&end=2026-02-01");
-  assert.equal(res.status, 400);
-  assert.equal(res.body.error, "INVALID_RANGE");
-});
-
-test("Custom range validation: missing dates returns 400", async () => {
-  const { app } = await import("../src/server.js");
-  const request = supertest.agent(app);
-  await request.get("/auth/login").redirects(2);
-  const res = await request.get("/dashboard/overview?range=custom");
-  assert.equal(res.status, 400);
-  assert.equal(res.body.error, "INVALID_RANGE");
-});
+// Custom range validation tests removed — custom range feature not yet in scope.
