@@ -230,6 +230,99 @@ function generateUserFlow(rng) {
   return { nodes, links };
 }
 
+/* ========== URL parameter auto-detection ========== */
+
+function generateUrlParams(rng) {
+  // Simulates what auto-detection would find by scanning URLs in telemetry
+  return {
+    // Discovered parameters with their frequency and top values
+    discovered: [
+      {
+        param: "utm_source",
+        frequency: vary(2800, 10, rng),
+        isUtm: true,
+        topValues: [
+          { value: "google", count: vary(1100, 12, rng) },
+          { value: "linkedin", count: vary(620, 14, rng) },
+          { value: "twitter", count: vary(380, 16, rng) },
+          { value: "newsletter", count: vary(350, 15, rng) },
+          { value: "partner_acme", count: vary(180, 20, rng) },
+        ],
+      },
+      {
+        param: "utm_medium",
+        frequency: vary(2800, 10, rng),
+        isUtm: true,
+        topValues: [
+          { value: "cpc", count: vary(980, 12, rng) },
+          { value: "social", count: vary(720, 14, rng) },
+          { value: "email", count: vary(540, 15, rng) },
+          { value: "referral", count: vary(310, 18, rng) },
+          { value: "organic", count: vary(250, 18, rng) },
+        ],
+      },
+      {
+        param: "utm_campaign",
+        frequency: vary(2200, 12, rng),
+        isUtm: true,
+        topValues: [
+          { value: "spring_launch_2026", count: vary(680, 12, rng) },
+          { value: "product_hunt", count: vary(420, 15, rng) },
+          { value: "retargeting_q1", count: vary(380, 14, rng) },
+          { value: "blog_promo", count: vary(290, 18, rng) },
+          { value: "partner_webinar", count: vary(180, 20, rng) },
+        ],
+      },
+      {
+        param: "ref",
+        frequency: vary(850, 15, rng),
+        isUtm: false,
+        topValues: [
+          { value: "homepage_banner", count: vary(320, 14, rng) },
+          { value: "footer_link", count: vary(210, 18, rng) },
+          { value: "blog_cta", count: vary(180, 18, rng) },
+          { value: "email_sig", count: vary(140, 20, rng) },
+        ],
+      },
+      {
+        param: "promo",
+        frequency: vary(420, 18, rng),
+        isUtm: false,
+        topValues: [
+          { value: "SPRING20", count: vary(220, 15, rng) },
+          { value: "WELCOME10", count: vary(130, 20, rng) },
+          { value: "PARTNER50", count: vary(70, 25, rng) },
+        ],
+      },
+      {
+        param: "ab_test",
+        frequency: vary(1200, 12, rng),
+        isUtm: false,
+        topValues: [
+          { value: "pricing_v2", count: vary(620, 14, rng) },
+          { value: "cta_green", count: vary(580, 14, rng) },
+        ],
+      },
+    ],
+    totalUrlsScanned: vary(11500, 8, rng),
+    urlsWithParams: vary(4800, 10, rng),
+  };
+}
+
+function generateCampaignBreakdown(rng) {
+  // UTM source x medium x campaign aggregation with metrics
+  return [
+    { source: "google", medium: "cpc", campaign: "spring_launch_2026", visitors: vary(480, 12, rng), sessions: vary(620, 12, rng), signups: vary(42, 18, rng), convRate: 0.068 },
+    { source: "linkedin", medium: "social", campaign: "product_hunt", visitors: vary(310, 14, rng), sessions: vary(380, 14, rng), signups: vary(28, 20, rng), convRate: 0.074 },
+    { source: "google", medium: "cpc", campaign: "retargeting_q1", visitors: vary(280, 14, rng), sessions: vary(340, 14, rng), signups: vary(31, 18, rng), convRate: 0.091 },
+    { source: "newsletter", medium: "email", campaign: "blog_promo", visitors: vary(220, 16, rng), sessions: vary(260, 16, rng), signups: vary(18, 22, rng), convRate: 0.069 },
+    { source: "twitter", medium: "social", campaign: "spring_launch_2026", visitors: vary(180, 18, rng), sessions: vary(210, 18, rng), signups: vary(8, 25, rng), convRate: 0.038 },
+    { source: "partner_acme", medium: "referral", campaign: "partner_webinar", visitors: vary(120, 20, rng), sessions: vary(150, 20, rng), signups: vary(15, 22, rng), convRate: 0.100 },
+    { source: "google", medium: "organic", campaign: "(none)", visitors: vary(350, 12, rng), sessions: vary(420, 12, rng), signups: vary(12, 25, rng), convRate: 0.029 },
+    { source: "linkedin", medium: "social", campaign: "retargeting_q1", visitors: vary(90, 22, rng), sessions: vary(110, 22, rng), signups: vary(9, 28, rng), convRate: 0.082 },
+  ];
+}
+
 /* ========== Baseline data (30d) with variance ========== */
 
 function generateBaseline() {
@@ -347,6 +440,10 @@ function generateBaseline() {
       { source: "Email", count: vary(180, 20, rng) },
     ],
     userFlow: generateUserFlow(rng),
+    // Auto-detected URL parameters with top values
+    urlParams: generateUrlParams(rng),
+    // Campaign (UTM) breakdown with metrics
+    campaignBreakdown: generateCampaignBreakdown(rng),
   };
 }
 
@@ -409,6 +506,28 @@ export function getMockRows(queryName, timeRangeKey) {
   }
   if (queryName === "referrerSources") {
     return baseline.referrerSources.map((r) => ({ ...r, count: scale(r.count, rk) }));
+  }
+
+  // URL parameters — scale frequencies
+  if (queryName === "urlParams") {
+    const params = baseline.urlParams;
+    return {
+      discovered: params.discovered.map((p) => ({
+        ...p,
+        frequency: scale(p.frequency, rk),
+        topValues: p.topValues.map((v) => ({ ...v, count: scale(v.count, rk) })),
+      })),
+      totalUrlsScanned: scale(params.totalUrlsScanned, rk),
+      urlsWithParams: scale(params.urlsWithParams, rk),
+    };
+  }
+  if (queryName === "campaignBreakdown") {
+    return baseline.campaignBreakdown.map((r) => ({
+      ...r,
+      visitors: scale(r.visitors, rk),
+      sessions: scale(r.sessions, rk),
+      signups: scale(r.signups, rk),
+    }));
   }
 
   // User flow — scale all values by range

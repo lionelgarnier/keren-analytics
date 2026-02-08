@@ -355,6 +355,28 @@ export async function buildOverviewDashboard({
       })
     : emptyResult;
 
+  const urlParamsResult = hasPageTable
+    ? await runQuery({
+        tenantId, resourceId, workspaceId,
+        queryName: "urlParams",
+        templateName: "top-pages",
+        params: { ...timeParams, tableName, pagePathExpr },
+        allowedValues: { tableName: ["pageViews", "requests"], pagePathExpr: allowedExpr.pagePathExpr },
+        timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
+      })
+    : { _raw: null };
+
+  const campaignResult = hasPageTable
+    ? await runQuery({
+        tenantId, resourceId, workspaceId,
+        queryName: "campaignBreakdown",
+        templateName: "top-pages",
+        params: { ...timeParams, tableName, pagePathExpr },
+        allowedValues: { tableName: ["pageViews", "requests"], pagePathExpr: allowedExpr.pagePathExpr },
+        timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
+      })
+    : { _raw: null };
+
   const userFlowResult = hasPageTable
     ? await runQuery({
         tenantId,
@@ -512,6 +534,8 @@ export async function buildOverviewDashboard({
         share: row.share || safeDivide(row.count, totalGeo),
       })),
       userFlow: userFlowResult?._raw || null,
+      urlParams: urlParamsResult?._raw || null,
+      campaignBreakdown: campaignResult?._raw || null,
       referrerSources: referrerRows.map((row) => ({
         source: row.source,
         count: row.count,

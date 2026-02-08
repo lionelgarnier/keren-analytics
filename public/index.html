@@ -198,6 +198,61 @@
             </div>
           </div>
 
+          <!-- Campaigns & URL Parameters -->
+          <div class="panel">
+            <div class="panel-header">
+              <h3>Campaigns & URL Parameters</h3>
+              <div class="panel-header-right">
+                <span id="paramScanCount" class="badge-count"></span>
+                <div class="view-toggle" data-toggle-group="campaign">
+                  <button class="view-toggle-btn active" data-view="overview">Campaigns</button>
+                  <button class="view-toggle-btn" data-view="params">Parameters</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Campaign overview (UTM breakdown table) -->
+            <div id="campaignOverviewView" class="toggle-view active">
+              <table class="data-table sortable" id="campaignTable">
+                <thead>
+                  <tr>
+                    <th data-sort="string">Source</th>
+                    <th data-sort="string">Medium</th>
+                    <th data-sort="string">Campaign</th>
+                    <th data-sort="number">Visitors</th>
+                    <th data-sort="number">Sessions</th>
+                    <th data-sort="number">Conv.</th>
+                    <th data-sort="number">Conv%</th>
+                  </tr>
+                </thead>
+                <tbody id="campaignBody"></tbody>
+              </table>
+              <div id="campaignEmpty" class="empty-state hidden">
+                <p>No UTM campaign data detected in URLs. Add utm_source, utm_medium, utm_campaign parameters to your marketing links.</p>
+              </div>
+            </div>
+
+            <!-- Auto-detected URL parameters -->
+            <div id="campaignParamsView" class="toggle-view">
+              <p class="text-muted" style="margin-top:0">Auto-detected URL parameters from your telemetry. Pin any parameter to add it as a dashboard filter.</p>
+              <div id="paramChips" class="param-chips"></div>
+              <div id="paramDetail" class="param-detail hidden">
+                <div class="param-detail-header">
+                  <h4 id="paramDetailName"></h4>
+                  <button id="paramDetailClose" class="btn btn-ghost btn-sm">Close</button>
+                </div>
+                <div id="paramDetailValues" class="param-values"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Active filters bar -->
+          <div id="filterBar" class="filter-bar hidden">
+            <span class="filter-bar-label">Filters:</span>
+            <div id="filterChips" class="filter-chips"></div>
+            <button id="clearFilters" class="btn btn-ghost btn-sm">Clear all</button>
+          </div>
+
           <!-- Conversion Funnel + Traffic Sources -->
           <div class="grid-2">
             <div class="panel">

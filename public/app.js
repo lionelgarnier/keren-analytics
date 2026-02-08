@@ -652,6 +652,204 @@ function renderGeoMap(data) {
   }
 }
 
+/* ========== Active Filters ========== */
+let activeFilters = [];
+
+function addFilter(param, value) {
+  if (activeFilters.some((f) => f.param === param && f.value === value)) return;
+  activeFilters.push({ param, value });
+  renderFilterBar();
+}
+
+function removeFilter(param, value) {
+  activeFilters = activeFilters.filter((f) => !(f.param === param && f.value === value));
+  renderFilterBar();
+}
+
+function clearAllFilters() {
+  activeFilters = [];
+  renderFilterBar();
+}
+
+function renderFilterBar() {
+  const bar = document.getElementById("filterBar");
+  const chips = document.getElementById("filterChips");
+  if (activeFilters.length === 0) {
+    bar.classList.add("hidden");
+    return;
+  }
+  bar.classList.remove("hidden");
+  chips.innerHTML = "";
+  activeFilters.forEach((f) => {
+    const chip = document.createElement("span");
+    chip.className = "filter-chip";
+    chip.innerHTML = `<span>${f.param}=${f.value}</span>`;
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "filter-chip-remove";
+    removeBtn.textContent = "\u00D7";
+    removeBtn.addEventListener("click", () => removeFilter(f.param, f.value));
+    chip.appendChild(removeBtn);
+    chips.appendChild(chip);
+  });
+}
+
+document.getElementById("clearFilters")?.addEventListener("click", clearAllFilters);
+
+/* ========== Render: Campaign Breakdown ========== */
+function renderCampaignTable(data) {
+  const tbody = document.getElementById("campaignBody");
+  const emptyEl = document.getElementById("campaignEmpty");
+  tbody.innerHTML = "";
+
+  if (!data || data.length === 0) {
+    tbody.parentElement.classList.add("hidden");
+    emptyEl?.classList.remove("hidden");
+    return;
+  }
+  tbody.parentElement.classList.remove("hidden");
+  emptyEl?.classList.add("hidden");
+
+  data.forEach((row) => {
+    const tr = document.createElement("tr");
+    tr.appendChild(td(row.source));
+    tr.appendChild(td(row.medium));
+    tr.appendChild(td(row.campaign));
+    tr.appendChild(td(fmt(row.visitors), "num"));
+    tr.appendChild(td(fmt(row.sessions), "num"));
+    tr.appendChild(td(fmt(row.signups), "num"));
+
+    const convTd = td(fmtPct(row.convRate), "num");
+    if (row.convRate >= 0.08) convTd.style.color = "var(--success)";
+    else if (row.convRate < 0.04) convTd.style.color = "var(--danger)";
+    tr.appendChild(convTd);
+
+    // Click to filter
+    tr.style.cursor = "pointer";
+    tr.addEventListener("click", () => {
+      addFilter("utm_source", row.source);
+      if (row.campaign !== "(none)") addFilter("utm_campaign", row.campaign);
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+/* ========== Render: URL Parameters ========== */
+let pinnedParams = new Set();
+try {
+  const saved = localStorage.getItem("ea_pinned_params");
+  if (saved) pinnedParams = new Set(JSON.parse(saved));
+} catch {}
+
+function savePinnedParams() {
+  try { localStorage.setItem("ea_pinned_params", JSON.stringify([...pinnedParams])); } catch {}
+}
+
+function renderUrlParams(data) {
+  const chipsContainer = document.getElementById("paramChips");
+  const scanCount = document.getElementById("paramScanCount");
+  chipsContainer.innerHTML = "";
+
+  if (!data || !data.discovered || data.discovered.length === 0) return;
+
+  if (scanCount) {
+    const pct = data.totalUrlsScanned > 0 ? ((data.urlsWithParams / data.totalUrlsScanned) * 100).toFixed(0) : 0;
+    scanCount.textContent = `${data.discovered.length} params detected (${pct}% of URLs)`;
+  }
+
+  data.discovered.forEach((param) => {
+    const chip = document.createElement("div");
+    chip.className = `param-chip${param.isUtm ? " is-utm" : ""}`;
+
+    const name = document.createElement("span");
+    name.className = "param-chip-name";
+    name.textContent = param.param;
+    chip.appendChild(name);
+
+    const count = document.createElement("span");
+    count.className = "param-chip-count";
+    count.textContent = fmt(param.frequency);
+    chip.appendChild(count);
+
+    // Pin button
+    const pin = document.createElement("button");
+    pin.className = `param-chip-pin${pinnedParams.has(param.param) ? " pinned" : ""}`;
+    pin.textContent = pinnedParams.has(param.param) ? "\u2713" : "+";
+    pin.title = pinnedParams.has(param.param) ? "Unpin from dashboard" : "Pin to dashboard";
+    pin.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (pinnedParams.has(param.param)) {
+        pinnedParams.delete(param.param);
+        pin.classList.remove("pinned");
+        pin.textContent = "+";
+        pin.title = "Pin to dashboard";
+      } else {
+        pinnedParams.add(param.param);
+        pin.classList.add("pinned");
+        pin.textContent = "\u2713";
+        pin.title = "Unpin from dashboard";
+      }
+      savePinnedParams();
+    });
+    chip.appendChild(pin);
+
+    // Click chip to show detail
+    chip.addEventListener("click", () => showParamDetail(param));
+
+    chipsContainer.appendChild(chip);
+  });
+}
+
+function showParamDetail(param) {
+  const detail = document.getElementById("paramDetail");
+  const nameEl = document.getElementById("paramDetailName");
+  const valuesEl = document.getElementById("paramDetailValues");
+
+  nameEl.textContent = `${param.param} (${fmt(param.frequency)} occurrences)`;
+  valuesEl.innerHTML = "";
+  detail.classList.remove("hidden");
+
+  const maxCount = Math.max(...param.topValues.map((v) => v.count));
+
+  param.topValues.forEach((v) => {
+    const row = document.createElement("div");
+    row.className = "param-value-row";
+
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "param-value-name";
+    nameSpan.textContent = v.value;
+    row.appendChild(nameSpan);
+
+    const barBg = document.createElement("div");
+    barBg.className = "param-value-bar-bg";
+    const bar = document.createElement("div");
+    bar.className = "param-value-bar";
+    bar.style.width = (maxCount > 0 ? (v.count / maxCount) * 100 : 0) + "%";
+    barBg.appendChild(bar);
+    row.appendChild(barBg);
+
+    const countSpan = document.createElement("span");
+    countSpan.className = "param-value-count";
+    countSpan.textContent = fmt(v.count);
+    row.appendChild(countSpan);
+
+    // Filter button
+    const filterBtn = document.createElement("button");
+    filterBtn.className = "param-value-filter-btn";
+    filterBtn.textContent = "Filter";
+    filterBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      addFilter(param.param, v.value);
+    });
+    row.appendChild(filterBtn);
+
+    valuesEl.appendChild(row);
+  });
+}
+
+document.getElementById("paramDetailClose")?.addEventListener("click", () => {
+  document.getElementById("paramDetail")?.classList.add("hidden");
+});
+
 /* ========== Render: Referrer sources ========== */
 function renderReferrerChart(data) {
   const items = data || [];
@@ -1270,6 +1468,10 @@ function renderDashboard(data) {
     tr.appendChild(td(fmt(row.count), "num"));
   });
 
+  // Campaigns & URL Parameters
+  renderCampaignTable(dashboard.charts.campaignBreakdown);
+  renderUrlParams(dashboard.charts.urlParams);
+
   // Conversion Funnel
   renderFunnel(dashboard.charts.topNavigationPaths, dashboard.charts.topPages);
 
@@ -1349,6 +1551,7 @@ async function init() {
   initSortableTable("topPagesTable");
   initSortableTable("slowEndpointsTable");
   initSortableTable("topNavTable");
+  initSortableTable("campaignTable");
 
   // Check for OAuth redirect errors
   if (checkAuthError()) {

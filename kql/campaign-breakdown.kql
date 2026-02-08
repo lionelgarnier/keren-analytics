@@ -1,0 +1,22 @@
+// UTM campaign breakdown with visitor and session metrics
+// Extracts utm_source, utm_medium, utm_campaign from URLs
+let startTime = datetime('{{timeStart}}');
+let endTime = datetime('{{timeEnd}}');
+{{tableName}}
+| where timestamp between (startTime .. endTime)
+| extend parsedUrl = parse_url(url)
+| extend
+    utm_source = tostring(parsedUrl.["Query Parameters"].["utm_source"]),
+    utm_medium = tostring(parsedUrl.["Query Parameters"].["utm_medium"]),
+    utm_campaign = tostring(parsedUrl.["Query Parameters"].["utm_campaign"])
+| where isnotempty(utm_source)
+| summarize
+    visitors = dcount({{userIdExpr}}),
+    sessions = dcount({{sessionIdExpr}}),
+    pageViews = count()
+  by
+    source = utm_source,
+    medium = coalesce(utm_medium, "(none)"),
+    campaign = coalesce(utm_campaign, "(none)")
+| order by visitors desc
+| take 20
