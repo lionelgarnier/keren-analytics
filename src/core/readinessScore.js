@@ -7,13 +7,14 @@
  */
 
 const SIGNAL_WEIGHTS = {
-  pageViews:      { points: 20, label: "Page Views",       category: "required",    description: "Frontend page view tracking" },
-  requests:       { points: 15, label: "Backend Requests",  category: "required",    description: "Server-side request telemetry" },
-  sessionId:      { points: 15, label: "Session Tracking",  category: "required",    description: "Session identification" },
-  userId:         { points: 15, label: "User Identity",     category: "recommended", description: "Authenticated user tracking" },
-  userAgent:      { points: 10, label: "Device & Browser",  category: "recommended", description: "Client environment details" },
-  geo:            { points: 10, label: "Geo Location",      category: "optional",    description: "Geographic enrichment" },
-  browserTimings: { points: 15, label: "Frontend Perf",     category: "optional",    description: "Browser timing metrics" },
+  pageViews:       { points: 20, label: "Page Views",       category: "required",    description: "Frontend page view tracking" },
+  requests:        { points: 15, label: "Backend Requests",  category: "required",    description: "Server-side request telemetry" },
+  sessionId:       { points: 15, label: "Session Tracking",  category: "required",    description: "Session identification" },
+  userId:          { points: 15, label: "User Identity",     category: "recommended", description: "Authenticated user tracking" },
+  userIdDegraded:  { points: 0,  label: "User Identity",     category: "recommended", description: "user_AuthenticatedId is nearly empty — visitor counts are over-estimated" },
+  userAgent:       { points: 10, label: "Device & Browser",  category: "recommended", description: "Client environment details" },
+  geo:             { points: 10, label: "Geo Location",      category: "optional",    description: "Geographic enrichment" },
+  browserTimings:  { points: 15, label: "Frontend Perf",     category: "optional",    description: "Browser timing metrics" },
 };
 
 /**
@@ -28,16 +29,23 @@ export function computeReadinessScore(readinessReport) {
 
   const signals = readinessReport.availableSignals || {};
   let score = 0;
-  const maxScore = Object.values(SIGNAL_WEIGHTS).reduce((sum, w) => sum + w.points, 0);
+  const isDegraded = Boolean(signals.userIdDegraded);
+  const maxScore = Object.entries(SIGNAL_WEIGHTS).reduce((sum, [key, w]) => {
+    if (key === "userIdDegraded") return sum;
+    return sum + w.points;
+  }, 0);
   const breakdown = [];
 
   for (const [key, weight] of Object.entries(SIGNAL_WEIGHTS)) {
+    if (key === "userIdDegraded" && !signals.userIdDegraded) continue;
+    if (key === "userId" && signals.userIdDegraded) continue;
+
     const available = Boolean(signals[key]);
     if (available) score += weight.points;
     breakdown.push({
       signal: key,
       label: weight.label,
-      points: weight.points,
+      points: key === "userIdDegraded" ? SIGNAL_WEIGHTS.userId.points : weight.points,
       available,
       category: weight.category,
       description: weight.description,

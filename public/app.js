@@ -152,10 +152,6 @@ function activateTab(tabName, { updateUrl = true } = {}) {
   const target = document.getElementById(`tab-${tabName}`);
   if (target) target.classList.add("active");
 
-  if (tabName === "readiness" && lastDashboardData && !document.querySelector(".prompt-card")) {
-    loadPrompts();
-  }
-
   if (updateUrl) {
     const currentRoute = router.current;
     if (currentRoute.page === "dashboard" && currentRoute.service) {
@@ -262,6 +258,7 @@ function exitPreviewMode() {
 async function apiFetch(url, options = {}) {
   const response = await fetch(url, {
     credentials: "same-origin",
+    cache: "no-store",
     headers: { "Content-Type": "application/json" },
     ...options,
   });
@@ -528,6 +525,32 @@ function initSortableTable(tableId) {
       rows.forEach((row) => tbody.appendChild(row));
     });
   });
+}
+
+/* ========== Technical route filtering ========== */
+const TECHNICAL_ROUTE_PATTERNS = [
+  /^\/api\//i,
+  /^\/apps\/web\/src\//i,
+  /\/api\/trpc\//i,
+  /\/api\/auth\//i,
+  /\/api\/auth\/session/i,
+  /\/_next\//i,
+  /\/_not-found/i,
+  /\/favicon/i,
+  /\/robots\.txt/i,
+  /\/sitemap/i,
+  /\/healthz?/i,
+  /\/ready/i,
+  /\/livez/i,
+  /\/__([\w-]+)/i,        // __nextjs, __data, etc.
+];
+
+function isTechnicalRoute(path) {
+  return TECHNICAL_ROUTE_PATTERNS.some((re) => re.test(path));
+}
+
+function filterTechnicalRoutes(rows, pathKey = "path") {
+  return rows.filter((row) => !isTechnicalRoute(row[pathKey]));
 }
 
 /* ========== Render: Daily Trend ========== */
@@ -2065,6 +2088,9 @@ function renderReadinessScore(readinessScore, readiness) {
   const container = document.getElementById("scoreBreakdown");
   container.innerHTML = "";
   breakdown.forEach((item) => {
+    const wrapper = document.createElement("div");
+    wrapper.className = `score-row-wrapper ${item.available ? "available" : "missing"}`;
+
     const row = document.createElement("div");
     row.className = `score-row ${item.available ? "available" : "missing"}`;
 
@@ -2085,97 +2111,89 @@ function renderReadinessScore(readinessScore, readiness) {
 
     const points = document.createElement("span");
     points.className = "score-row-points";
-    points.textContent = item.available ? `+${item.points}` : `+${item.points}`;
+    points.textContent = `+${item.points}`;
     row.appendChild(points);
 
-    container.appendChild(row);
+    wrapper.appendChild(row);
+
+    if (!item.available) {
+      const fixBtn = document.createElement("button");
+      fixBtn.className = "score-row-fix-btn";
+      fixBtn.textContent = "How to fix";
+      fixBtn.dataset.signal = item.signal;
+      row.appendChild(fixBtn);
+
+      const detail = document.createElement("div");
+      detail.className = "score-row-detail";
+      detail.id = `signal-detail-${item.signal}`;
+
+      const spinner = document.createElement("div");
+      spinner.className = "score-row-detail-loading";
+      spinner.textContent = "Loading\u2026";
+      detail.appendChild(spinner);
+
+      wrapper.appendChild(detail);
+
+      fixBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const isOpen = wrapper.classList.toggle("open");
+        fixBtn.textContent = isOpen ? "Hide" : "How to fix";
+        if (isOpen) {
+          detail.innerHTML = "";
+          const loading = document.createElement("div");
+          loading.className = "score-row-detail-loading";
+          loading.textContent = "Loading...";
+          detail.appendChild(loading);
+          try {
+            const data = await apiFetch(`/prompts?t=${Date.now()}`);
+            const prompts = data.prompts || [];
+            const match = prompts.find((p) => p.signal === item.signal);
+            detail.innerHTML = "";
+            if (match) {
+              const stackTag = document.createElement("span");
+              stackTag.className = "prompt-card-stack";
+              stackTag.textContent = match.detectedStack;
+              detail.appendChild(stackTag);
+
+              const pre = document.createElement("div");
+              pre.className = "prompt-text";
+              pre.textContent = match.prompt;
+              detail.appendChild(pre);
+
+              const copyBtn = document.createElement("button");
+              copyBtn.className = "prompt-copy-btn";
+              copyBtn.textContent = "Copy prompt";
+              copyBtn.addEventListener("click", async () => {
+                try {
+                  await navigator.clipboard.writeText(match.prompt);
+                } catch {
+                  const ta = document.createElement("textarea");
+                  ta.value = match.prompt;
+                  document.body.appendChild(ta);
+                  ta.select();
+                  document.execCommand("copy");
+                  document.body.removeChild(ta);
+                }
+                copyBtn.textContent = "Copied!";
+                copyBtn.classList.add("copied");
+                setTimeout(() => { copyBtn.textContent = "Copy prompt"; copyBtn.classList.remove("copied"); }, 2000);
+              });
+              detail.appendChild(copyBtn);
+            } else {
+              detail.innerHTML = "<p class=\"text-muted\">No prompt available for this signal yet.</p>";
+            }
+          } catch (err) {
+            detail.innerHTML = `<p class="text-muted">Failed to load prompt: ${err.message}</p>`;
+          }
+        }
+      });
+    }
+
+    container.appendChild(wrapper);
   });
 }
 
-/* ========== Render: Prompt Cards ========== */
-async function loadPrompts() {
-  try {
-    const data = await apiFetch("/prompts");
-    const container = document.getElementById("promptCards");
-    const noMessage = document.getElementById("noPromptsMessage");
-    container.innerHTML = "";
-
-    if (!data.prompts || data.prompts.length === 0) {
-      noMessage?.classList.remove("hidden");
-      return;
-    }
-    noMessage?.classList.add("hidden");
-
-    data.prompts.forEach((p) => {
-      const card = document.createElement("div");
-      card.className = "prompt-card";
-
-      const header = document.createElement("div");
-      header.className = "prompt-card-header";
-      header.addEventListener("click", () => card.classList.toggle("open"));
-
-      const title = document.createElement("span");
-      title.className = "prompt-card-title";
-      title.textContent = p.label;
-
-      const stack = document.createElement("span");
-      stack.className = "prompt-card-stack";
-      stack.textContent = p.detectedStack;
-      title.appendChild(stack);
-
-      const arrow = document.createElement("span");
-      arrow.className = "prompt-card-arrow";
-      arrow.textContent = "\u25BC";
-
-      header.appendChild(title);
-      header.appendChild(arrow);
-      card.appendChild(header);
-
-      const body = document.createElement("div");
-      body.className = "prompt-card-body";
-
-      const pre = document.createElement("div");
-      pre.className = "prompt-text";
-      pre.textContent = p.prompt;
-      body.appendChild(pre);
-
-      const copyBtn = document.createElement("button");
-      copyBtn.className = "prompt-copy-btn";
-      copyBtn.textContent = "Copy prompt";
-      copyBtn.addEventListener("click", async () => {
-        try {
-          await navigator.clipboard.writeText(p.prompt);
-          copyBtn.textContent = "Copied!";
-          copyBtn.classList.add("copied");
-          setTimeout(() => {
-            copyBtn.textContent = "Copy prompt";
-            copyBtn.classList.remove("copied");
-          }, 2000);
-        } catch {
-          // Fallback for non-HTTPS
-          const textarea = document.createElement("textarea");
-          textarea.value = p.prompt;
-          document.body.appendChild(textarea);
-          textarea.select();
-          document.execCommand("copy");
-          document.body.removeChild(textarea);
-          copyBtn.textContent = "Copied!";
-          copyBtn.classList.add("copied");
-          setTimeout(() => {
-            copyBtn.textContent = "Copy prompt";
-            copyBtn.classList.remove("copied");
-          }, 2000);
-        }
-      });
-      body.appendChild(copyBtn);
-
-      card.appendChild(body);
-      container.appendChild(card);
-    });
-  } catch (error) {
-    console.error("Failed to load prompts:", error.message);
-  }
-}
+/* ========== Prompt Cards (removed — prompts now inline in score rows) ========== */
 
 /* ========== Safe render helper ========== */
 function safeRender(label, fn) {
@@ -2241,13 +2259,20 @@ function renderDashboard(data) {
   // Daily trend
   safeRender("Daily trend", () => renderDailyTrend(dashboard.charts.dailyTrend));
 
-  // Top Pages table
+  // Top Pages table (with technical route filtering)
   safeRender("Top Pages", () => {
-    renderTableRows("topPagesBody", "topPagesEmpty", "topPagesCount", dashboard.charts.topPages, (tr, row) => {
-      tr.appendChild(td(row.path));
-      tr.appendChild(td(fmt(row.views), "num"));
-      tr.appendChild(td(fmtPct(row.share), "num"));
-    });
+    const topPagesCheckbox = document.getElementById("topPagesFilterTechnical");
+    const renderTopPages = () => {
+      const all = dashboard.charts.topPages || [];
+      const rows = topPagesCheckbox?.checked ? filterTechnicalRoutes(all) : all;
+      renderTableRows("topPagesBody", "topPagesEmpty", "topPagesCount", rows, (tr, row) => {
+        tr.appendChild(td(row.path));
+        tr.appendChild(td(fmt(row.views), "num"));
+        tr.appendChild(td(fmtPct(row.share), "num"));
+      });
+    };
+    renderTopPages();
+    if (topPagesCheckbox) topPagesCheckbox.onchange = renderTopPages;
   });
 
   // Geo distribution (map + chart)
@@ -2264,16 +2289,23 @@ function renderDashboard(data) {
   // Browser timings
   safeRender("Browser timings", () => renderBrowserTimings(dashboard.charts.browserTimings));
 
-  // Slow endpoints table
+  // Slow endpoints table (with technical route filtering)
   safeRender("Slow endpoints", () => {
-    renderTableRows("slowEndpointsBody", "slowEndpointsEmpty", "slowEndpointsCount", dashboard.tables.slowEndpoints, (tr, row) => {
-      tr.appendChild(td(row.path));
-      tr.appendChild(td(fmtMs(row.p50), "num"));
-      tr.appendChild(td(fmtMs(row.p95), "num"));
-      tr.appendChild(td(fmtMs(row.p99), "num"));
-      tr.appendChild(td(fmt(row.count), "num"));
-      tr.appendChild(td(fmtPct(row.errorRate), "num"));
-    });
+    const slowCheckbox = document.getElementById("slowEndpointsFilterTechnical");
+    const renderSlowEndpoints = () => {
+      const all = dashboard.tables.slowEndpoints || [];
+      const rows = slowCheckbox?.checked ? filterTechnicalRoutes(all) : all;
+      renderTableRows("slowEndpointsBody", "slowEndpointsEmpty", "slowEndpointsCount", rows, (tr, row) => {
+        tr.appendChild(td(row.path));
+        tr.appendChild(td(fmtMs(row.p50), "num"));
+        tr.appendChild(td(fmtMs(row.p95), "num"));
+        tr.appendChild(td(fmtMs(row.p99), "num"));
+        tr.appendChild(td(fmt(row.count), "num"));
+        tr.appendChild(td(fmtPct(row.errorRate), "num"));
+      });
+    };
+    renderSlowEndpoints();
+    if (slowCheckbox) slowCheckbox.onchange = renderSlowEndpoints;
   });
 
   // Sankey User Flow + table fallback

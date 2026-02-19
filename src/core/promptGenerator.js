@@ -1,9 +1,13 @@
 /**
  * Generate LLM-ready prompts for improving telemetry coverage.
  *
- * Each prompt is contextual: it includes the detected stack, the specific
- * missing signal, and produces a copy-paste prompt that works with
- * Cursor, Copilot, ChatGPT, or any code-aware LLM.
+ * Each prompt follows a 3-phase approach:
+ *   1. Audit — scan the codebase to understand what's already in place
+ *   2. Gap analysis — identify what's missing for the specific signal
+ *   3. Implementation — make the minimal targeted changes
+ *
+ * This avoids prescriptive "install and configure" instructions that
+ * assume nothing exists, which is almost never the case in real projects.
  */
 
 const STACK_HINTS = {
@@ -39,115 +43,139 @@ function detectStack(schemaProfile) {
 }
 
 const PROMPT_TEMPLATES = {
-  pageViews: (stack, resource) => `I need to add page view tracking to my ${stack.name} application using Azure Application Insights.
+  pageViews: (stack, resource) => `My ${stack.name} application is connected to Azure Application Insights (resource: ${resource || "[your-resource-name]"}), but **no pageView telemetry is reaching Application Insights**.
 
-Context:
-- App Insights resource: ${resource || "[your-resource-name]"}
-- Framework: ${stack.name}
-- SDK to use: ${stack.sdk}
-- Signal missing: pageViews (no page view telemetry detected)
+## What I need
+Page view events must appear in the Application Insights \`pageViews\` table, with the page URL path and page title.${stack.name.includes("SPA") ? " For a SPA, client-side route changes must be tracked — not just the initial page load." : ""}
 
-What I need:
-1. Install and configure the Application Insights SDK (${stack.sdk})
-2. Automatically track every route change / page navigation as a pageView
-3. Include the page URL path and page title in each event
-4. For SPA: ensure client-side route changes are tracked (not just initial load)
-5. Do NOT send any PII (no email, no full name in telemetry)
+## Your approach
+1. **Audit** — Search this codebase for any existing Application Insights setup: SDK imports, configuration files, connection strings, \`trackPageView\` calls, or equivalent. Also check package.json / dependencies for \`${stack.sdk}\` or similar packages.
+2. **Gap analysis** — Based on what you find, identify the specific reason pageViews are missing. Common causes:
+   - SDK installed but pageView auto-tracking is disabled
+   - SDK configured but the connection string / instrumentation key is wrong or missing
+   - SDK not initialized early enough in the app lifecycle${stack.name.includes("SPA") ? "\n   - Route change tracking not enabled (enableAutoRouteTracking: false or missing)" : ""}
+   - SDK not installed at all
+3. **Fix** — Make the minimal changes needed to close the gap. If the SDK is already installed, do NOT reinstall or reconfigure from scratch — only adjust what's missing. If nothing exists, then set up the SDK with pageView tracking enabled.
 
-Generate the complete code with file paths and installation commands.`,
+Do NOT send any PII (no email, no full name) in telemetry.`,
 
-  requests: (stack, resource) => `I need to enable backend request tracking in my ${stack.name} application using Azure Application Insights.
+  requests: (stack, resource) => `My ${stack.name} application is connected to Azure Application Insights (resource: ${resource || "[your-resource-name]"}), but **no server-side request telemetry is reaching Application Insights**.
 
-Context:
-- App Insights resource: ${resource || "[your-resource-name]"}
-- Framework: ${stack.name}
-- SDK to use: ${stack.sdk}
-- Signal missing: requests (no server-side request telemetry detected)
+## What I need
+HTTP requests must appear in the Application Insights \`requests\` table, including method, URL, status code, and duration.
 
-What I need:
-1. Install and configure server-side Application Insights SDK
-2. Auto-collect all incoming HTTP requests (method, URL, status, duration)
-3. Capture request headers relevant for analytics (user-agent, referer)
-4. Enable dependency tracking for outbound calls (databases, APIs)
-5. Set up proper sampling to control costs (adaptive sampling recommended)
+## Your approach
+1. **Audit** — Search this codebase for any existing Application Insights server-side setup: SDK imports (e.g. \`${stack.sdk}\`), initialization code, middleware, connection strings. Check package/dependency files.
+2. **Gap analysis** — Identify why requests are not being tracked. Common causes:
+   - SDK installed but not initialized before the web framework starts listening
+   - Auto-collection is disabled in configuration
+   - Connection string / instrumentation key is wrong or missing
+   - SDK not installed at all
+3. **Fix** — Make the minimal changes needed. If the SDK is already present, just adjust the configuration. If it's missing entirely, add server-side telemetry with request auto-collection enabled. Also consider:
+   - Dependency tracking for outbound calls (databases, APIs) — enable if not already
+   - Adaptive sampling to control costs`,
 
-Generate the complete code with file paths and installation commands.`,
+  userId: (stack, resource) => `My ${stack.name} application is connected to Azure Application Insights (resource: ${resource || "[your-resource-name]"}), but **no authenticated user ID (\`user_AuthenticatedId\`) appears in the telemetry**.
 
-  userId: (stack, resource) => `I need to attach authenticated user identity to Azure Application Insights telemetry in my ${stack.name} application.
+## What I need
+After a user logs in, all subsequent telemetry (pageViews, requests, custom events) must carry a pseudonymized user identifier in the \`user_AuthenticatedId\` field.
 
-Context:
-- App Insights resource: ${resource || "[your-resource-name]"}
-- Framework: ${stack.name}
-- Signal missing: userId (no user_AuthenticatedId detected)
+## Your approach
+1. **Audit** — Search this codebase for:
+   - How authentication works (auth provider, session management, login flow)
+   - Any existing calls to \`setAuthenticatedUserContext()\`, \`context.user\`, or telemetry initializers that set user identity
+   - Where the Application Insights SDK is initialized (frontend and/or backend)
+2. **Gap analysis** — Identify why the user ID is missing. Common causes:
+   - Authentication exists but nobody wired it to Application Insights
+   - \`setAuthenticatedUserContext()\` is called with the wrong arguments or at the wrong time
+   - User ID is set on frontend but not propagated to backend, or vice versa
+3. **Fix** — Wire the authenticated user ID to Application Insights at the right point in the auth flow. Use a hashed or pseudonymized ID — never raw email or PII. Show changes for both frontend and backend if both exist.`,
 
-What I need:
-1. After user authentication, set the authenticated user ID on the telemetry context
-2. Use a hashed or pseudonymized ID (NOT raw email or PII)
-3. Ensure the user ID propagates to all subsequent telemetry (pageViews, requests, events)
-4. For frontend: set via appInsights.setAuthenticatedUserContext()
-5. For backend: set via TelemetryClient context
+  userIdDegraded: (stack, resource) => `My ${stack.name} application is connected to Azure Application Insights (resource: ${resource || "[your-resource-name]"}). Users **do authenticate**, but the \`user_AuthenticatedId\` field is nearly empty — less than 10 % of telemetry carries it. As a result, unique-visitor counts fall back to anonymous IDs (\`user_Id\`) and are **significantly over-estimated**.
 
-Generate the complete code. Show both frontend and backend if applicable.`,
+## What I need
+After a user logs in, every subsequent telemetry item (pageViews, requests, custom events) must carry a stable, pseudonymized identifier in \`user_AuthenticatedId\`.
 
-  sessionId: (stack, resource) => `I need to ensure session tracking is properly configured in my ${stack.name} application using Azure Application Insights.
+## Your approach
+1. **Audit** — Search this codebase for:
+   - How authentication works (auth provider, session/token management, login flow)
+   - Where the Application Insights SDK is initialized — both frontend and backend
+   - Any existing calls to \`setAuthenticatedUserContext()\` or telemetry initializers that set \`user_AuthenticatedId\`
+   - Whether the user ID is available in a cookie, JWT claim, or server-side session after login
+2. **Gap analysis** — The SDK is collecting data, but the authenticated user ID is missing from almost all events. Common causes:
+   - \`setAuthenticatedUserContext()\` is never called after login
+   - It is called, but at the wrong time (before the auth token is available, or only on one page)
+   - The frontend sets it, but the backend SDK doesn't receive or propagate it
+   - The value passed is empty, null, or changes across sessions for the same user
+3. **Fix** — Wire the authenticated user ID at the earliest reliable point after login:
+   - **Frontend (JS SDK):** call \`appInsights.setAuthenticatedUserContext(hashedUserId)\` once the user session is established. Use a hashed or opaque ID — never raw email or PII.
+   - **Backend (.NET / Node / Java / Python):** set \`TelemetryContext.User.AuthenticatedUserId\` (or equivalent) via a telemetry initializer or middleware that reads the auth session.
+   - Ensure the same stable ID is used on both sides so frontend and backend telemetry can be correlated.
 
-Context:
-- App Insights resource: ${resource || "[your-resource-name]"}
-- Framework: ${stack.name}
-- Signal missing: sessionId (no session_Id detected)
+Do NOT send any PII (no email, no full name) in telemetry.`,
 
-What I need:
-1. Verify the Application Insights SDK is configured to generate session IDs
-2. Ensure session_Id is set on all telemetry items
-3. Configure session timeout (default 30 min is fine)
-4. If using a custom session mechanism, bridge it to Application Insights
+  sessionId: (stack, resource) => `My ${stack.name} application is connected to Azure Application Insights (resource: ${resource || "[your-resource-name]"}), but **no \`session_Id\` appears in the telemetry**.
 
-Generate the configuration code needed.`,
+## What I need
+Every telemetry item must carry a \`session_Id\` that groups user activity into sessions (default 30-minute timeout is fine).
 
-  userAgent: (stack, resource) => `I need to ensure device and browser information is captured in my ${stack.name} application using Azure Application Insights.
+## Your approach
+1. **Audit** — Search this codebase for the Application Insights SDK configuration. Check whether session tracking is explicitly disabled, or if a custom session mechanism overrides the default behavior.
+2. **Gap analysis** — Session IDs are normally auto-generated by the JavaScript SDK. Common reasons they're missing:
+   - SDK is configured with \`disableSessionTracking: true\` or equivalent
+   - A custom telemetry initializer strips the session ID
+   - The SDK is only server-side with no frontend component (server SDK doesn't auto-generate sessions)
+   - Cookie consent blocking prevents the session cookie from being set
+3. **Fix** — Make the minimal adjustment to restore session tracking. This is usually a configuration flag, not new code.`,
 
-Context:
-- App Insights resource: ${resource || "[your-resource-name]"}
-- Framework: ${stack.name}
-- Signal missing: client_Browser / client_OS / client_Type
+  userAgent: (stack, resource) => `My ${stack.name} application is connected to Azure Application Insights (resource: ${resource || "[your-resource-name]"}), but **device and browser information (\`client_Browser\`, \`client_OS\`) is missing from the telemetry**.
 
-What I need:
-1. Verify the JavaScript SDK is loaded on all pages (this auto-captures user agent)
-2. Ensure the SDK configuration has enableAutoRouteTracking: true
-3. Confirm client_Browser, client_OS, and client_Type fields are populated
+## What I need
+Telemetry must include the user's browser name, OS, and device type — populated automatically from the user-agent header.
 
-This is usually automatic with the JS SDK. Show the minimal config to verify.`,
+## Your approach
+1. **Audit** — Search this codebase for the Application Insights JavaScript SDK setup. Check if it's loaded on all pages and whether any configuration disables user-agent collection.
+2. **Gap analysis** — This data is normally auto-collected by the JS SDK. Common reasons it's missing:
+   - No frontend JavaScript SDK (only server-side tracking)
+   - SDK loaded but user-agent parsing is disabled
+   - A telemetry initializer or proxy strips these fields
+3. **Fix** — If the JS SDK is already present, verify the configuration. If there's no frontend SDK, add the minimal JavaScript snippet to collect client-side context. This is typically a small configuration change, not a major implementation.`,
 
-  geo: (stack, resource) => `I need to enable geographic enrichment in Azure Application Insights for my ${stack.name} application.
+  geo: (stack, resource) => `My ${stack.name} application is connected to Azure Application Insights (resource: ${resource || "[your-resource-name]"}), but **no geographic information (country, city) appears in the telemetry**.
 
-Context:
-- App Insights resource: ${resource || "[your-resource-name]"}
-- Signal missing: geo data (no geographic information detected)
+## What I need
+Telemetry must include geo-location data so we can analyze usage by region.
 
-What I need:
-1. Check that client IP addresses are properly forwarded to Application Insights
-2. If behind a proxy/load balancer: configure X-Forwarded-For header forwarding
-3. Verify geo-enrichment is enabled in the Application Insights resource settings (Azure Portal)
-4. Note: geo-enrichment happens server-side in Azure, not in the SDK
+## Your approach
+1. **Audit** — Check how the application is deployed:
+   - Is it behind a reverse proxy, CDN, or load balancer?
+   - Is the Application Insights SDK sending telemetry directly from the client browser, or only from the server?
+   - Check the Azure Portal: is geo-enrichment enabled on the Application Insights resource?
+2. **Gap analysis** — Geo-enrichment is done server-side by Azure based on the client IP. Common reasons it fails:
+   - A reverse proxy or load balancer replaces the client IP with its own, and \`X-Forwarded-For\` is not configured
+   - All telemetry is server-side only, and the server's IP (not the user's) gets geo-resolved
+   - IP collection is explicitly disabled in the SDK configuration
+3. **Fix** — The fix depends on the root cause:
+   - If behind a proxy: ensure \`X-Forwarded-For\` is forwarded
+   - If no frontend SDK: add client-side telemetry or forward the real client IP
+   - If IP collection is disabled: re-enable it (note: Application Insights can use IP for geo without storing it)`,
 
-Provide the configuration steps (both Azure Portal and code if applicable).`,
+  browserTimings: (stack, resource) => `My ${stack.name} application is connected to Azure Application Insights (resource: ${resource || "[your-resource-name]"}), but **no browser timing / page load performance data appears in the telemetry**.
 
-  browserTimings: (stack, resource) => `I need to capture frontend performance metrics (browser timings) in my ${stack.name} application using Azure Application Insights.
+## What I need
+The Application Insights \`browserTimings\` table must receive page load performance metrics: network time, DOM processing time, and ideally Web Vitals (LCP, FID, CLS).
 
-Context:
-- App Insights resource: ${resource || "[your-resource-name]"}
-- Framework: ${stack.name}
-- SDK to use: ${stack.sdk}
-- Signal missing: browserTimings (no page load performance data)
-
-What I need:
-1. Install the Application Insights JavaScript SDK if not already present
-2. Enable browser timing collection (enableAutoRouteTracking, enableAjaxPerfTracking)
-3. Capture: network time, send time, receive time, DOM processing time
-4. Capture: TTFB, LCP, FID, CLS (Web Vitals) if possible
-5. Set proper sampling to control costs
-
-Generate the complete frontend configuration code.`,
+## Your approach
+1. **Audit** — Search this codebase for the Application Insights JavaScript SDK. Check the configuration for performance-related settings: \`enableAutoRouteTracking\`, \`enableAjaxPerfTracking\`, \`maxAjaxCallsPerView\`, and any custom performance tracking.
+2. **Gap analysis** — Browser timings require the JS SDK on the frontend. Common reasons they're missing:
+   - No frontend JavaScript SDK (server-side only)
+   - JS SDK present but auto-tracking of performance is disabled
+   - SDK initialized too late (after page load events have already fired)
+   - Sampling is too aggressive, filtering out performance data
+3. **Fix** — If the JS SDK is present, enable browser timing collection in the configuration. If no frontend SDK exists, add the minimal setup with performance tracking enabled. Consider:
+   - \`enableAutoRouteTracking: true\` for SPA navigation timing
+   - \`enableAjaxPerfTracking: true\` for XHR/fetch performance
+   - Reasonable sampling to control costs without losing performance visibility`,
 };
 
 /**
@@ -184,6 +212,7 @@ function signalLabel(signal) {
     pageViews: "Page View Tracking",
     requests: "Backend Request Tracking",
     userId: "User Identity",
+    userIdDegraded: "User Identity (degraded)",
     sessionId: "Session Tracking",
     userAgent: "Device & Browser Info",
     geo: "Geo Enrichment",

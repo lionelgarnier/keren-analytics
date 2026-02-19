@@ -1161,6 +1161,66 @@ body {
   color: var(--text-muted);
 }
 
+/* ========== Score row wrappers (inline prompts) ========== */
+.score-row-wrapper {
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.score-row-wrapper.missing {
+  border: 1px solid transparent;
+  transition: border-color 0.15s ease;
+}
+
+.score-row-wrapper.missing.open {
+  border-color: var(--border);
+}
+
+.score-row-fix-btn {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+}
+
+.score-row-fix-btn:hover {
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+
+.score-row-detail {
+  display: none;
+  padding: 12px 16px 16px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+}
+
+.score-row-wrapper.open .score-row-detail {
+  display: block;
+}
+
+.score-row-detail .prompt-card-stack {
+  display: inline-block;
+  margin-bottom: 8px;
+}
+
+.score-row-detail .prompt-text {
+  margin-bottom: 12px;
+}
+
+.score-row-detail-loading {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 8px 0;
+}
+
 /* ========== Prompt cards ========== */
 .prompt-cards {
   display: flex;
@@ -1866,6 +1926,60 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+/* ========== Toggle Filter (Hide technical) ========== */
+.toggle-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle-filter input {
+  display: none;
+}
+
+.toggle-filter-slider {
+  position: relative;
+  width: 30px;
+  height: 16px;
+  background: var(--border);
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.toggle-filter-slider::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  background: var(--surface);
+  border-radius: 50%;
+  transition: transform 0.2s;
+  box-shadow: var(--shadow-sm);
+}
+
+.toggle-filter input:checked + .toggle-filter-slider {
+  background: var(--accent);
+}
+
+.toggle-filter input:checked + .toggle-filter-slider::after {
+  transform: translateX(14px);
+}
+
+.toggle-filter-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.toggle-filter:hover .toggle-filter-label {
+  color: var(--text-secondary);
 }
 
 /* ========== World Map ========== */

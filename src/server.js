@@ -434,6 +434,8 @@ app.post("/azure/select", ensureAuth, (req, res) => {
   if (!resourceId || !workspaceId) {
     return res.status(400).json({ error: "INVALID_SELECTION" });
   }
+  const prev = getTenant(tenantId).selectedResource;
+  const changed = !prev || prev.resourceId !== resourceId;
   updateTenant(tenantId, {
     selectedResource: {
       resourceId,
@@ -443,6 +445,7 @@ app.post("/azure/select", ensureAuth, (req, res) => {
       appInsightsName,
       selectedAt: new Date().toISOString(),
     },
+    ...(changed ? { readinessReport: null, schemaProfile: null, mapping: null } : {}),
   });
   res.json({ ok: true });
 });
@@ -578,6 +581,7 @@ app.get("/recommendations", ensureAuth, (req, res) => {
   }
   const recommendations = buildRecommendations(tenant.readinessReport);
   const readinessScore = computeReadinessScore(tenant.readinessReport);
+  res.set("Cache-Control", "no-store");
   res.json({ recommendations, readinessScore });
 });
 
@@ -593,6 +597,7 @@ app.get("/prompts", ensureAuth, (req, res) => {
     schemaProfile: tenant.schemaProfile,
     resourceName,
   });
+  res.set("Cache-Control", "no-store");
   res.json({ prompts });
 });
 

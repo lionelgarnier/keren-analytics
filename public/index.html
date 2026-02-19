@@ -208,7 +208,14 @@
           <div class="panel">
             <div class="panel-header">
               <h3>Top Pages</h3>
-              <span id="topPagesCount" class="badge-count"></span>
+              <div class="panel-header-right">
+                <label class="toggle-filter" title="Hide technical routes (API, auth, trpc, internal…)">
+                  <input type="checkbox" id="topPagesFilterTechnical" checked />
+                  <span class="toggle-filter-slider"></span>
+                  <span class="toggle-filter-label">Hide technical</span>
+                </label>
+                <span id="topPagesCount" class="badge-count"></span>
+              </div>
             </div>
             <table class="data-table sortable" id="topPagesTable">
               <thead>
@@ -464,7 +471,14 @@
             <div class="panel">
               <div class="panel-header">
                 <h3>Slow Endpoints</h3>
-                <span id="slowEndpointsCount" class="badge-count"></span>
+                <div class="panel-header-right">
+                  <label class="toggle-filter" title="Hide technical routes (API, auth, trpc, internal…)">
+                    <input type="checkbox" id="slowEndpointsFilterTechnical" checked />
+                    <span class="toggle-filter-slider"></span>
+                    <span class="toggle-filter-label">Hide technical</span>
+                  </label>
+                  <span id="slowEndpointsCount" class="badge-count"></span>
+                </div>
               </div>
               <table class="data-table sortable" id="slowEndpointsTable">
                 <thead>
@@ -526,18 +540,13 @@
           <!-- Signal breakdown -->
           <div class="panel">
             <h3>Signal Breakdown</h3>
+            <p class="text-muted">Click <strong>How to fix</strong> on any missing signal to get a ready-to-use prompt for your AI code assistant.</p>
             <div id="scoreBreakdown" class="score-breakdown"></div>
           </div>
 
-          <!-- Recommended actions with prompts -->
-          <div class="panel">
-            <h3>Improve Your Score</h3>
-            <p class="text-muted">Each missing signal below includes a ready-to-use prompt. Copy it into your AI code assistant (Cursor, Copilot, ChatGPT) to get the exact implementation code.</p>
-            <div id="promptCards" class="prompt-cards"></div>
-            <div id="noPromptsMessage" class="empty-state hidden">
-              <p>All signals are active. Your telemetry coverage is excellent.</p>
-            </div>
-          </div>
+          <!-- promptCards kept as hidden container for backwards compat -->
+          <div id="promptCards" class="hidden"></div>
+          <div id="noPromptsMessage" class="hidden"></div>
 
           <!-- Cross-department teaser -->
           <div class="panel panel-teaser">

@@ -22,11 +22,19 @@ function buildRecommendedActions(signals) {
       message: "Ensure Application Insights is enabled for your backend.",
     });
   }
-  if (!signals.userId) {
+  if (!signals.userId && !signals.userIdDegraded) {
     actions.push({
       id: "set-userid",
       title: "Attach authenticated user IDs",
       message: "Set user_AuthenticatedId to unlock unique visitors.",
+    });
+  }
+  if (signals.userIdDegraded) {
+    actions.push({
+      id: "fix-userid-degraded",
+      title: "Fix authenticated user ID tracking",
+      message:
+        "user_AuthenticatedId is nearly empty — unique visitor counts rely on anonymous IDs and are likely over-estimated. Wire your auth flow to setAuthenticatedUserContext().",
     });
   }
   if (!signals.sessionId) {
@@ -66,10 +74,18 @@ export function buildReadinessReport({ probeResult, window }) {
   const urlPopulated = (probeResult.urlPopulatedCount || 0) > 0;
   const namePopulated = (probeResult.namePopulatedCount || 0) > 0;
   const headerReferer = (probeResult.headerRefererCount || 0) > 0;
+  const userAuthCount = probeResult.userAuthCount || 0;
+  const userAnonCount = probeResult.userAnonCount || 0;
+
+  const hasAnyUserId = userAuthCount + userAnonCount > 0;
+  const authRatio = totalEvents > 0 ? userAuthCount / totalEvents : 0;
+  const userIdDegraded = hasAnyUserId && authRatio < 0.1;
+
   const signals = {
     pageViews: (probeResult.pageViewsCount || 0) > 0,
     requests: (probeResult.requestsCount || 0) > 0,
-    userId: (probeResult.userAuthCount || 0) + (probeResult.userAnonCount || 0) > 0,
+    userId: hasAnyUserId && !userIdDegraded,
+    userIdDegraded,
     sessionId: (probeResult.sessionCount || 0) + (probeResult.requestSessionCount || 0) > 0,
     userAgent: (probeResult.browserCount || 0) + (probeResult.osCount || 0) + (probeResult.deviceCount || 0) > 0,
     geo: (probeResult.geoCount || 0) > 0,
