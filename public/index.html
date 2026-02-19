@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Easy Analytics</title>
     <link rel="stylesheet" href="/styles.css" />
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <!-- ========== Top navbar ========== -->
@@ -16,6 +17,10 @@
         </div>
         <div class="navbar-right">
           <a href="/docs" class="nav-link">Docs</a>
+          <button id="themeToggle" class="theme-toggle" aria-label="Toggle dark mode" title="Toggle theme">
+            <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          </button>
           <div id="selectedResourceBar" class="resource-pill hidden">
             <span id="selectedResourceName" class="resource-pill-name"></span>
             <button id="changeResourceButton" class="resource-pill-change">Change</button>
@@ -96,11 +101,38 @@
       <!-- Status messages -->
       <section id="statusPanel" class="status-bar"></section>
 
+      <!-- Loading progress (shown during pipeline execution) -->
+      <div id="progressPanel" class="progress-panel hidden">
+        <div class="progress-header">
+          <span id="progressLabel" class="progress-label">Loading dashboard...</span>
+          <span id="progressPct" class="progress-pct">0%</span>
+        </div>
+        <div class="progress-track">
+          <div id="progressBar" class="progress-fill" style="width: 0%"></div>
+        </div>
+      </div>
+
       <!-- Resource selection -->
-      <section id="resourcePanel" class="panel hidden">
-        <h2>Select Application Insights Resource</h2>
-        <p class="text-muted">Choose the resource to analyze. If you have only one, it will be selected automatically.</p>
+      <section id="resourcePanel" class="resource-panel hidden">
+        <div class="resource-panel-header">
+          <div class="resource-panel-icon-wrapper">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="28" height="28">
+              <rect x="2" y="3" width="20" height="14" rx="2" />
+              <line x1="8" y1="21" x2="16" y2="21" />
+              <line x1="12" y1="17" x2="12" y2="21" />
+            </svg>
+          </div>
+          <h2>Select a Resource</h2>
+          <p class="resource-panel-subtitle">Choose which Application Insights resource to analyze.<br>Your dashboard will be ready in seconds.</p>
+          <div id="resourceSearchWrapper" class="resource-search-wrapper hidden">
+            <svg class="resource-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="resourceSearchInput" class="resource-search-input" placeholder="Filter resources..." />
+          </div>
+        </div>
         <div id="resourceList" class="resource-list"></div>
+        <div id="resourceEmptySearch" class="resource-empty-search hidden">
+          <p>No resources match your search.</p>
+        </div>
       </section>
 
       <!-- ========== Dashboard ========== -->
@@ -212,6 +244,7 @@
             </div>
             <div id="geoEmpty" class="empty-state hidden">
               <p>No geo data available.</p>
+              <p class="empty-hint">The <code>client_CountryOrRegion</code> field is empty in your telemetry. Ensure client IPs reach Application Insights (check <code>X-Forwarded-For</code> if behind a proxy).</p>
             </div>
           </div>
 

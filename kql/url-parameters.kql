@@ -1,15 +1,21 @@
 // Auto-detect URL parameters from telemetry
-// Scans pageView URLs, extracts query string parameters, and counts their frequency
-let startTime = datetime('{{timeStart}}');
-let endTime = datetime('{{timeEnd}}');
-{{tableName}}
+// Scans URLs (or request names when url is empty), extracts query string parameters
+let startTime = {{timeStart}};
+let endTime = {{timeEnd}};
+let allEvents = {{tableName}}
 | where timestamp between (startTime .. endTime)
-| extend parsedUrl = parse_url(url)
-| extend queryString = tostring(parsedUrl.["Query Parameters"])
-| where isnotempty(queryString)
-| mv-expand param = split(queryString, "&")
-| extend paramName = tostring(split(tostring(param), "=")[0])
-| extend paramValue = tostring(split(tostring(param), "=")[1])
+| extend rawUrl = iif(isnotempty(url), url, name);
+let totalScanned = toscalar(allEvents | count);
+let urlsWithParams = toscalar(allEvents | where rawUrl contains "?" | count);
+allEvents
+| where rawUrl contains "?"
+| extend qs = substring(rawUrl, indexof(rawUrl, "?") + 1)
+| extend qs = iif(qs contains " ", substring(qs, 0, indexof(qs, " ")), qs)
+| extend qs = iif(qs contains "#", substring(qs, 0, indexof(qs, "#")), qs)
+| where isnotempty(qs)
+| mv-expand kvPair = split(qs, "&")
+| extend paramName = tostring(split(tostring(kvPair), "=")[0])
+| extend paramValue = tostring(split(tostring(kvPair), "=")[1])
 | where isnotempty(paramName)
 | summarize
     frequency = count(),
@@ -17,5 +23,6 @@ let endTime = datetime('{{timeEnd}}');
     topValue = any(paramValue)
   by paramName
 | extend isUtm = paramName startswith "utm_"
+| extend totalScanned = totalScanned, urlsWithParams = urlsWithParams
 | order by frequency desc
 | take 20

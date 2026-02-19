@@ -1,14 +1,22 @@
 // UTM campaign breakdown with visitor and session metrics
-// Extracts utm_source, utm_medium, utm_campaign from URLs
-let startTime = datetime('{{timeStart}}');
-let endTime = datetime('{{timeEnd}}');
+// Extracts utm_source, utm_medium, utm_campaign from URLs or request name
+let startTime = {{timeStart}};
+let endTime = {{timeEnd}};
 {{tableName}}
 | where timestamp between (startTime .. endTime)
-| extend parsedUrl = parse_url(url)
+| extend rawUrl = iif(isnotempty(url), url, name)
+| extend qs = iif(rawUrl contains "?", substring(rawUrl, indexof(rawUrl, "?") + 1), "")
+| extend qs = iif(qs contains "#", substring(qs, 0, indexof(qs, "#")), qs)
+| where isnotempty(qs) and qs contains "utm_"
+| mv-expand kvPair = split(qs, "&")
+| extend pName = tostring(split(tostring(kvPair), "=")[0])
+| extend pValue = tostring(split(tostring(kvPair), "=")[1])
+| where pName startswith "utm_"
+| summarize params = make_bag(pack(pName, pValue)) by timestamp, {{userIdExpr}}, {{sessionIdExpr}}
 | extend
-    utm_source = tostring(parsedUrl.["Query Parameters"].["utm_source"]),
-    utm_medium = tostring(parsedUrl.["Query Parameters"].["utm_medium"]),
-    utm_campaign = tostring(parsedUrl.["Query Parameters"].["utm_campaign"])
+    utm_source = tostring(params["utm_source"]),
+    utm_medium = tostring(params["utm_medium"]),
+    utm_campaign = tostring(params["utm_campaign"])
 | where isnotempty(utm_source)
 | summarize
     visitors = dcount({{userIdExpr}}),

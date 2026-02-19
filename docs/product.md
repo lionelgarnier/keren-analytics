@@ -22,12 +22,12 @@ See `docs/vision.md` for the full product vision and strategy.
 - Provide clear readiness feedback, improvement steps, and LLM-ready prompts.
 - Design architecture for multi-cloud expansion (AWS, GCP) from day one.
 
-## Non-goals (MVP)
-- Marketing attribution and channel grouping.
-- Complex funnels, cohorts, or retention analysis.
+## Non-goals (current scope)
+- Complex cohorts or retention analysis.
 - Custom report builder.
 - Writing telemetry into customer tenant.
 - Multi-cloud connectors (AWS/GCP are designed for but not yet implemented).
+- A/B test monitoring (frontend ready, no data source yet).
 
 ## Target Users
 
@@ -62,37 +62,50 @@ See `docs/vision.md` for the full product vision and strategy.
 - Consistent dashboard experience regardless of cloud provider
 - See `docs/architecture-multicloud.md` for technical details
 
-## MVP Dashboard (Overview)
+## Dashboard (Overview)
 
 ### Marketing View
 KPIs:
 - Unique visitors (user or session based)
 - Sessions
 - Page views
-- Bounce indicators (when data permits)
+- Avg pages per session
+- KPI sparklines with anomaly detection (derived from daily trends)
 
-Tables:
-- Top pages/routes
-- Top navigation paths
+Charts and tables:
+- Traffic trend (daily visitors and page views line chart)
+- Top pages with sort/pagination and view share
+- Top navigation paths (table view)
+- User flow (Sankey diagram built from navigation transitions)
+- Referrer / Traffic sources (doughnut chart: Direct, Organic, Social, etc.)
+- Peak hours heatmap (day-of-week x hour-of-day)
+- Content performance scoring (pages driving funnel progression)
+- Conversion funnel (homepage -> pricing -> signup when pages exist)
+- Campaign breakdown (UTM source/medium/campaign table)
+- URL parameters discovery (auto-detected params with frequency)
 
 Distributions:
-- Browser / OS / Device category
-- Geo distribution (country/city) when available
+- Browser / OS / Device category (doughnut charts)
+- Geo distribution (country bar chart + Leaflet map) when available
 
-Trends:
-- Daily visitor and pageview trends
+Smart insights:
+- Auto-generated insights from traffic sources, peak hours, campaigns, and URL data
 
 ### Technical View
 KPIs:
 - Avg response time (backend)
 - P95 response time
 - Error rate
+- Frontend avg (browser timings)
+
+Charts:
+- Frontend performance (browser timings: network/send/receive/processing bar chart)
 
 Tables:
-- Slow endpoints (percentiles, count, error rate)
+- Slow endpoints (p50/p95/p99 percentiles, count, error rate)
 
-Performance:
-- Frontend performance (browser timings) when present
+Session analysis:
+- Session timelines (reconstructed user journeys from page view events)
 
 ## User Journey
 1. Connect Azure tenant (OAuth SSO via Entra ID).

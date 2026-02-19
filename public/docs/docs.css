@@ -18,12 +18,38 @@
   --green-bg: #ecfdf5;
   --yellow: #d97706;
   --yellow-bg: #fffbeb;
+  --yellow-text: #92400e;
   --red: #dc2626;
   --red-bg: #fef2f2;
+  --topbar-bg: rgba(255,255,255,0.85);
   --sidebar-w: 240px;
   --topbar-h: 56px;
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: "SF Mono", "Fira Code", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+}
+
+[data-theme="dark"] {
+  --bg: #0f1117;
+  --bg-alt: #1a1d27;
+  --bg-code: #131620;
+  --border: #2d3042;
+  --border-light: #252838;
+  --text: #e8eaf0;
+  --text-secondary: #9ca3b4;
+  --text-muted: #6b7088;
+  --accent: #3b82f6;
+  --accent-hover: #60a5fa;
+  --accent-bg: rgba(59, 130, 246, 0.12);
+  --accent-border: rgba(59, 130, 246, 0.25);
+  --green: #34d399;
+  --green-bg: rgba(52, 211, 153, 0.1);
+  --yellow: #fbbf24;
+  --yellow-bg: rgba(251, 191, 36, 0.1);
+  --yellow-text: #fbbf24;
+  --red: #f87171;
+  --red-bg: rgba(248, 113, 113, 0.1);
+  --topbar-bg: rgba(15, 17, 23, 0.85);
+  color-scheme: dark;
 }
 
 body {
@@ -42,7 +68,7 @@ body {
   left: 0;
   right: 0;
   height: var(--topbar-h);
-  background: rgba(255,255,255,0.85);
+  background: var(--topbar-bg);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
   z-index: 100;
@@ -168,6 +194,7 @@ body {
   font-family: var(--font);
   outline: none;
   color: var(--text);
+  background: var(--bg);
 }
 
 .doc-search-results {
@@ -433,7 +460,7 @@ body {
 
 .doc-code pre {
   background: var(--bg-code);
-  color: #e2e8f0;
+  color: #e2e8f0;  /* Always light text on dark code background */
   padding: 16px 20px;
   border-radius: 10px;
   overflow-x: auto;
@@ -500,7 +527,7 @@ body {
 .doc-callout-warning {
   background: var(--yellow-bg);
   border-color: var(--yellow);
-  color: #92400e;
+  color: var(--yellow-text);
 }
 
 /* ========== Feature grid ========== */
@@ -680,6 +707,38 @@ body {
 @media (max-width: 600px) {
   .doc-topnav { display: none; }
 }
+
+/* ========== Theme Toggle ========== */
+.theme-toggle {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-alt);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background 0.2s ease, border-color 0.2s ease;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.theme-toggle:hover {
+  border-color: var(--accent-border);
+  color: var(--text);
+}
+
+.theme-toggle svg {
+  width: 18px;
+  height: 18px;
+}
+
+.theme-toggle .icon-sun { display: none; }
+.theme-toggle .icon-moon { display: block; }
+[data-theme="dark"] .theme-toggle .icon-sun { display: block; }
+[data-theme="dark"] .theme-toggle .icon-moon { display: none; }
 
 /* Smooth scroll */
 html { scroll-behavior: smooth; scroll-padding-top: calc(var(--topbar-h) + 16px); }

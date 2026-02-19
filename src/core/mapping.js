@@ -13,11 +13,13 @@ export const mappingExpressions = {
   },
   pagePath: {
     urlPath: 'tostring(parse_url(url).Path)',
+    namePath: 'extract("(?:GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|RSC GET|RSC POST)\\\\s+([^?\\\\s]+)", 1, name)',
     custom: 'tostring(customDimensions["page"])',
   },
   referrer: {
-    referrer: "tostring(referrer)",
-    custom: 'tostring(customDimensions["referrer"])',
+    refUri: 'tostring(customDimensions["refUri"])',
+    referrer: 'tostring(customDimensions["referrer"])',
+    headerReferer: 'tostring(customDimensions["http.request.header.referer"])',
   },
 };
 
@@ -67,19 +69,23 @@ export function buildMapping({ schemaProfile, readinessReport }) {
     };
   }
 
+  const urlPopulated = readinessReport?.availableSignals?.urlField !== false;
+  const namePopulated = readinessReport?.availableSignals?.nameField === true;
+  const useNameForPath = !urlPopulated && namePopulated;
+
   let canonicalPagePath = null;
   let pageTable = null;
   if (tables.pageViews || readinessReport?.availableSignals?.pageViews) {
     pageTable = "pageViews";
     canonicalPagePath = {
-      source: "pageViews.url",
-      expr: mappingExpressions.pagePath.urlPath,
+      source: useNameForPath ? "pageViews.name" : "pageViews.url",
+      expr: useNameForPath ? mappingExpressions.pagePath.namePath : mappingExpressions.pagePath.urlPath,
     };
   } else if (tables.requests || readinessReport?.availableSignals?.requests) {
     pageTable = "requests";
     canonicalPagePath = {
-      source: "requests.url",
-      expr: mappingExpressions.pagePath.urlPath,
+      source: useNameForPath ? "requests.name" : "requests.url",
+      expr: useNameForPath ? mappingExpressions.pagePath.namePath : mappingExpressions.pagePath.urlPath,
     };
   } else if (pickCustomKey(customKeys, "page")) {
     canonicalPagePath = {
@@ -88,16 +94,23 @@ export function buildMapping({ schemaProfile, readinessReport }) {
     };
   }
 
+  const hasHeaderReferer = readinessReport?.availableSignals?.headerReferer === true;
+
   let canonicalReferrer = null;
   if (tables.pageViews || readinessReport?.availableSignals?.pageViews) {
     canonicalReferrer = {
-      source: "pageViews.referrer",
-      expr: mappingExpressions.referrer.referrer,
+      source: "customDimensions.refUri",
+      expr: mappingExpressions.referrer.refUri,
+    };
+  } else if (hasHeaderReferer) {
+    canonicalReferrer = {
+      source: "customDimensions.http.request.header.referer",
+      expr: mappingExpressions.referrer.headerReferer,
     };
   } else if (pickCustomKey(customKeys, "referrer")) {
     canonicalReferrer = {
       source: "customDimensions.referrer",
-      expr: mappingExpressions.referrer.custom,
+      expr: mappingExpressions.referrer.referrer,
     };
   }
 
@@ -130,4 +143,8 @@ export function allowedKqlExpressions() {
     pagePathExpr: Object.values(mappingExpressions.pagePath),
     referrerExpr: Object.values(mappingExpressions.referrer),
   };
+}
+
+export function urlFieldAvailable(readinessReport) {
+  return readinessReport?.availableSignals?.urlField !== false;
 }

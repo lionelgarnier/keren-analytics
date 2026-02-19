@@ -7,6 +7,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { config } from "./config.js";
 import { getAzureClient } from "./azure/client.js";
+import { createMockClient } from "./azure/mockClient.js";
 import { runOverviewPipeline } from "./core/orchestrator.js";
 import { buildRecommendations } from "./core/recommendations.js";
 import { computeReadinessScore } from "./core/readinessScore.js";
@@ -16,6 +17,7 @@ import { runWithToken } from "./azure/tokenStore.js";
 
 const app = express();
 const azureClient = getAzureClient();
+const previewClient = createMockClient();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -43,7 +45,7 @@ app.use(
         scriptSrc: ["'self'", "https://cdn.jsdelivr.net", "https://unpkg.com"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com"],
         imgSrc: ["'self'", "data:", "https://*.tile.openstreetmap.org"],
-        connectSrc: ["'self'"],
+        connectSrc: ["'self'", "https://cdn.jsdelivr.net", "https://unpkg.com"],
       },
     },
   })
@@ -478,6 +480,57 @@ app.get("/dashboard/overview", ensureAuth, async (req, res) => {
   const requestedRange = req.query.range || "7d";
   const rangeKey = ["today", "7d", "30d"].includes(requestedRange) ? requestedRange : "7d";
   const tenantId = req.session.tenantId;
+  const streamParam = req.query?.stream;
+  const acceptHeader = req.headers.accept || "";
+  const wantStream =
+    streamParam === "1" ||
+    streamParam === 1 ||
+    streamParam === true ||
+    streamParam === "true" ||
+    acceptHeader.includes("application/x-ndjson");
+  res.set("Cache-Control", "no-store");
+  res.vary("Accept");
+  console.log(
+    `[overview] tenant=${tenantId} range=${rangeKey} stream=${wantStream} streamParam=${String(streamParam)} accept=${acceptHeader} query=${JSON.stringify(req.query)}`
+  );
+
+  if (wantStream) {
+    res.set({ "Content-Type": "application/x-ndjson", "Cache-Control": "no-cache", "X-Accel-Buffering": "no" });
+    res.flushHeaders();
+    let closed = false;
+    req.on("close", () => { closed = true; console.log("[stream] client disconnected"); });
+
+    function send(obj) {
+      if (closed) return;
+      const line = JSON.stringify(obj) + "\n";
+      console.log("[stream] send:", obj.type, obj.label || "");
+      res.write(line);
+    }
+
+    try {
+      const result = await runOverviewPipeline({
+        tenantId, rangeKey, azureClient,
+        cacheTtlMs: config.cacheTtlMs[rangeKey] || config.cacheTtlMs["7d"],
+        onProgress(label, pct) { send({ type: "progress", label, pct: Math.round(pct * 100) }); },
+      });
+      console.log("[stream] pipeline done, requiresSelection:", !!result.requiresSelection, "error:", !!result.error);
+      if (result.requiresSelection) {
+        send({ type: "error", error: "RESOURCE_SELECTION_REQUIRED", resources: result.resources });
+      } else if (result.error) {
+        send({ type: "error", ...result });
+      } else {
+        const readinessScore = computeReadinessScore(result.readinessReport);
+        send({ type: "done", dashboard: result.dashboard, readiness: result.readinessReport, readinessScore, schemaProfile: result.schemaProfile, mapping: result.mapping, recommendations: buildRecommendations(result.readinessReport) });
+      }
+    } catch (error) {
+      console.error("[stream] pipeline error:", error.message, error.stack);
+      send({ type: "error", error: "PIPELINE_ERROR", message: error.message });
+    }
+    console.log("[stream] ending response, closed:", closed);
+    if (!closed) res.end();
+    return;
+  }
+
   try {
     const result = await runOverviewPipeline({
       tenantId,
@@ -548,11 +601,51 @@ app.get("/prompts", ensureAuth, (req, res) => {
 app.get("/preview/dashboard", async (req, res) => {
   const requestedRange = req.query.range || "7d";
   const rangeKey = ["today", "7d", "30d"].includes(requestedRange) ? requestedRange : "7d";
+  const streamParam = req.query?.stream;
+  const acceptHeader = req.headers.accept || "";
+  const wantStream =
+    streamParam === "1" ||
+    streamParam === 1 ||
+    streamParam === true ||
+    streamParam === "true" ||
+    acceptHeader.includes("application/x-ndjson");
+  res.set("Cache-Control", "no-store");
+  res.vary("Accept");
+  console.log(
+    `[preview] range=${rangeKey} stream=${wantStream} streamParam=${String(streamParam)} accept=${acceptHeader} query=${JSON.stringify(req.query)}`
+  );
+
+  if (wantStream) {
+    res.set({ "Content-Type": "application/x-ndjson", "Cache-Control": "no-cache", "X-Accel-Buffering": "no" });
+    res.flushHeaders();
+    let closed = false;
+    req.on("close", () => { closed = true; });
+    function send(obj) { if (!closed) res.write(JSON.stringify(obj) + "\n"); }
+
+    try {
+      const result = await runOverviewPipeline({
+        tenantId: "preview-tenant", rangeKey, azureClient: previewClient,
+        cacheTtlMs: config.cacheTtlMs[rangeKey] || config.cacheTtlMs["7d"],
+        onProgress(label, pct) { send({ type: "progress", label, pct: Math.round(pct * 100) }); },
+      });
+      if (result.error) {
+        send({ type: "error", ...result });
+      } else {
+        const readinessScore = computeReadinessScore(result.readinessReport);
+        send({ type: "done", dashboard: result.dashboard, readiness: result.readinessReport, readinessScore, preview: true });
+      }
+    } catch (error) {
+      send({ type: "error", error: "PREVIEW_ERROR", message: error.message });
+    }
+    if (!closed) res.end();
+    return;
+  }
+
   try {
     const result = await runOverviewPipeline({
       tenantId: "preview-tenant",
       rangeKey,
-      azureClient,
+      azureClient: previewClient,
       cacheTtlMs: config.cacheTtlMs[rangeKey] || config.cacheTtlMs["7d"],
     });
     if (result.error) {
@@ -568,6 +661,13 @@ app.get("/preview/dashboard", async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: "PREVIEW_ERROR", message: error.message });
   }
+});
+
+/* ========== SPA catch-all (History API routing) ========== */
+const API_ROUTE = /^\/(auth|azure|dashboard|readiness|recommendations|prompts|docs)(\/|$)/;
+app.get("/{*splat}", (req, res, next) => {
+  if (API_ROUTE.test(req.path) || req.path.startsWith("/preview/")) return next();
+  res.sendFile(path.resolve(__dirname, "..", "public", "index.html"));
 });
 
 /* ========== Server ========== */

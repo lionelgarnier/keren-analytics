@@ -47,7 +47,8 @@ function buildRecommendedActions(signals) {
     actions.push({
       id: "enable-geo",
       title: "Enable geo enrichment",
-      message: "Turn on geo enrichment in Application Insights.",
+      message:
+        "client_CountryOrRegion is empty — ensure real client IPs reach Application Insights (check X-Forwarded-For if behind a proxy/CDN).",
     });
   }
   if (!signals.browserTimings) {
@@ -62,6 +63,9 @@ function buildRecommendedActions(signals) {
 
 export function buildReadinessReport({ probeResult, window }) {
   const totalEvents = (probeResult.pageViewsCount || 0) + (probeResult.requestsCount || 0);
+  const urlPopulated = (probeResult.urlPopulatedCount || 0) > 0;
+  const namePopulated = (probeResult.namePopulatedCount || 0) > 0;
+  const headerReferer = (probeResult.headerRefererCount || 0) > 0;
   const signals = {
     pageViews: (probeResult.pageViewsCount || 0) > 0,
     requests: (probeResult.requestsCount || 0) > 0,
@@ -70,6 +74,9 @@ export function buildReadinessReport({ probeResult, window }) {
     userAgent: (probeResult.browserCount || 0) + (probeResult.osCount || 0) + (probeResult.deviceCount || 0) > 0,
     geo: (probeResult.geoCount || 0) > 0,
     browserTimings: (probeResult.browserTimingsCount || 0) > 0,
+    urlField: urlPopulated,
+    nameField: namePopulated,
+    headerReferer,
   };
 
   let overallStatus = "OK";
@@ -104,6 +111,9 @@ export function buildReadinessReport({ probeResult, window }) {
       deviceCount: probeResult.deviceCount || 0,
       geoCount: probeResult.geoCount || 0,
       browserTimingsCount: probeResult.browserTimingsCount || 0,
+      urlPopulatedCount: probeResult.urlPopulatedCount || 0,
+      namePopulatedCount: probeResult.namePopulatedCount || 0,
+      headerRefererCount: probeResult.headerRefererCount || 0,
     },
     probeWindow: window,
   };

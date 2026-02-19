@@ -13,18 +13,123 @@ const changeResourceButton = document.getElementById("changeResourceButton");
 const landingPage = document.getElementById("landingPage");
 const previewBanner = document.getElementById("previewBanner");
 const onboardingBanner = document.getElementById("onboardingBanner");
+const progressPanel = document.getElementById("progressPanel");
+const progressLabel = document.getElementById("progressLabel");
+const progressPct = document.getElementById("progressPct");
+const progressBar = document.getElementById("progressBar");
 
 let lastDiscoveredResources = [];
 let lastDashboardData = null;
 let isPreviewMode = false;
 
+/* ========== Client-side router (History API) ========== */
+const router = {
+  /** Parse the current pathname into a structured route object */
+  parse(pathname = window.location.pathname) {
+    const parts = pathname.replace(/\/+$/, "").split("/").filter(Boolean);
+    if (parts[0] === "preview") return { page: "preview" };
+    if (parts[0] === "services") return { page: "services" };
+    if (parts[0] === "service" && parts[1]) {
+      const tab = ["marketing", "technical", "readiness"].includes(parts[2]) ? parts[2] : "marketing";
+      return { page: "dashboard", service: decodeURIComponent(parts[1]), tab };
+    }
+    return { page: "home" };
+  },
+
+  /** Build a URL path from route parameters */
+  path({ page, service, tab } = {}) {
+    if (page === "preview") return "/preview";
+    if (page === "services") return "/services";
+    if (page === "dashboard" && service) {
+      const base = `/service/${encodeURIComponent(service)}`;
+      return tab && tab !== "marketing" ? `${base}/${tab}` : base;
+    }
+    return "/";
+  },
+
+  /** Push a new route (creates a history entry) */
+  push(route) {
+    const url = this.path(route);
+    if (url !== window.location.pathname) {
+      window.history.pushState(route, "", url);
+    }
+  },
+
+  /** Replace current route (no new history entry) */
+  replace(route) {
+    const url = this.path(route);
+    window.history.replaceState(route, "", url);
+  },
+
+  /** Current route object */
+  get current() {
+    return this.parse();
+  },
+};
+
 /* ========== Chart instances ========== */
 const charts = {};
+
+/* ========== Theme management ========== */
+function getTheme() {
+  return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+}
+
+function getCSSVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function applyChartThemeDefaults() {
+  Chart.defaults.color = getCSSVar("--text-muted");
+  Object.values(charts).forEach((c) => {
+    if (!c) return;
+    c.options.scales?.x?.grid && (c.options.scales.x.grid.color = getCSSVar("--chart-grid"));
+    c.options.scales?.y?.grid && (c.options.scales.y.grid.color = getCSSVar("--chart-grid"));
+    if (c.options.plugins?.tooltip) {
+      c.options.plugins.tooltip.backgroundColor = getCSSVar("--tooltip-bg");
+      c.options.plugins.tooltip.titleColor = getCSSVar("--tooltip-text");
+      c.options.plugins.tooltip.bodyColor = getCSSVar("--tooltip-text");
+    }
+    c.update("none");
+  });
+}
+
+function toggleTheme() {
+  const next = getTheme() === "dark" ? "light" : "dark";
+  if (next === "dark") {
+    document.documentElement.setAttribute("data-theme", "dark");
+  } else {
+    document.documentElement.removeAttribute("data-theme");
+  }
+  try { localStorage.setItem("theme", next); } catch {}
+  applyChartThemeDefaults();
+  updateSankeySVGColors();
+}
+
+function updateSankeySVGColors() {
+  document.querySelectorAll(".flow-diagram svg text").forEach((t) => {
+    const fs = t.getAttribute("font-size");
+    t.setAttribute("fill", fs === "10" ? getCSSVar("--text-muted") : getCSSVar("--text-secondary"));
+  });
+}
+
+document.getElementById("themeToggle")?.addEventListener("click", toggleTheme);
+
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
+  if (localStorage.getItem("theme")) return;
+  if (e.matches) {
+    document.documentElement.setAttribute("data-theme", "dark");
+  } else {
+    document.documentElement.removeAttribute("data-theme");
+  }
+  applyChartThemeDefaults();
+  updateSankeySVGColors();
+});
 
 /* ========== Chart.js global defaults ========== */
 Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 Chart.defaults.font.size = 12;
-Chart.defaults.color = "#9ca3af";
+Chart.defaults.color = getCSSVar("--text-muted") || "#9ca3af";
 Chart.defaults.plugins.legend.labels.usePointStyle = true;
 Chart.defaults.plugins.legend.labels.pointStyleWidth = 8;
 Chart.defaults.plugins.legend.labels.padding = 16;
@@ -37,24 +142,30 @@ const CHART_COLORS = [
 /* ========== Tab Navigation ========== */
 const tabs = document.querySelectorAll(".tab[data-tab]");
 
-tabs.forEach((tab) => {
-  tab.addEventListener("click", () => {
-    tabs.forEach((t) => {
-      t.classList.remove("active");
-      t.setAttribute("aria-selected", "false");
-    });
-    tab.classList.add("active");
-    tab.setAttribute("aria-selected", "true");
-
-    document.querySelectorAll(".tab-content").forEach((tc) => tc.classList.remove("active"));
-    const target = document.getElementById(`tab-${tab.dataset.tab}`);
-    if (target) target.classList.add("active");
-
-    // Load prompts on first visit to readiness tab
-    if (tab.dataset.tab === "readiness" && lastDashboardData && !document.querySelector(".prompt-card")) {
-      loadPrompts();
-    }
+function activateTab(tabName, { updateUrl = true } = {}) {
+  tabs.forEach((t) => {
+    const isTarget = t.dataset.tab === tabName;
+    t.classList.toggle("active", isTarget);
+    t.setAttribute("aria-selected", isTarget ? "true" : "false");
   });
+  document.querySelectorAll(".tab-content").forEach((tc) => tc.classList.remove("active"));
+  const target = document.getElementById(`tab-${tabName}`);
+  if (target) target.classList.add("active");
+
+  if (tabName === "readiness" && lastDashboardData && !document.querySelector(".prompt-card")) {
+    loadPrompts();
+  }
+
+  if (updateUrl) {
+    const currentRoute = router.current;
+    if (currentRoute.page === "dashboard" && currentRoute.service) {
+      router.push({ page: "dashboard", service: currentRoute.service, tab: tabName });
+    }
+  }
+}
+
+tabs.forEach((tab) => {
+  tab.addEventListener("click", () => activateTab(tab.dataset.tab));
 });
 
 /* ========== Events ========== */
@@ -64,7 +175,7 @@ connectButton.addEventListener("click", () => {
 
 logoutButton.addEventListener("click", async () => {
   await fetch("/auth/logout", { method: "POST" });
-  window.location.reload();
+  window.location.href = "/";
 });
 
 rangeSelect.addEventListener("change", () => {
@@ -81,6 +192,7 @@ changeResourceButton.addEventListener("click", async () => {
   } catch { /* ignore */ }
   dashboardPanel.classList.add("hidden");
   selectedResourceBar.classList.add("hidden");
+  router.push({ page: "services" });
   if (lastDiscoveredResources.length > 0) {
     renderResources(lastDiscoveredResources);
   } else {
@@ -122,9 +234,13 @@ async function enterPreviewMode() {
   connectButton.classList.add("hidden");
   previewBanner.classList.remove("hidden");
   dashboardPanel.classList.remove("hidden");
-  setStatus("Loading preview dashboard...");
+  if (router.current.page === "preview") {
+    router.replace({ page: "preview" });
+  } else {
+    router.push({ page: "preview" });
+  }
   try {
-    const data = await apiFetch(`/preview/dashboard?range=${rangeSelect.value}`);
+    const data = await loadDashboardStream(`/preview/dashboard?range=${rangeSelect.value}&stream=1`);
     renderDashboard(data);
     setStatus("Preview loaded -- sample data.", "success");
   } catch (error) {
@@ -139,6 +255,7 @@ function exitPreviewMode() {
   landingPage.classList.remove("hidden");
   connectButton.classList.remove("hidden");
   statusPanel.textContent = "";
+  router.push({ page: "home" });
 }
 
 /* ========== API ========== */
@@ -167,6 +284,34 @@ function setStatus(message, variant = "info") {
   statusPanel.className = `status-bar${variant !== "info" ? ` ${variant}` : ""}`;
 }
 
+/* ========== Resource helpers ========== */
+function detectEnvironment(resource) {
+  const name = (resource.appInsightsName || "").toLowerCase();
+  const hint = (resource.environmentHint || "").toLowerCase();
+  if (hint === "prod" || hint === "prd" || hint === "production" || name.includes("-prd") || name.includes("-prod"))
+    return { label: "Production", short: "PRD", css: "env-prod" };
+  if (hint === "dev" || hint === "development" || name.includes("-dev"))
+    return { label: "Development", short: "DEV", css: "env-dev" };
+  if (hint === "staging" || hint === "stg" || hint === "stage" || name.includes("-stg") || name.includes("-staging"))
+    return { label: "Staging", short: "STG", css: "env-staging" };
+  if (hint === "qa" || hint === "test" || hint === "uat" || name.includes("-qa") || name.includes("-test") || name.includes("-uat"))
+    return { label: "QA", short: "QA", css: "env-qa" };
+  if (hint)
+    return { label: hint.charAt(0).toUpperCase() + hint.slice(1), short: hint.toUpperCase().slice(0, 3), css: "env-default" };
+  return { label: "", short: "", css: "env-default" };
+}
+
+function extractWorkspaceName(workspaceId) {
+  if (!workspaceId) return "\u2014";
+  const segments = workspaceId.split("/").filter(Boolean);
+  return segments[segments.length - 1] || workspaceId;
+}
+
+function truncateGuid(id) {
+  if (!id || id.length < 16) return id || "\u2014";
+  return id.slice(0, 8) + "\u2026" + id.slice(-4);
+}
+
 /* ========== Resource selection ========== */
 function showSelectedResource(name) {
   selectedResourceName.textContent = name;
@@ -176,49 +321,137 @@ function showSelectedResource(name) {
 function renderResources(resources) {
   lastDiscoveredResources = resources;
   resourceList.innerHTML = "";
-  resources.forEach((resource) => {
-    const card = document.createElement("div");
-    card.className = "resource-card";
+  statusPanel.textContent = "";
 
-    const nameEl = document.createElement("strong");
-    nameEl.textContent = resource.appInsightsName;
-    card.appendChild(nameEl);
+  const searchWrapper = document.getElementById("resourceSearchWrapper");
+  const searchInput = document.getElementById("resourceSearchInput");
+  const emptySearch = document.getElementById("resourceEmptySearch");
 
-    const subDiv = document.createElement("div");
-    subDiv.textContent = `Subscription: ${resource.subscriptionId}`;
-    card.appendChild(subDiv);
-
-    const wsDiv = document.createElement("div");
-    wsDiv.textContent = `Workspace: ${resource.workspaceId}`;
-    card.appendChild(wsDiv);
-
-    if (resource.environmentHint) {
-      const envDiv = document.createElement("div");
-      envDiv.textContent = `Environment: ${resource.environmentHint}`;
-      card.appendChild(envDiv);
-    }
-
-    const button = document.createElement("button");
-    button.className = "btn btn-primary btn-sm";
-    button.textContent = "Select";
-    button.addEventListener("click", async () => {
-      await apiFetch("/azure/select", {
-        method: "POST",
-        body: JSON.stringify({
-          resourceId: resource.resourceId,
-          workspaceId: resource.workspaceId,
-          subscriptionId: resource.subscriptionId,
-          resourceGroup: resource.resourceGroup,
-          appInsightsName: resource.appInsightsName,
-        }),
+  if (resources.length >= 3 && searchWrapper) {
+    searchWrapper.classList.remove("hidden");
+    searchInput.value = "";
+    searchInput.oninput = () => {
+      const q = searchInput.value.toLowerCase();
+      let visible = 0;
+      resourceList.querySelectorAll(".resource-card-v2").forEach((c) => {
+        const match = !q || (c.dataset.search || "").includes(q);
+        c.style.display = match ? "" : "none";
+        if (match) visible++;
       });
-      resourcePanel.classList.add("hidden");
-      showSelectedResource(resource.appInsightsName);
-      await loadDashboard(rangeSelect.value);
+      if (emptySearch) emptySearch.classList.toggle("hidden", visible > 0);
+    };
+  } else if (searchWrapper) {
+    searchWrapper.classList.add("hidden");
+  }
+  if (emptySearch) emptySearch.classList.add("hidden");
+
+  const envOrder = { "env-prod": 0, "env-staging": 1, "env-dev": 2, "env-qa": 3, "env-default": 4 };
+  const sorted = [...resources].sort((a, b) => {
+    const ea = detectEnvironment(a), eb = detectEnvironment(b);
+    const d = (envOrder[ea.css] ?? 4) - (envOrder[eb.css] ?? 4);
+    return d !== 0 ? d : (a.appInsightsName || "").localeCompare(b.appInsightsName || "");
+  });
+
+  const ICON_FOLDER = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
+  const ICON_DB = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>';
+  const ICON_SUB = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+
+  sorted.forEach((resource, idx) => {
+    const env = detectEnvironment(resource);
+    const wsName = extractWorkspaceName(resource.workspaceId);
+
+    const card = document.createElement("div");
+    card.className = `resource-card-v2 ${env.css}`;
+    card.style.animationDelay = `${idx * 60}ms`;
+    card.dataset.search = [resource.appInsightsName, resource.subscriptionId, resource.resourceGroup, wsName, env.label].join(" ").toLowerCase();
+
+    // Header: name + env badge
+    const top = document.createElement("div");
+    top.className = "resource-card-top";
+
+    const nameBlock = document.createElement("div");
+    const nameEl = document.createElement("div");
+    nameEl.className = "resource-card-name";
+    nameEl.textContent = resource.appInsightsName;
+    nameBlock.appendChild(nameEl);
+    const typeEl = document.createElement("div");
+    typeEl.className = "resource-card-type";
+    typeEl.textContent = "Application Insights";
+    nameBlock.appendChild(typeEl);
+    top.appendChild(nameBlock);
+
+    if (env.short) {
+      const badge = document.createElement("span");
+      badge.className = `resource-card-env-badge ${env.css}`;
+      badge.textContent = env.short;
+      top.appendChild(badge);
+    }
+    card.appendChild(top);
+
+    // Metadata rows
+    const meta = document.createElement("div");
+    meta.className = "resource-card-meta";
+
+    const addRow = (iconSvg, text, title) => {
+      const row = document.createElement("div");
+      row.className = "resource-card-meta-row";
+      const icon = document.createElement("span");
+      icon.innerHTML = iconSvg;
+      row.appendChild(icon);
+      const val = document.createElement("span");
+      val.className = "resource-card-meta-value";
+      val.textContent = text;
+      if (title) val.title = title;
+      row.appendChild(val);
+      return row;
+    };
+
+    if (resource.resourceGroup) {
+      meta.appendChild(addRow(ICON_FOLDER, resource.resourceGroup, resource.resourceGroup));
+    }
+    meta.appendChild(addRow(ICON_DB, wsName, resource.workspaceId));
+    meta.appendChild(addRow(ICON_SUB, truncateGuid(resource.subscriptionId), resource.subscriptionId));
+    card.appendChild(meta);
+
+    // Action footer
+    const action = document.createElement("div");
+    action.className = "resource-card-action";
+    const selText = document.createElement("span");
+    selText.className = "resource-card-select-text";
+    selText.innerHTML = 'Analyze <span class="resource-card-select-arrow">\u2192</span>';
+    action.appendChild(selText);
+    card.appendChild(action);
+
+    // Click handler — entire card is clickable
+    card.addEventListener("click", async () => {
+      card.style.opacity = "0.6";
+      card.style.pointerEvents = "none";
+      setStatus(`Connecting to ${resource.appInsightsName}\u2026`);
+      try {
+        await apiFetch("/azure/select", {
+          method: "POST",
+          body: JSON.stringify({
+            resourceId: resource.resourceId,
+            workspaceId: resource.workspaceId,
+            subscriptionId: resource.subscriptionId,
+            resourceGroup: resource.resourceGroup,
+            appInsightsName: resource.appInsightsName,
+          }),
+        });
+        resourcePanel.classList.add("hidden");
+        showSelectedResource(resource.appInsightsName);
+        router.push({ page: "dashboard", service: resource.appInsightsName, tab: "marketing" });
+        await loadDashboard(rangeSelect.value);
+      } catch (err) {
+        card.style.opacity = "";
+        card.style.pointerEvents = "";
+        setStatus(err.message || "Selection failed.", "error");
+      }
     });
-    card.appendChild(button);
+
     resourceList.appendChild(card);
   });
+
   resourcePanel.classList.remove("hidden");
 }
 
@@ -300,12 +533,13 @@ function initSortableTable(tableId) {
 /* ========== Render: Daily Trend ========== */
 function renderDailyTrend(data) {
   const points = data || [];
-  const hasData = points.length > 1;
+  const hasData = points.length >= 1;
   showOrHide("dailyTrendChart", "dailyTrendEmpty", hasData);
   if (!hasData) return;
 
   destroyChart("dailyTrend");
   const ctx = document.getElementById("dailyTrendChart").getContext("2d");
+  const pointSize = points.length <= 3 ? 5 : points.length > 20 ? 0 : 3;
   charts.dailyTrend = new Chart(ctx, {
     type: "line",
     data: {
@@ -318,7 +552,7 @@ function renderDailyTrend(data) {
           backgroundColor: "rgba(59, 130, 246, 0.06)",
           fill: true,
           tension: 0.35,
-          pointRadius: points.length > 20 ? 0 : 3,
+          pointRadius: pointSize,
           pointHoverRadius: 5,
           borderWidth: 2,
         },
@@ -329,7 +563,7 @@ function renderDailyTrend(data) {
           backgroundColor: "rgba(16, 185, 129, 0.04)",
           fill: true,
           tension: 0.35,
-          pointRadius: points.length > 20 ? 0 : 3,
+          pointRadius: pointSize,
           pointHoverRadius: 5,
           borderWidth: 2,
         },
@@ -342,9 +576,9 @@ function renderDailyTrend(data) {
       plugins: {
         legend: { position: "top", align: "end" },
         tooltip: {
-          backgroundColor: "#1e293b",
-          titleColor: "#f8fafc",
-          bodyColor: "#e2e8f0",
+          backgroundColor: getCSSVar("--tooltip-bg"),
+          titleColor: getCSSVar("--tooltip-text"),
+          bodyColor: getCSSVar("--tooltip-text"),
           padding: 12,
           cornerRadius: 8,
         },
@@ -356,7 +590,7 @@ function renderDailyTrend(data) {
         },
         y: {
           beginAtZero: true,
-          grid: { color: "#f1f5f9" },
+          grid: { color: getCSSVar("--chart-grid") },
           ticks: { callback: (v) => fmt(v) },
         },
       },
@@ -449,7 +683,7 @@ function renderGeoChart(data) {
       scales: {
         x: {
           beginAtZero: true,
-          grid: { color: "#f1f5f9" },
+          grid: { color: getCSSVar("--chart-grid") },
           ticks: { callback: (v) => fmt(v) },
         },
         y: {
@@ -507,7 +741,7 @@ function renderBrowserTimings(data) {
         x: { grid: { display: false } },
         y: {
           beginAtZero: true,
-          grid: { color: "#f1f5f9" },
+          grid: { color: getCSSVar("--chart-grid") },
           ticks: { callback: (v) => v + " ms" },
         },
       },
@@ -593,12 +827,54 @@ const COUNTRY_COORDS = {
   "Philippines": [12.9, 121.8],
   "New Zealand": [-40.9, 174.9],
   "Chile": [-35.7, -71.5],
+  "Greece": [39.1, 21.8],
+  "Morocco": [31.8, -7.1],
+  "Martinique": [14.6, -61.0],
+  "Romania": [45.9, 24.97],
+  "Ukraine": [48.4, 31.2],
+  "Croatia": [45.1, 15.2],
+  "Hungary": [47.2, 19.5],
+  "Slovakia": [48.7, 19.7],
+  "Bulgaria": [42.7, 25.5],
+  "Serbia": [44.0, 21.0],
+  "Lithuania": [55.2, 23.9],
+  "Latvia": [56.9, 24.1],
+  "Estonia": [58.6, 25.0],
+  "Iceland": [64.1, -18.1],
+  "Luxembourg": [49.8, 6.1],
+  "Malta": [35.9, 14.4],
+  "Tunisia": [34.0, 9.5],
+  "Algeria": [28.0, 1.7],
+  "Kenya": [0.02, 37.9],
+  "Ghana": [7.9, -1.0],
+  "Pakistan": [30.4, 69.3],
+  "Bangladesh": [23.7, 90.4],
+  "Sri Lanka": [7.9, 80.8],
+  "Malaysia": [4.2, 101.9],
+  "Taiwan": [23.7, 121.0],
+  "Hong Kong": [22.4, 114.1],
+  "Peru": [-9.2, -75.0],
+  "Ecuador": [-1.8, -78.2],
+  "Uruguay": [-32.5, -55.8],
+  "Costa Rica": [9.7, -83.8],
+  "Panama": [8.5, -80.8],
+  "Saudi Arabia": [23.9, 45.1],
+  "Qatar": [25.3, 51.2],
+  "Kuwait": [29.3, 47.5],
+  "Jordan": [30.6, 36.2],
+  "Lebanon": [33.9, 35.9],
 };
 
 function renderGeoMap(data) {
   const items = data || [];
   const container = document.getElementById("geoMap");
   if (!items.length) return;
+
+  // Leaflet must be loaded from CDN
+  if (typeof L === "undefined") {
+    console.warn("Leaflet (L) not loaded — skipping geo map render.");
+    return;
+  }
 
   // Destroy previous map
   if (geoMapInstance) {
@@ -1021,15 +1297,19 @@ function renderPeakHours(data) {
   const maxCount = Math.max(...data.map((d) => d.count));
   const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-  // Color scale: light blue to deep blue
+  const isDark = getTheme() === "dark";
+  const heatScale = isDark
+    ? ["#0c1a2e", "#0c3a6e", "#1d6eb5", "#38bdf8", "#7dd3fc", "#bae6fd"]
+    : ["#f0f9ff", "#bae6fd", "#7dd3fc", "#38bdf8", "#0284c7", "#0c4a6e"];
+
   function heatColor(count) {
     const intensity = maxCount > 0 ? count / maxCount : 0;
-    if (intensity < 0.15) return "#f0f9ff";
-    if (intensity < 0.3) return "#bae6fd";
-    if (intensity < 0.5) return "#7dd3fc";
-    if (intensity < 0.7) return "#38bdf8";
-    if (intensity < 0.85) return "#0284c7";
-    return "#0c4a6e";
+    if (intensity < 0.15) return heatScale[0];
+    if (intensity < 0.3) return heatScale[1];
+    if (intensity < 0.5) return heatScale[2];
+    if (intensity < 0.7) return heatScale[3];
+    if (intensity < 0.85) return heatScale[4];
+    return heatScale[5];
   }
 
   // Build grid
@@ -1070,7 +1350,7 @@ function renderPeakHours(data) {
   legend.className = "peak-legend";
   legend.innerHTML = '<span>Less</span><div class="peak-legend-bar"></div><span>More</span>';
   const bar = legend.querySelector(".peak-legend-bar");
-  ["#f0f9ff", "#bae6fd", "#7dd3fc", "#38bdf8", "#0284c7", "#0c4a6e"].forEach((c) => {
+  heatScale.forEach((c) => {
     const cell = document.createElement("div");
     cell.className = "peak-legend-cell";
     cell.style.background = c;
@@ -1666,7 +1946,7 @@ function renderSankeyFlow(flowData) {
       text.setAttribute("y", node.y + node.h / 2 + 4);
       text.setAttribute("font-size", "11");
       text.setAttribute("font-family", "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif");
-      text.setAttribute("fill", "#374151");
+      text.setAttribute("fill", getCSSVar("--text-secondary"));
       text.textContent = node.label;
       nodeGroup.appendChild(text);
     }
@@ -1682,7 +1962,7 @@ function renderSankeyFlow(flowData) {
     text.setAttribute("text-anchor", "middle");
     text.setAttribute("font-size", "10");
     text.setAttribute("font-family", "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif");
-    text.setAttribute("fill", "#9ca3af");
+    text.setAttribute("fill", getCSSVar("--text-muted"));
     text.textContent = s === 0 ? "Entry" : `Step ${s}`;
     labelGroup.appendChild(text);
   }
@@ -1897,6 +2177,15 @@ async function loadPrompts() {
   }
 }
 
+/* ========== Safe render helper ========== */
+function safeRender(label, fn) {
+  try {
+    fn();
+  } catch (err) {
+    console.error(`[renderDashboard] ${label} failed:`, err);
+  }
+}
+
 /* ========== Main render ========== */
 function renderDashboard(data) {
   lastDashboardData = data;
@@ -1905,119 +2194,289 @@ function renderDashboard(data) {
   const readinessScore = data.readinessScore;
 
   // Marketing KPIs
-  document.getElementById("kpiVisitors").textContent = fmt(dashboard.kpis.uniqueVisitors);
-  document.getElementById("kpiSessions").textContent = fmt(dashboard.kpis.sessions);
+  safeRender("Marketing KPIs", () => {
+    document.getElementById("kpiVisitors").textContent = fmt(dashboard.kpis.uniqueVisitors);
+    document.getElementById("kpiSessions").textContent = fmt(dashboard.kpis.sessions);
 
-  // Compute total page views from trend data
-  const totalPageViews = (dashboard.charts.dailyTrend || []).reduce((sum, d) => sum + (d.pageViews || 0), 0);
-  document.getElementById("kpiPageViews").textContent = fmt(totalPageViews);
+    // Compute total page views from trend data
+    const totalPageViews = (dashboard.charts.dailyTrend || []).reduce((sum, d) => sum + (d.pageViews || 0), 0);
+    document.getElementById("kpiPageViews").textContent = fmt(totalPageViews);
 
-  // Pages per session
-  const pagesPerSession = dashboard.kpis.sessions > 0
-    ? (totalPageViews / dashboard.kpis.sessions).toFixed(1)
-    : "-";
-  document.getElementById("kpiPagesPerSession").textContent = pagesPerSession;
+    // Pages per session
+    const pagesPerSession = dashboard.kpis.sessions > 0
+      ? (totalPageViews / dashboard.kpis.sessions).toFixed(1)
+      : "-";
+    document.getElementById("kpiPagesPerSession").textContent = pagesPerSession;
+  });
 
   // Technical KPIs
-  document.getElementById("kpiAvg").textContent = fmtMs(dashboard.kpis.avgResponseTimeMs);
-  document.getElementById("kpiP95").textContent = fmtMs(dashboard.kpis.p95ResponseTimeMs);
-  document.getElementById("kpiErrors").textContent = fmtPct(dashboard.kpis.errorRate);
+  safeRender("Technical KPIs", () => {
+    document.getElementById("kpiAvg").textContent = fmtMs(dashboard.kpis.avgResponseTimeMs);
+    document.getElementById("kpiP95").textContent = fmtMs(dashboard.kpis.p95ResponseTimeMs);
+    document.getElementById("kpiErrors").textContent = fmtPct(dashboard.kpis.errorRate);
 
-  // Color-code error rate
-  const errorCard = document.getElementById("kpiErrorCard");
-  if (dashboard.kpis.errorRate > 0.05) {
-    errorCard.style.borderLeft = "3px solid var(--danger)";
-  } else if (dashboard.kpis.errorRate > 0.02) {
-    errorCard.style.borderLeft = "3px solid var(--warning)";
-  } else {
-    errorCard.style.borderLeft = "3px solid var(--success)";
-  }
+    // Color-code error rate
+    const errorCard = document.getElementById("kpiErrorCard");
+    if (dashboard.kpis.errorRate > 0.05) {
+      errorCard.style.borderLeft = "3px solid var(--danger)";
+    } else if (dashboard.kpis.errorRate > 0.02) {
+      errorCard.style.borderLeft = "3px solid var(--warning)";
+    } else {
+      errorCard.style.borderLeft = "3px solid var(--success)";
+    }
+  });
 
   // Frontend avg KPI
-  const btData = dashboard.charts.browserTimings;
-  document.getElementById("kpiFrontendAvg").textContent = btData ? fmtMs(btData.avgTotal) : "-";
+  safeRender("Frontend KPI", () => {
+    const btData = dashboard.charts.browserTimings;
+    document.getElementById("kpiFrontendAvg").textContent = btData ? fmtMs(btData.avgTotal) : "-";
+  });
 
   // KPI Sparklines with anomaly detection
-  renderAllSparklines(dashboard.charts.kpiSparklines);
+  safeRender("Sparklines", () => renderAllSparklines(dashboard.charts.kpiSparklines));
 
   // Smart Insights (auto-generated from all data)
-  renderInsights(dashboard);
+  safeRender("Insights", () => renderInsights(dashboard));
 
   // Daily trend
-  renderDailyTrend(dashboard.charts.dailyTrend);
+  safeRender("Daily trend", () => renderDailyTrend(dashboard.charts.dailyTrend));
 
   // Top Pages table
-  renderTableRows("topPagesBody", "topPagesEmpty", "topPagesCount", dashboard.charts.topPages, (tr, row) => {
-    tr.appendChild(td(row.path));
-    tr.appendChild(td(fmt(row.views), "num"));
-    tr.appendChild(td(fmtPct(row.share), "num"));
+  safeRender("Top Pages", () => {
+    renderTableRows("topPagesBody", "topPagesEmpty", "topPagesCount", dashboard.charts.topPages, (tr, row) => {
+      tr.appendChild(td(row.path));
+      tr.appendChild(td(fmt(row.views), "num"));
+      tr.appendChild(td(fmtPct(row.share), "num"));
+    });
   });
 
   // Geo distribution (map + chart)
-  renderGeoChart(dashboard.charts.geoDistribution);
-  renderGeoMap(dashboard.charts.geoDistribution);
+  safeRender("Geo chart", () => renderGeoChart(dashboard.charts.geoDistribution));
+  safeRender("Geo map", () => renderGeoMap(dashboard.charts.geoDistribution));
 
   // Doughnut charts
-  renderDoughnut("browserChart", "browserEmpty", "browser", dashboard.charts.browsers, "name", "count");
-  renderDoughnut("osChart", "osEmpty", "os", dashboard.charts.os, "name", "count");
-  renderDoughnut("deviceChart", "deviceEmpty", "device", dashboard.charts.devices, "name", "count");
+  safeRender("Doughnuts", () => {
+    renderDoughnut("browserChart", "browserEmpty", "browser", dashboard.charts.browsers, "name", "count");
+    renderDoughnut("osChart", "osEmpty", "os", dashboard.charts.os, "name", "count");
+    renderDoughnut("deviceChart", "deviceEmpty", "device", dashboard.charts.devices, "name", "count");
+  });
 
   // Browser timings
-  renderBrowserTimings(dashboard.charts.browserTimings);
+  safeRender("Browser timings", () => renderBrowserTimings(dashboard.charts.browserTimings));
 
   // Slow endpoints table
-  renderTableRows("slowEndpointsBody", "slowEndpointsEmpty", "slowEndpointsCount", dashboard.tables.slowEndpoints, (tr, row) => {
-    tr.appendChild(td(row.path));
-    tr.appendChild(td(fmtMs(row.p50), "num"));
-    tr.appendChild(td(fmtMs(row.p95), "num"));
-    tr.appendChild(td(fmtMs(row.p99), "num"));
-    tr.appendChild(td(fmt(row.count), "num"));
-    tr.appendChild(td(fmtPct(row.errorRate), "num"));
+  safeRender("Slow endpoints", () => {
+    renderTableRows("slowEndpointsBody", "slowEndpointsEmpty", "slowEndpointsCount", dashboard.tables.slowEndpoints, (tr, row) => {
+      tr.appendChild(td(row.path));
+      tr.appendChild(td(fmtMs(row.p50), "num"));
+      tr.appendChild(td(fmtMs(row.p95), "num"));
+      tr.appendChild(td(fmtMs(row.p99), "num"));
+      tr.appendChild(td(fmt(row.count), "num"));
+      tr.appendChild(td(fmtPct(row.errorRate), "num"));
+    });
   });
 
   // Sankey User Flow + table fallback
-  renderSankeyFlow(dashboard.charts.userFlow);
-  renderTableRows("topNavBody", null, null, dashboard.charts.topNavigationPaths, (tr, row) => {
-    tr.appendChild(td(row.from));
-    tr.appendChild(td(row.to));
-    tr.appendChild(td(fmt(row.count), "num"));
+  safeRender("User flow", () => {
+    renderSankeyFlow(dashboard.charts.userFlow);
+    renderTableRows("topNavBody", null, null, dashboard.charts.topNavigationPaths, (tr, row) => {
+      tr.appendChild(td(row.from));
+      tr.appendChild(td(row.to));
+      tr.appendChild(td(fmt(row.count), "num"));
+    });
   });
 
   // A/B Test Monitor
-  renderAbTests(dashboard.charts.abTests);
+  safeRender("A/B tests", () => renderAbTests(dashboard.charts.abTests));
 
   // Peak Hours heatmap
-  renderPeakHours(dashboard.charts.peakHours);
+  safeRender("Peak hours", () => renderPeakHours(dashboard.charts.peakHours));
 
   // Content Performance scoring
-  renderContentScoring(dashboard.charts.topNavigationPaths, dashboard.charts.topPages);
+  safeRender("Content scoring", () => renderContentScoring(dashboard.charts.topNavigationPaths, dashboard.charts.topPages));
 
   // Campaigns & URL Parameters
-  renderCampaignTable(dashboard.charts.campaignBreakdown);
-  renderUrlParams(dashboard.charts.urlParams);
+  safeRender("Campaigns", () => {
+    renderCampaignTable(dashboard.charts.campaignBreakdown);
+    renderUrlParams(dashboard.charts.urlParams);
+  });
 
   // Conversion Funnel
-  renderFunnel(dashboard.charts.topNavigationPaths, dashboard.charts.topPages);
+  safeRender("Funnel", () => renderFunnel(dashboard.charts.topNavigationPaths, dashboard.charts.topPages));
 
   // Traffic Sources
-  renderReferrerChart(dashboard.charts.referrerSources);
+  safeRender("Referrers", () => renderReferrerChart(dashboard.charts.referrerSources));
 
   // Session Replay Timelines (Technical tab)
-  renderSessionReplays(dashboard.charts.sessionReplays);
+  safeRender("Session replays", () => renderSessionReplays(dashboard.charts.sessionReplays));
 
   // Readiness score
-  renderReadinessScore(readinessScore, readiness);
+  safeRender("Readiness", () => renderReadinessScore(readinessScore, readiness));
 
   // Show dashboard
   dashboardPanel.classList.remove("hidden");
+
+  // Leaflet needs a valid container size to position markers correctly;
+  // the panel was hidden during render so we must refresh now.
+  if (geoMapInstance) {
+    setTimeout(() => geoMapInstance.invalidateSize(), 50);
+  }
+
   setStatus("Dashboard loaded.", "success");
 }
 
-/* ========== Dashboard loading ========== */
+/* ========== Progress indicator ========== */
+function showProgress(label, pct) {
+  progressPanel.classList.remove("hidden");
+  progressLabel.textContent = label;
+  progressPct.textContent = `${pct}%`;
+  progressBar.style.width = `${pct}%`;
+}
+
+function hideProgress() {
+  progressPanel.classList.add("hidden");
+  progressBar.style.width = "0%";
+}
+
+function startFallbackProgress() {
+  const stepLabels = [
+    "Connecting...",
+    "Checking access...",
+    "Preparing data...",
+    "Running analytics queries...",
+    "Building dashboard...",
+    "Finalizing...",
+  ];
+  let pct = 2;
+  showProgress(stepLabels[0], pct);
+
+  const timer = setInterval(() => {
+    if (pct >= 90) return;
+    if (pct < 20) pct += 3;
+    else if (pct < 55) pct += 2;
+    else pct += 1;
+    pct = Math.min(pct, 90);
+    const idx = Math.min(stepLabels.length - 1, Math.floor((pct / 90) * stepLabels.length));
+    showProgress(stepLabels[idx], pct);
+  }, 350);
+
+  return {
+    stop() {
+      clearInterval(timer);
+    },
+  };
+}
+
+/* ========== Dashboard loading (NDJSON stream with progress) ========== */
+async function loadDashboardStream(url) {
+  statusPanel.textContent = "";
+  const fallbackProgress = startFallbackProgress();
+  let hasLiveProgress = false;
+
+  const streamUrl = `${url}${url.includes("?") ? "&" : "?"}_stream=${Date.now()}`;
+  const response = await fetch(streamUrl, {
+    credentials: "same-origin",
+    cache: "no-store",
+    headers: {
+      "Accept": "application/x-ndjson",
+      "Cache-Control": "no-cache, no-store, max-age=0",
+      "Pragma": "no-cache",
+    },
+  });
+
+  if (!response.ok) {
+    fallbackProgress.stop();
+    hideProgress();
+    const text = await response.text().catch(() => "");
+    let data = {};
+    try { data = JSON.parse(text); } catch { /* not JSON */ }
+    console.error("[loadDashboardStream] HTTP", response.status, text.slice(0, 500));
+    const err = new Error(data.message || data.error || `Request failed (HTTP ${response.status})`);
+    err.data = data;
+    throw err;
+  }
+
+  const contentType = response.headers.get("content-type") || "";
+  console.log("[loadDashboardStream] response OK, content-type:", contentType, "reading stream...");
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result = null;
+  let chunkCount = 0;
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const text = decoder.decode(value, { stream: true });
+    chunkCount++;
+    if (chunkCount <= 3) console.log("[stream] chunk", chunkCount, "length:", text.length, "preview:", text.slice(0, 120));
+    buffer += text;
+
+    let newlineIdx;
+    while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
+      const line = buffer.slice(0, newlineIdx).trim();
+      buffer = buffer.slice(newlineIdx + 1);
+      if (!line) continue;
+
+      try {
+        const msg = JSON.parse(line);
+        console.log("[stream] msg:", msg.type, msg.label || "");
+        if (msg.type === "progress") {
+          if (!hasLiveProgress) {
+            hasLiveProgress = true;
+            fallbackProgress.stop();
+          }
+          showProgress(msg.label, msg.pct);
+        } else if (msg.type === "done") {
+          result = msg;
+        } else if (msg.type === "error") {
+          fallbackProgress.stop();
+          hideProgress();
+          const err = new Error(msg.message || msg.error || "Pipeline error");
+          err.data = msg;
+          throw err;
+        } else if (msg.dashboard) {
+          // Fallback when the server returns classic JSON (non-stream response).
+          result = msg;
+        }
+      } catch (e) {
+        if (e.data) throw e;
+        console.warn("[stream] parse error on line:", line.slice(0, 200));
+      }
+    }
+  }
+
+  // Parse any trailing buffered payload (e.g. classic JSON without newline).
+  if (!result && buffer.trim()) {
+    try {
+      const tail = JSON.parse(buffer.trim());
+      if (tail.type === "error") {
+        const err = new Error(tail.message || tail.error || "Pipeline error");
+        err.data = tail;
+        throw err;
+      }
+      if (tail.type === "done" || tail.dashboard) {
+        result = tail;
+      }
+    } catch (e) {
+      if (e.data) throw e;
+      console.warn("[stream] trailing payload parse error:", buffer.slice(0, 200));
+    }
+  }
+
+  console.log("[loadDashboardStream] stream ended, chunks:", chunkCount, "hasResult:", !!result);
+  fallbackProgress.stop();
+  hideProgress();
+
+  if (!result) {
+    throw new Error("No data received from server");
+  }
+  return result;
+}
+
 async function loadDashboard(range) {
-  setStatus("Loading dashboard...");
   try {
-    const data = await apiFetch(`/dashboard/overview?range=${range}`);
+    const data = await loadDashboardStream(`/dashboard/overview?range=${range}&stream=1`);
     renderDashboard(data);
   } catch (error) {
     if (error.data && error.data.error === "RESOURCE_SELECTION_REQUIRED") {
@@ -2025,6 +2484,7 @@ async function loadDashboard(range) {
       renderResources(error.data.resources || []);
       return;
     }
+    console.error("[loadDashboard]", error);
     setStatus(error.message || "Unable to load dashboard.", "error");
   }
 }
@@ -2086,20 +2546,27 @@ async function init() {
     return;
   }
 
+  const route = router.current;
+
+  // Handle preview route without needing auth
+  if (route.page === "preview") {
+    await enterPreviewMode();
+    return;
+  }
+
   try {
     const session = await apiFetch("/auth/session");
     modeBadge.textContent = session.mode || "mock";
 
     if (!session.authenticated) {
-      // Show landing page instead of plain "Connect" button
       landingPage.classList.remove("hidden");
       statusPanel.textContent = "";
+      if (route.page !== "home") router.replace({ page: "home" });
 
       if (session.mode === "real" && !session.oauthConfigured) {
         await showSetupInstructions();
       }
       connectButton.textContent = session.mode === "real" ? "Sign in with Microsoft" : "Connect Azure";
-      // Keep navbar connect button visible too
       connectButton.classList.remove("hidden");
       return;
     }
@@ -2114,17 +2581,53 @@ async function init() {
 
     const discovery = await apiFetch("/azure/discover");
     lastDiscoveredResources = discovery.resources || [];
-    if (!discovery.autoSelected && discovery.resources?.length > 1) {
+
+    // Route-driven initialization: try to restore state from URL
+    if (route.page === "dashboard" && route.service) {
+      const target = lastDiscoveredResources.find(
+        (r) => r.appInsightsName === route.service
+      );
+      if (target) {
+        // Select the resource from the URL if not already selected
+        if (discovery.selectedResource !== route.service) {
+          await apiFetch("/azure/select", {
+            method: "POST",
+            body: JSON.stringify({
+              resourceId: target.resourceId,
+              workspaceId: target.workspaceId,
+              subscriptionId: target.subscriptionId,
+              resourceGroup: target.resourceGroup,
+              appInsightsName: target.appInsightsName,
+            }),
+          });
+        }
+        showSelectedResource(route.service);
+        activateTab(route.tab, { updateUrl: false });
+        router.replace({ page: "dashboard", service: route.service, tab: route.tab });
+        await loadDashboard(rangeSelect.value);
+        try {
+          if (!localStorage.getItem("ea_onboarding_seen")) {
+            onboardingBanner.classList.remove("hidden");
+          }
+        } catch {}
+        return;
+      }
+      // Service from URL not found — fall through to normal discovery flow
+    }
+
+    if (route.page === "services" || (!discovery.autoSelected && discovery.resources?.length > 1)) {
+      router.replace({ page: "services" });
       renderResources(discovery.resources);
     } else {
-      if (discovery.autoSelected && discovery.resources?.length === 1) {
-        showSelectedResource(discovery.resources[0].appInsightsName);
-      } else if (discovery.selectedResource) {
-        showSelectedResource(discovery.selectedResource);
+      const serviceName = discovery.autoSelected
+        ? discovery.resources[0]?.appInsightsName
+        : discovery.selectedResource;
+      if (serviceName) {
+        showSelectedResource(serviceName);
+        router.replace({ page: "dashboard", service: serviceName, tab: "marketing" });
       }
       await loadDashboard(rangeSelect.value);
 
-      // Show onboarding banner on first load
       try {
         if (!localStorage.getItem("ea_onboarding_seen")) {
           onboardingBanner.classList.remove("hidden");
@@ -2135,5 +2638,63 @@ async function init() {
     setStatus(error.message || "Unable to initialize.", "error");
   }
 }
+
+/* ========== Browser back/forward navigation ========== */
+window.addEventListener("popstate", async () => {
+  const route = router.current;
+
+  if (route.page === "home") {
+    if (isPreviewMode) {
+      isPreviewMode = false;
+      previewBanner.classList.add("hidden");
+      dashboardPanel.classList.add("hidden");
+      landingPage.classList.remove("hidden");
+      connectButton.classList.remove("hidden");
+      statusPanel.textContent = "";
+    }
+    return;
+  }
+
+  if (route.page === "preview") {
+    await enterPreviewMode();
+    return;
+  }
+
+  if (route.page === "services") {
+    dashboardPanel.classList.add("hidden");
+    selectedResourceBar.classList.add("hidden");
+    if (lastDiscoveredResources.length > 0) {
+      renderResources(lastDiscoveredResources);
+    }
+    return;
+  }
+
+  if (route.page === "dashboard" && route.service) {
+    resourcePanel.classList.add("hidden");
+    previewBanner.classList.add("hidden");
+    landingPage.classList.add("hidden");
+    isPreviewMode = false;
+    activateTab(route.tab, { updateUrl: false });
+    const currentName = selectedResourceName.textContent;
+    if (currentName !== route.service) {
+      const target = lastDiscoveredResources.find((r) => r.appInsightsName === route.service);
+      if (target) {
+        await apiFetch("/azure/select", {
+          method: "POST",
+          body: JSON.stringify({
+            resourceId: target.resourceId,
+            workspaceId: target.workspaceId,
+            subscriptionId: target.subscriptionId,
+            resourceGroup: target.resourceGroup,
+            appInsightsName: target.appInsightsName,
+          }),
+        });
+        showSelectedResource(route.service);
+        dashboardPanel.classList.remove("hidden");
+        await loadDashboard(rangeSelect.value);
+      }
+    }
+  }
+});
 
 init();

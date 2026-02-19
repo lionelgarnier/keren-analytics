@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Easy Analytics — Documentation</title>
   <link rel="stylesheet" href="/docs/docs.css" />
+  <script src="/theme-init.js"></script>
 </head>
 <body>
   <!-- ========== Top bar ========== -->
@@ -20,6 +21,10 @@
         <span class="doc-search-icon">&#x2315;</span>
         <span>Search docs...</span>
         <kbd>Ctrl K</kbd>
+      </button>
+      <button id="themeToggle" class="theme-toggle" aria-label="Toggle dark mode" title="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
       </button>
       <button class="doc-mobile-toggle" id="mobileToggle">&#9776;</button>
     </div>
@@ -318,9 +323,9 @@
 
         <section id="setup-ab-tests">
           <h2>Set Up A/B Tests</h2>
-          <p>Easy Analytics auto-detects A/B test variants from URL parameters. Add a parameter like <code>ab_test</code> to your experiment URLs and the dashboard compares variants automatically.</p>
+          <p>Easy Analytics can detect A/B test variants from URL parameters. Add a parameter like <code>ab_test</code> to your experiment URLs and the <strong>URL Parameters</strong> panel will track variant distribution.</p>
 
-          <h3>How it works</h3>
+          <h3>How it works today</h3>
           <div class="doc-steps">
             <div class="doc-step">
               <span class="doc-step-num">1</span>
@@ -337,21 +342,21 @@ https://yourapp.com/pricing?ab_test=new_pricing_v2</code></pre><button class="do
             <div class="doc-step">
               <span class="doc-step-num">2</span>
               <div>
-                <strong>Easy Analytics detects it</strong>
-                <p>The <em>A/B Tests Detected</em> panel appears automatically in your Marketing tab, showing a side-by-side comparison of all variants.</p>
+                <strong>Easy Analytics detects the parameter</strong>
+                <p>The <code>ab_test</code> parameter appears in the <em>URL Parameters</em> panel with variant frequency. Click it to see top values and filter by variant.</p>
               </div>
             </div>
             <div class="doc-step">
               <span class="doc-step-num">3</span>
               <div>
-                <strong>Read the results</strong>
-                <p>The dashboard compares: visitors, conversions, conversion rate, bounce rate, and average session duration. The leading variant is marked as <strong>WINNER</strong>.</p>
+                <strong>Filter and compare</strong>
+                <p>Use the <strong>Filter</strong> button on each variant value to see all dashboard metrics filtered to that variant. Compare by switching between filters.</p>
               </div>
             </div>
           </div>
 
-          <div class="doc-callout doc-callout-warning">
-            <strong>Statistical significance:</strong> Currently, winner detection is based on raw conversion rate. For production decisions, ensure you have sufficient sample size (typically 1000+ visitors per variant). Statistical significance testing is on the roadmap.
+          <div class="doc-callout doc-callout-info">
+            <strong>Coming soon:</strong> A dedicated A/B test comparison panel with side-by-side variant metrics (visitors, conversions, bounce rate) and automatic winner detection is on the roadmap.
           </div>
         </section>
 

@@ -47,12 +47,22 @@ IN PROGRESS
 - Prompts include detected stack, resource name, and SDK references
 - Collapsible prompt cards with copy-to-clipboard in UI
 
-### Priority 4 — Analytics Depth
+### Priority 4 — Analytics Depth (DONE)
 
 - Daily aggregates for last 30 days with trend charts (no PII)
-- Geo distribution (country/city) when available in customDimensions
+- Geo distribution (country bar chart + Leaflet map) when client_CountryOrRegion is available
+- Referrer/traffic source analysis (Direct, Organic, Social, Email, Referral)
 - Frontend performance (browserTimings) when present
 - Slow endpoint drill-downs (percentiles, evolution, detail per endpoint)
+- Peak hours heatmap (day-of-week x hour-of-day visitor distribution)
+- Campaign breakdown (UTM source/medium/campaign extraction from URLs)
+- URL parameter auto-discovery (scans URLs, detects query params and frequency)
+- User flow Sankey diagram (built from page navigation transitions)
+- Session timelines (reconstructed user journeys from page view events)
+- KPI sparklines with anomaly detection (derived from daily trend data)
+- Content performance scoring (pages driving funnel progression)
+- Conversion funnel (homepage -> pricing -> signup when pages exist)
+- Smart auto-generated insights from all available data
 
 ### Priority 5 — Real Azure Connection
 

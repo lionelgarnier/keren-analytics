@@ -99,6 +99,116 @@ function binSizeForRange(rangeKey) {
   return rangeKey === "today" ? "1h" : "1d";
 }
 
+/**
+ * Build Sankey node/link structure from page navigation rows.
+ */
+function buildSankeyFromNav(navRows) {
+  if (!navRows || navRows.length === 0) return null;
+  const sources = new Set(navRows.map((r) => r.from));
+  const targets = new Set(navRows.map((r) => r.to));
+  const allIds = new Set([...sources, ...targets]);
+  const inValue = {};
+  const outValue = {};
+  allIds.forEach((id) => { inValue[id] = 0; outValue[id] = 0; });
+  navRows.forEach((r) => {
+    const v = r.transitions || r.count || 0;
+    outValue[r.from] += v;
+    inValue[r.to] += v;
+  });
+
+  const funnelPaths = new Set(["/pricing", "/signup", "/checkout", "/register"]);
+  function groupOf(p) {
+    if (funnelPaths.has(p)) return "funnel";
+    if (p === "/" || p.startsWith("/blog") || p.startsWith("/docs")) return "info";
+    return "other";
+  }
+
+  const nodes = [...allIds].map((id) => {
+    let step = 1;
+    if (id === "/" || !targets.has(id)) step = 0;
+    else if (!sources.has(id)) step = 2;
+    return { id, step, group: groupOf(id), value: Math.max(inValue[id], outValue[id]) };
+  });
+  const links = navRows.map((r) => ({ source: r.from, target: r.to, value: r.transitions || r.count || 0 }));
+  return { nodes, links };
+}
+
+/**
+ * Derive KPI sparkline data from daily trend rows.
+ */
+function buildSparklines(trendRows) {
+  if (!trendRows || trendRows.length < 3) return null;
+  const visitorPts = trendRows.map((r) => r.visitors || 0);
+
+  function detectAnomaly(pts) {
+    if (pts.length < 7) return null;
+    const avg = pts.reduce((s, v) => s + v, 0) / pts.length;
+    const std = Math.sqrt(pts.reduce((s, v) => s + (v - avg) ** 2, 0) / pts.length);
+    const last = pts[pts.length - 1];
+    if (std > 0 && Math.abs(last - avg) > 2 * std) {
+      return { direction: last > avg ? "up" : "down", magnitude: Math.round((Math.abs(last - avg) / std) * 10) / 10 };
+    }
+    return null;
+  }
+  return {
+    visitors: { points: visitorPts, anomaly: detectAnomaly(visitorPts) },
+    sessions: { points: visitorPts, anomaly: null },
+  };
+}
+
+/**
+ * Group flat session event rows into session timeline objects.
+ */
+function buildSessionTimelines(rows) {
+  if (!rows || rows.length === 0) return null;
+  const sessionMap = new Map();
+  rows.forEach((row) => {
+    const sid = row.sessionId;
+    if (!sessionMap.has(sid)) {
+      sessionMap.set(sid, { sessionId: String(sid).substring(0, 8), device: row.device || "Unknown", country: row.country || "", rawEvents: [] });
+    }
+    sessionMap.get(sid).rawEvents.push({ path: row.pagePath, ts: new Date(row.timestamp).getTime() });
+  });
+  return [...sessionMap.values()].map((s) => {
+    const events = s.rawEvents.sort((a, b) => a.ts - b.ts);
+    const t0 = events[0].ts;
+    return {
+      sessionId: s.sessionId,
+      converted: false,
+      pageCount: events.length,
+      duration: events.length > 1 ? (events[events.length - 1].ts - t0) / 1000 : 0,
+      device: s.device,
+      country: s.country,
+      events: events.map((e, i) => ({
+        type: "pageView",
+        path: e.path,
+        label: e.path,
+        duration: i < events.length - 1 ? Math.round((events[i + 1].ts - e.ts) / 1000) : null,
+        timestamp: Math.round((e.ts - t0) / 1000),
+      })),
+    };
+  });
+}
+
+/**
+ * Transform URL parameter query rows into the frontend-expected shape.
+ */
+function buildUrlParamsData(rows) {
+  if (!rows || rows.length === 0) return null;
+  const totalScanned = Number(rows[0]?.totalScanned) || 0;
+  const urlsWithParams = Number(rows[0]?.urlsWithParams) || 0;
+  return {
+    discovered: rows.map((row) => ({
+      param: row.paramName,
+      frequency: Number(row.frequency) || 0,
+      isUtm: Boolean(row.isUtm),
+      topValues: row.topValue ? [{ value: String(row.topValue), count: Number(row.frequency) || 0 }] : [],
+    })),
+    totalUrlsScanned: totalScanned,
+    urlsWithParams,
+  };
+}
+
 export async function buildOverviewDashboard({
   tenantId,
   resourceId,
@@ -109,7 +219,15 @@ export async function buildOverviewDashboard({
   cacheTtlMs,
   azureClient,
   readinessReport,
+  onProgress,
 }) {
+  const TOTAL_QUERIES = 18;
+  let queryIndex = 0;
+  const progress = typeof onProgress === "function" ? onProgress : () => {};
+  function queryProgress(label) {
+    progress(label, queryIndex / TOTAL_QUERIES);
+    queryIndex++;
+  }
   const allowedExpr = allowedKqlExpressions();
   const pageTable = mapping.pageTable || (schemaProfile?.tables?.requests ? "requests" : "pageViews");
   const tableName = schemaProfile?.tables?.[pageTable] ? pageTable : "requests";
@@ -135,6 +253,7 @@ export async function buildOverviewDashboard({
 
   // --- Core queries (same as Phase 1) ---
 
+  queryProgress("Counting visitors");
   const uniqueVisitorsResult = hasPageTable
     ? await runQuery({
         tenantId,
@@ -159,6 +278,7 @@ export async function buildOverviewDashboard({
       })
     : emptyResult;
 
+  queryProgress("Counting sessions");
   const sessionsResult = hasPageTable
     ? await runQuery({
         tenantId,
@@ -182,6 +302,7 @@ export async function buildOverviewDashboard({
       })
     : emptyResult;
 
+  queryProgress("Loading top pages");
   const topPagesResult = hasPageTable
     ? await runQuery({
         tenantId,
@@ -205,6 +326,7 @@ export async function buildOverviewDashboard({
       })
     : emptyResult;
 
+  queryProgress("Analyzing navigation paths");
   const topNavResult = hasPageTable
     ? await runQuery({
         tenantId,
@@ -230,6 +352,7 @@ export async function buildOverviewDashboard({
       })
     : emptyResult;
 
+  queryProgress("Detecting browsers");
   const browsersResult = hasPageTable
     ? await runQuery({
         tenantId,
@@ -246,6 +369,7 @@ export async function buildOverviewDashboard({
       })
     : emptyResult;
 
+  queryProgress("Detecting operating systems");
   const osResult = hasPageTable
     ? await runQuery({
         tenantId,
@@ -262,6 +386,7 @@ export async function buildOverviewDashboard({
       })
     : emptyResult;
 
+  queryProgress("Detecting devices");
   const deviceResult = hasPageTable
     ? await runQuery({
         tenantId,
@@ -278,6 +403,7 @@ export async function buildOverviewDashboard({
       })
     : emptyResult;
 
+  queryProgress("Measuring performance");
   const performanceResult = hasRequests
     ? await runQuery({
         tenantId,
@@ -294,6 +420,7 @@ export async function buildOverviewDashboard({
       })
     : emptyResult;
 
+  queryProgress("Finding slow endpoints");
   const slowEndpointsResult = hasRequests
     ? await runQuery({
         tenantId,
@@ -312,6 +439,7 @@ export async function buildOverviewDashboard({
 
   // --- Phase 2 new queries ---
 
+  queryProgress("Computing daily trend");
   const dailyTrendResult = hasPageTable
     ? await runQuery({
         tenantId,
@@ -339,6 +467,7 @@ export async function buildOverviewDashboard({
       })
     : emptyResult;
 
+  queryProgress("Loading geo distribution");
   const geoResult = hasGeo
     ? await runQuery({
         tenantId,
@@ -355,76 +484,79 @@ export async function buildOverviewDashboard({
       })
     : emptyResult;
 
-  const abTestsResult = hasPageTable
-    ? await runQuery({ tenantId, resourceId, workspaceId, queryName: "abTests", templateName: "top-pages", params: { ...timeParams, tableName, pagePathExpr }, allowedValues: { tableName: ["pageViews", "requests"], pagePathExpr: allowedExpr.pagePathExpr }, timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient })
-    : { _raw: null };
-
-  const kpiSparklinesResult = hasPageTable
-    ? await runQuery({ tenantId, resourceId, workspaceId, queryName: "kpiSparklines", templateName: "top-pages", params: { ...timeParams, tableName, pagePathExpr }, allowedValues: { tableName: ["pageViews", "requests"], pagePathExpr: allowedExpr.pagePathExpr }, timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient })
-    : { _raw: null };
-
-  const sessionReplaysResult = hasPageTable
-    ? await runQuery({ tenantId, resourceId, workspaceId, queryName: "sessionReplays", templateName: "top-pages", params: { ...timeParams, tableName, pagePathExpr }, allowedValues: { tableName: ["pageViews", "requests"], pagePathExpr: allowedExpr.pagePathExpr }, timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient })
-    : { _raw: null };
-
+  queryProgress("Analyzing peak hours");
   const peakHoursResult = hasPageTable
     ? await runQuery({
         tenantId, resourceId, workspaceId,
         queryName: "peakHours",
-        templateName: "top-pages",
-        params: { ...timeParams, tableName, pagePathExpr },
-        allowedValues: { tableName: ["pageViews", "requests"], pagePathExpr: allowedExpr.pagePathExpr },
+        templateName: "peak-hours",
+        params: { ...timeParams, tableName, sessionIdExpr: sessionExpr },
+        allowedValues: {
+          tableName: ["pageViews", "requests"],
+          sessionIdExpr: allowedExpr.sessionIdExpr,
+        },
         timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
       })
-    : { _raw: null };
+    : emptyResult;
 
+  queryProgress("Scanning URL parameters");
   const urlParamsResult = hasPageTable
     ? await runQuery({
         tenantId, resourceId, workspaceId,
         queryName: "urlParams",
-        templateName: "top-pages",
-        params: { ...timeParams, tableName, pagePathExpr },
-        allowedValues: { tableName: ["pageViews", "requests"], pagePathExpr: allowedExpr.pagePathExpr },
+        templateName: "url-parameters",
+        params: { ...timeParams, tableName },
+        allowedValues: { tableName: ["pageViews", "requests"] },
         timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
       })
-    : { _raw: null };
+    : emptyResult;
 
+  queryProgress("Loading campaign data");
   const campaignResult = hasPageTable
     ? await runQuery({
         tenantId, resourceId, workspaceId,
         queryName: "campaignBreakdown",
-        templateName: "top-pages",
-        params: { ...timeParams, tableName, pagePathExpr },
-        allowedValues: { tableName: ["pageViews", "requests"], pagePathExpr: allowedExpr.pagePathExpr },
-        timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
-      })
-    : { _raw: null };
-
-  const userFlowResult = hasPageTable
-    ? await runQuery({
-        tenantId,
-        resourceId,
-        workspaceId,
-        queryName: "userFlow",
-        templateName: "top-navigation",
+        templateName: "campaign-breakdown",
         params: {
           ...timeParams,
           tableName,
-          pagePathExpr,
+          userIdExpr: userIdExpr || mappingExpressions.userId.anonymous,
           sessionIdExpr: sessionExpr,
         },
         allowedValues: {
           tableName: ["pageViews", "requests"],
-          pagePathExpr: allowedExpr.pagePathExpr,
+          userIdExpr: allowedExpr.userIdExpr,
           sessionIdExpr: allowedExpr.sessionIdExpr,
         },
-        timeRangeKey: timeRange.key,
-        mappingVersion: mapping.version,
-        ttlMs: cacheTtlMs,
-        azureClient,
+        timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
       })
-    : { _raw: null };
+    : emptyResult;
 
+  queryProgress("Reconstructing sessions");
+  const sessionTimelinesResult = hasPageTable
+    ? await runQuery({
+        tenantId, resourceId, workspaceId,
+        queryName: "sessionTimelines",
+        templateName: "session-timelines",
+        params: {
+          ...timeParams,
+          tableName,
+          sessionIdExpr: sessionExpr,
+          pagePathExpr,
+        },
+        allowedValues: {
+          tableName: ["pageViews", "requests"],
+          sessionIdExpr: allowedExpr.sessionIdExpr,
+          pagePathExpr: allowedExpr.pagePathExpr,
+        },
+        timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
+      })
+    : emptyResult;
+
+  const referrerExpr =
+    mapping.canonicalReferrer?.expr || mappingExpressions.referrer.referrer;
+
+  queryProgress("Analyzing referrers");
   const referrerResult = hasPageTable
     ? await runQuery({
         tenantId,
@@ -432,8 +564,11 @@ export async function buildOverviewDashboard({
         workspaceId,
         queryName: "referrerSources",
         templateName: "referrer-sources",
-        params: { ...timeParams, tableName },
-        allowedValues: { tableName: ["pageViews", "requests"] },
+        params: { ...timeParams, tableName, referrerExpr },
+        allowedValues: {
+          tableName: ["pageViews", "requests"],
+          referrerExpr: allowedExpr.referrerExpr,
+        },
         timeRangeKey: timeRange.key,
         mappingVersion: mapping.version,
         ttlMs: cacheTtlMs,
@@ -441,6 +576,7 @@ export async function buildOverviewDashboard({
       })
     : emptyResult;
 
+  queryProgress("Measuring frontend timings");
   const browserTimingsResult = hasBrowserTimings
     ? await runQuery({
         tenantId,
@@ -472,6 +608,10 @@ export async function buildOverviewDashboard({
   const geoRows = toRows(geoResult);
   const referrerRows = toRows(referrerResult);
   const browserTimingsRows = toRows(browserTimingsResult);
+  const peakHoursRows = toRows(peakHoursResult);
+  const urlParamRows = toRows(urlParamsResult);
+  const campaignRows = toRows(campaignResult);
+  const sessionTimelineRows = toRows(sessionTimelinesResult);
 
   const totalBrowser =
     Number(browsersRows[0]?.total) || browsersRows.reduce((sum, row) => sum + (row.count || 0), 0);
@@ -556,13 +696,25 @@ export async function buildOverviewDashboard({
         count: row.count,
         share: row.share || safeDivide(row.count, totalGeo),
       })),
-      userFlow: userFlowResult?._raw || null,
-      abTests: abTestsResult?._raw || null,
-      kpiSparklines: kpiSparklinesResult?._raw || null,
-      sessionReplays: sessionReplaysResult?._raw || null,
-      peakHours: peakHoursResult?._raw || null,
-      urlParams: urlParamsResult?._raw || null,
-      campaignBreakdown: campaignResult?._raw || null,
+      userFlow: buildSankeyFromNav(topNavRows),
+      abTests: null,
+      kpiSparklines: buildSparklines(dailyTrendRows),
+      sessionReplays: buildSessionTimelines(sessionTimelineRows),
+      peakHours: peakHoursRows.map((row) => ({
+        dayIndex: Number(row.dayIndex),
+        hour: Number(row.hour),
+        count: Number(row.count) || 0,
+      })),
+      urlParams: buildUrlParamsData(urlParamRows),
+      campaignBreakdown: campaignRows.map((row) => ({
+        source: row.source,
+        medium: row.medium,
+        campaign: row.campaign,
+        visitors: Number(row.visitors) || 0,
+        sessions: Number(row.sessions) || 0,
+        signups: 0,
+        convRate: 0,
+      })),
       referrerSources: referrerRows.map((row) => ({
         source: row.source,
         count: row.count,

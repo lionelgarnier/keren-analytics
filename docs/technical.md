@@ -66,19 +66,36 @@ Requests are timed out and retried once on transient errors (429, 503).
 ## KQL Templates
 All queries are stored as templates in `kql/*.kql` and rendered with safe,
 whitelisted parameters:
-- readiness-probes.kql
-- schema-tables.kql
-- schema-custom-dimensions.kql
-- unique-visitors-user.kql
-- unique-visitors-session.kql
-- sessions.kql
-- top-pages.kql
-- top-navigation.kql
-- tech-browser.kql
-- tech-os.kql
-- tech-device.kql
-- performance.kql
-- slow-endpoints.kql
+
+### Discovery and profiling
+- readiness-probes.kql — signal availability checks (pageViews, requests, geo, browserTimings, etc.)
+- schema-tables.kql — available tables and row counts
+- schema-custom-dimensions.kql — custom dimension key discovery
+
+### Marketing queries
+- unique-visitors-user.kql — unique visitors via userId + sessionId
+- unique-visitors-session.kql — unique visitors via sessionId only
+- sessions.kql — distinct session count
+- top-pages.kql — top 10 pages by view count
+- top-navigation.kql — page-to-page transitions within sessions
+- daily-trend.kql — visitors and page views binned by time period
+- geo-distribution.kql — top 10 countries by client_CountryOrRegion
+- referrer-sources.kql — traffic source categorization (Direct, Organic, Social, etc.)
+- campaign-breakdown.kql — UTM campaign breakdown (source, medium, campaign)
+- url-parameters.kql — auto-detect URL query string parameters and frequency
+- peak-hours.kql — visitor count by day-of-week and hour-of-day
+- session-timelines.kql — recent session page sequences for timeline reconstruction
+
+### Technical queries
+- performance.kql — avg/p95 response time and error rate
+- slow-endpoints.kql — top 10 slowest endpoints by p95
+- browser-timings.kql — frontend network/send/receive/processing durations
+- endpoint-detail.kql — per-endpoint performance over time (drill-down)
+
+### Tech distribution
+- tech-browser.kql — top 5 browsers
+- tech-os.kql — top 5 operating systems
+- tech-device.kql — top 5 device types
 
 ## Mapping and Fallbacks
 Mapping logic in `src/core/mapping.js` chooses canonical fields by priority:

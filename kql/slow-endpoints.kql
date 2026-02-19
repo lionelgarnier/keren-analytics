@@ -2,7 +2,9 @@ let start={{timeStart}};
 let end={{timeEnd}};
 requests
 | where timestamp between (start..end)
-| extend path = tostring(parse_url(url).Path)
+| extend urlPath = tostring(parse_url(url).Path)
+| extend namePath = extract("(?:GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|RSC GET|RSC POST)\\s+([^?\\s]+)", 1, name)
+| extend path = iif(isnotempty(urlPath), urlPath, namePath)
 | where isnotempty(path)
 | summarize
     p50 = percentile(duration, 50),

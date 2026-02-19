@@ -14,5 +14,14 @@ let deviceCount = toscalar(events | where isnotempty(client_Type) | count);
 let geoCount = toscalar(events | where isnotempty(client_CountryOrRegion) | count);
 let latestTimestamp = toscalar(events | summarize max(timestamp));
 let browserTimingsCount = toscalar(union isfuzzy=true browserTimings | where timestamp between (start..end) | count);
-print pageViewsCount, requestsCount, userAuthCount, userAnonCount, sessionCount, requestSessionCount,
-      browserCount, osCount, deviceCount, geoCount, browserTimingsCount, latestTimestamp
+let urlPopulatedCount = toscalar(events | where isnotempty(url) | count);
+let namePopulatedCount = toscalar(events | where isnotempty(name) | count);
+let headerRefererCount = toscalar(events | where isnotempty(tostring(customDimensions["http.request.header.referer"])) | count);
+print pageViewsCount = pageViewsCount, requestsCount = requestsCount,
+      userAuthCount = userAuthCount, userAnonCount = userAnonCount,
+      sessionCount = sessionCount, requestSessionCount = requestSessionCount,
+      browserCount = browserCount, osCount = osCount, deviceCount = deviceCount,
+      geoCount = geoCount, browserTimingsCount = browserTimingsCount,
+      latestTimestamp = latestTimestamp,
+      urlPopulatedCount = urlPopulatedCount, namePopulatedCount = namePopulatedCount,
+      headerRefererCount = headerRefererCount

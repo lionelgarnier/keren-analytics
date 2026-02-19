@@ -1,0 +1,15 @@
+let start={{timeStart}};
+let end={{timeEnd}};
+let recentSessions = {{tableName}}
+| where timestamp between (start..end)
+| extend sessionId = {{sessionIdExpr}}, pagePath = {{pagePathExpr}}
+| where isnotempty(sessionId) and isnotempty(pagePath)
+| summarize lastEvent = max(timestamp), eventCount = count() by sessionId
+| top 10 by lastEvent desc
+| project sessionId;
+{{tableName}}
+| where timestamp between (start..end)
+| extend sessionId = {{sessionIdExpr}}, pagePath = {{pagePathExpr}}
+| where sessionId in (recentSessions) and isnotempty(pagePath)
+| project sessionId, pagePath, timestamp, device = client_Type, country = client_CountryOrRegion
+| order by sessionId asc, timestamp asc

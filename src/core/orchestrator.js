@@ -14,7 +14,9 @@ export async function runOverviewPipeline({
   cacheTtlMs,
   customStart,
   customEnd,
+  onProgress,
 }) {
+  const progress = typeof onProgress === "function" ? onProgress : () => {};
   const timeRange = resolveTimeRange(rangeKey, customStart, customEnd);
   const now = new Date();
   let readinessWindow = {
@@ -22,6 +24,7 @@ export async function runOverviewPipeline({
     end: now,
   };
   logStateTransition(tenantId, { state: PipelineStates.DISCOVERING_RESOURCES });
+  progress("Discovering resources", 0);
 
   const tenant = getTenant(tenantId);
   let selectedResource = tenant.selectedResource;
@@ -48,6 +51,7 @@ export async function runOverviewPipeline({
   }
 
   logStateTransition(tenantId, { state: PipelineStates.CHECKING_ACCESS });
+  progress("Checking workspace access", 0.05);
   const access = await azureClient.checkAccess(selectedResource.workspaceId);
   if (!access.ok) {
     logStateTransition(tenantId, { state: PipelineStates.NO_ACCESS, detail: access.reason });
@@ -67,6 +71,7 @@ export async function runOverviewPipeline({
   };
 
   logStateTransition(tenantId, { state: PipelineStates.READINESS_PROBES });
+  progress("Running readiness probes", 0.08);
   const readinessTemplate = loadKqlTemplate("readiness-probes");
   const readinessKql = renderTemplate(readinessTemplate, readinessParams);
   const readinessResult = await azureClient.queryWorkspace({
@@ -111,24 +116,33 @@ export async function runOverviewPipeline({
   updateTenant(tenantId, { readinessReport });
 
   logStateTransition(tenantId, { state: PipelineStates.SCHEMA_PROFILING });
+  progress("Profiling schema", 0.15);
+  const schemaStart = new Date(Math.min(
+    timeRange.start.getTime(),
+    now.getTime() - 30 * 24 * 60 * 60 * 1000,
+  ));
+  const schemaTimeParams = {
+    timeStart: toKqlDatetime(schemaStart),
+    timeEnd: toKqlDatetime(now),
+  };
   const schemaTablesTemplate = loadKqlTemplate("schema-tables");
-  const schemaTablesKql = renderTemplate(schemaTablesTemplate, timeParams);
+  const schemaTablesKql = renderTemplate(schemaTablesTemplate, schemaTimeParams);
   const tablesResult = await azureClient.queryWorkspace({
     resourceId: selectedResource.resourceId,
     workspaceId: selectedResource.workspaceId,
     kql: schemaTablesKql,
     queryName: "schemaTables",
-    timeRangeKey: timeRange.key,
+    timeRangeKey: "30d",
   });
 
   const schemaCustomTemplate = loadKqlTemplate("schema-custom-dimensions");
-  const schemaCustomKql = renderTemplate(schemaCustomTemplate, timeParams);
+  const schemaCustomKql = renderTemplate(schemaCustomTemplate, schemaTimeParams);
   const customResult = await azureClient.queryWorkspace({
     resourceId: selectedResource.resourceId,
     workspaceId: selectedResource.workspaceId,
     kql: schemaCustomKql,
     queryName: "schemaCustomDimensions",
-    timeRangeKey: timeRange.key,
+    timeRangeKey: "30d",
   });
 
   const schemaProfile = buildSchemaProfile({
@@ -138,10 +152,12 @@ export async function runOverviewPipeline({
   updateTenant(tenantId, { schemaProfile });
 
   logStateTransition(tenantId, { state: PipelineStates.MAPPING_BUILD });
+  progress("Building data mapping", 0.22);
   const mapping = buildMapping({ schemaProfile, readinessReport });
   updateTenant(tenantId, { mapping });
 
   logStateTransition(tenantId, { state: PipelineStates.DASHBOARD_BUILD });
+  progress("Building dashboard", 0.25);
   const dashboard = await buildOverviewDashboard({
     tenantId,
     resourceId: selectedResource.resourceId,
@@ -152,10 +168,13 @@ export async function runOverviewPipeline({
     cacheTtlMs,
     azureClient,
     readinessReport,
+    onProgress: (label, pct) => progress(label, 0.25 + pct * 0.7),
   });
 
   logStateTransition(tenantId, { state: PipelineStates.CACHING_RESULTS });
+  progress("Finalizing", 0.98);
   logStateTransition(tenantId, { state: PipelineStates.READY });
+  progress("Done", 1);
 
   return {
     resources: [selectedResource],

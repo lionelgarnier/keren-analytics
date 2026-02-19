@@ -1,3 +1,23 @@
+/* ========== Theme Toggle ========== */
+document.getElementById("themeToggle")?.addEventListener("click", () => {
+  const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+  if (isDark) {
+    document.documentElement.removeAttribute("data-theme");
+  } else {
+    document.documentElement.setAttribute("data-theme", "dark");
+  }
+  try { localStorage.setItem("theme", isDark ? "light" : "dark"); } catch {}
+});
+
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
+  if (localStorage.getItem("theme")) return;
+  if (e.matches) {
+    document.documentElement.setAttribute("data-theme", "dark");
+  } else {
+    document.documentElement.removeAttribute("data-theme");
+  }
+});
+
 /* ========== Scroll spy ========== */
 const sidebarLinks = document.querySelectorAll(".doc-sidebar-link");
 const sections = document.querySelectorAll(".doc-content section[id]");
@@ -93,7 +113,7 @@ function renderSearchResults(query) {
   if (results.length === 0 && q) {
     const empty = document.createElement("div");
     empty.className = "doc-search-result";
-    empty.innerHTML = `<span style="color:#9ca3af">No results for "${q}"</span>`;
+    empty.innerHTML = `<span style="color:var(--text-muted)">No results for "${q}"</span>`;
     searchResults.appendChild(empty);
   }
 }
