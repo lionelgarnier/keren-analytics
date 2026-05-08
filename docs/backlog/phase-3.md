@@ -1,5 +1,16 @@
 # Phase 3 - Production Readiness and Adoption Engine
 
+> **Trigger gate (OSS-first strategy).**
+> This phase is **gated on traction signals** defined in
+> [`docs/launch-strategy.md`](../launch-strategy.md) §3. Do not start any item
+> below until at least one of: ≥ 500 GitHub stars, ≥ 100 self-host installs,
+> ≥ 5 inbound enterprise inquiries, or ≥ 3 design partners. Building
+> multi-tenant SaaS infrastructure speculatively is the single highest-cost
+> mistake available to a solo founder before product/market signal.
+>
+> The pre-launch sprint is captured in
+> [`launch-readiness.md`](launch-readiness.md), not here.
+
 ## Goal
 
 Harden infrastructure for production use, add persistent storage, build adoption

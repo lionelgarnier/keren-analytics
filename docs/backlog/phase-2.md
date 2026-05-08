@@ -9,7 +9,7 @@ and a gamified readiness system that drives continuous telemetry improvement.
 
 ## Status
 
-IN PROGRESS
+DONE
 
 ## Scope
 
@@ -64,14 +64,21 @@ IN PROGRESS
 - Conversion funnel (homepage -> pricing -> signup when pages exist)
 - Smart auto-generated insights from all available data
 
-### Priority 5 — Real Azure Connection
+### Priority 5 — Real Azure Connection (DONE)
 
 - Entra ID OAuth + PKCE (SSO, one-click sign-in)
-- Test and harden real client with actual tenant data
-- RBAC detection with actionable error messages
-- Range validation and per-range cache TTL
+  - PKCE helpers in `src/server.js` (generateCodeVerifier, generateCodeChallenge, generateState)
+  - `/auth/login` and `/auth/callback` routes with state validation and code exchange
+  - Setup guide in `docs/setup-entra-id.md`
+- Real client hardened with actionable error categorization (`src/azure/realClient.js` — categorizeAzureError)
+- RBAC detection with actionable messages (RBAC_DENIED, AUTH_EXPIRED, NOT_FOUND, THROTTLED) covered by `tests/rbac.test.js`
+- Range validation on `/overview`, `/preview`, `/prompts` and per-range cache TTL in `src/config.js` (today: 5m, 7d/30d: 15m)
+- Token auto-refresh middleware with expiry detection in `src/server.js`
 
-### Priority 6 — Cross-Department Vision (Teaser)
+### Priority 6 — Cross-Department Vision (Teaser) (DONE)
+
+UI teaser panel implemented in `public/index.html` (Readiness tab) — backend endpoints intentionally
+deferred to Phase 3+.
 
 - Finance: revenue per session, conversion funnel cost, infra cost per segment
 - Legal & Compliance: consent tracking, data residency, GDPR requests, audit trails
