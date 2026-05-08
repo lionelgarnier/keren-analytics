@@ -174,12 +174,43 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
   pass — `docs/maintainer-todo.md` already has the "open dev server
   and check the dashboard" item.
 
-### B4. Period-over-period comparison (top 3 KPI tiles only) [STRONG, 10h]
+### B4. Period-over-period comparison (top 3 KPI tiles only) [STRONG, 10h] — DONE
 - Limited scope: only the 3 most prominent KPI tiles get a delta vs.
   previous period.
 - KQL templates accept a `compareTo: previous` parameter.
 - UI: small green/red delta chip + "vs last week" caption.
 - Full comparison + deployment markers ship post-launch.
+- **Shipped server side:** new `previousTimeRange(timeRange)` helper in
+  `core/timeRange.js` maps the launch ranges to their predecessors
+  (`today → yesterday`, `7d → prev7d`, `30d → prev30d`) and `null` for
+  anything else (custom range hides the chips). New
+  `kql/previous-kpis.kql` template runs a single `summarize` over the
+  prior window returning all three KPIs (`uniqueVisitors`, `sessions`,
+  `pageViews = count()`) — keeps query count to +1 instead of +3.
+  `core/dashboard.js` runs that query when a predecessor exists, then
+  `deltaEntry()` builds `{ current, previous, deltaPct, direction }`
+  per KPI with a `0.5%` neutral band and an explicit `null` deltaPct
+  when previous is zero (so a first-time tenant doesn't see misleading
+  +∞%). Final payload: `dashboard.kpis.comparison = {
+  previousRangeKey, label, uniqueVisitors, sessions, pageViews }` or
+  `null`. Cache key uses the prev range key, so previous results live
+  in their own cache slot.
+- **Shipped UI:** the 3 KPI tiles on the Marketing tab gain a
+  `.kpi-meta-row` with a colored `.kpi-delta` pill (`+13.6%` green up,
+  `-x%` red down, `~0%` neutral grey) and a `.kpi-compare` caption
+  ("vs last week" / "vs yesterday" / "vs last month"). Hidden when
+  comparison is null. No new dependency.
+- **Mock data:** `src/azure/mockData.js` gains `RANGE_SCALE` entries
+  for `yesterday: 0.06`, `prev7d: 0.22`, `prev30d: 0.88` (slightly
+  lower than current so the demo screenshots show the screenshot-
+  friendly green positive deltas) plus a `previousKpis` query handler.
+- **Tests:** new `tests/timeRange.test.js` (5 cases — predecessor key,
+  window length, today→yesterday, custom/null/unknown returns null,
+  comparisonLabel mapping). `tests/api.test.js` end-to-end asserts
+  `dashboard.kpis.comparison.previousRangeKey === "prev7d"` with all
+  three KPIs and a valid `direction`. 69 → 74 tests, audit clean.
+- **Out of scope (post-launch, per spec):** the deployment-markers
+  layer and full per-chart comparisons stay deferred.
 
 ### B5. "Copy share image" button [OPTIONAL, 4h]
 - Server-side render a PNG of the current dashboard view using the existing

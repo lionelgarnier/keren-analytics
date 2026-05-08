@@ -1211,6 +1211,37 @@ function renderSessionReplays(sessions) {
   });
 }
 
+/* ========== Render: Period-over-period KPI deltas (B4) ========== */
+function renderKpiComparison(kpis) {
+  const cmp = kpis && kpis.comparison;
+  const targets = [
+    { key: "uniqueVisitors", deltaId: "kpiVisitorsDelta", captionId: "kpiVisitorsCompare" },
+    { key: "sessions",       deltaId: "kpiSessionsDelta", captionId: "kpiSessionsCompare" },
+    { key: "pageViews",      deltaId: "kpiPageViewsDelta", captionId: "kpiPageViewsCompare" },
+  ];
+  for (const t of targets) {
+    const deltaEl = document.getElementById(t.deltaId);
+    const captionEl = document.getElementById(t.captionId);
+    if (!deltaEl || !captionEl) continue;
+
+    const entry = cmp && cmp[t.key];
+    if (!cmp || !entry || entry.deltaPct === null || !Number.isFinite(entry.deltaPct)) {
+      deltaEl.classList.add("hidden");
+      captionEl.classList.add("hidden");
+      continue;
+    }
+
+    const sign = entry.deltaPct > 0 ? "+" : "";
+    deltaEl.textContent = `${sign}${entry.deltaPct.toFixed(1)}%`;
+    deltaEl.dataset.direction = entry.direction || "neutral";
+    deltaEl.classList.remove("hidden");
+
+    captionEl.textContent = cmp.label || "";
+    if (cmp.label) captionEl.classList.remove("hidden");
+    else captionEl.classList.add("hidden");
+  }
+}
+
 /* ========== Render: Environment analysis narration ========== */
 function renderNarration(narration) {
   const panel = document.getElementById("narrationPanel");
@@ -2363,6 +2394,9 @@ function renderDashboard(data) {
 
   // Environment analysis narration (deterministic; AI-style framing)
   safeRender("Narration", () => renderNarration(dashboard.narration));
+
+  // Period-over-period comparison chips on the top 3 KPI tiles (B4).
+  safeRender("KPI comparison", () => renderKpiComparison(dashboard.kpis));
 
   // Smart Insights (auto-generated from all data)
   safeRender("Insights", () => renderInsights(dashboard));

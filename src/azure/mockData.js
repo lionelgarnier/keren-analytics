@@ -54,7 +54,19 @@ function vary(value, pct, rng) {
 }
 
 /* ========== Range-aware multipliers ========== */
-const RANGE_SCALE = { today: 0.07, "7d": 0.25, "30d": 1.0 };
+// Current-period scales (today/7d/30d) and their "previous-period" peers
+// used by the period-over-period KPI comparison (B4). Previous values are
+// intentionally a touch lower than current so the demo screenshots show
+// the optimistic green delta — same heuristic as `vary()` keeping the
+// dataset visually believable across renders.
+const RANGE_SCALE = {
+  today: 0.07,
+  "7d": 0.25,
+  "30d": 1.0,
+  yesterday: 0.06,
+  prev7d: 0.22,
+  prev30d: 0.88,
+};
 
 function scale(value, rangeKey) {
   return Math.round(value * (RANGE_SCALE[rangeKey] || 1));
@@ -697,6 +709,19 @@ export function getMockRows(queryName, timeRangeKey) {
   }
   if (queryName === "sessions") {
     return [{ sessions: scale(baseline.sessions[0].sessions, rk) }];
+  }
+
+  // Previous-period KPIs (B4) — single-row aggregate covering the three
+  // tiles that get a delta chip. PageViews mirrors the daily-trend math
+  // (3x visitors) so the prev-period number stays internally consistent.
+  if (queryName === "previousKpis") {
+    const prevVisitors = scale(baseline.uniqueVisitors[0].uniqueVisitors, rk);
+    const prevSessions = scale(baseline.sessions[0].sessions, rk);
+    return [{
+      uniqueVisitors: prevVisitors,
+      sessions: prevSessions,
+      pageViews: prevVisitors * 3,
+    }];
   }
 
   // Count-based tables — scale counts

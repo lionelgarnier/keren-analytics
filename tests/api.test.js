@@ -21,4 +21,17 @@ test("mock auth and dashboard overview flow", async () => {
   assert.equal(narration.mode, "mock");
   assert.equal(narration.badge, null);
   assert.ok(narration.paragraph && narration.paragraph.length > 0);
+
+  // Period-over-period comparison (B4) — 7d range has prev7d as predecessor.
+  const cmp = dashboard.body.dashboard.kpis.comparison;
+  assert.ok(cmp, "dashboard.kpis.comparison should be present for 7d range");
+  assert.equal(cmp.previousRangeKey, "prev7d");
+  assert.equal(cmp.label, "vs last week");
+  for (const key of ["uniqueVisitors", "sessions", "pageViews"]) {
+    const entry = cmp[key];
+    assert.ok(entry, `comparison.${key} should be present`);
+    assert.ok(Number.isFinite(entry.current));
+    assert.ok(Number.isFinite(entry.previous));
+    assert.ok(["up", "down", "neutral"].includes(entry.direction));
+  }
 });

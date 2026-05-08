@@ -1,7 +1,7 @@
 import { auditEvent } from "./audit.js";
 import { buildCacheKey, cacheStore } from "./cache.js";
 import { loadKqlTemplate, renderTemplate } from "./kql.js";
-import { toKqlDatetime } from "./timeRange.js";
+import { toKqlDatetime, previousTimeRange, comparisonLabel } from "./timeRange.js";
 import { allowedKqlExpressions, mappingExpressions } from "./mapping.js";
 import { buildNarration } from "./narration.js";
 
@@ -21,6 +21,29 @@ function toRows(result) {
 function toSingleValue(rows, key) {
   if (!rows || rows.length === 0) return 0;
   return rows[0][key] ?? 0;
+}
+
+/**
+ * Build the period-over-period delta payload for a single KPI (B4).
+ * Returns null when the previous value is 0 — the UI surfaces "—" rather
+ * than rendering a misleading +∞% chip on first-time-connected tenants.
+ */
+function deltaEntry(current, previous) {
+  const cur = Number(current) || 0;
+  const prev = Number(previous) || 0;
+  if (prev === 0) {
+    return { current: cur, previous: 0, deltaPct: null, direction: "neutral" };
+  }
+  const deltaPct = ((cur - prev) / prev) * 100;
+  let direction = "neutral";
+  if (deltaPct > 0.5) direction = "up";
+  else if (deltaPct < -0.5) direction = "down";
+  return {
+    current: cur,
+    previous: prev,
+    deltaPct: Math.round(deltaPct * 10) / 10,
+    direction,
+  };
 }
 
 async function runQuery({
@@ -223,7 +246,7 @@ export async function buildOverviewDashboard({
   onProgress,
   azureMode,
 }) {
-  const TOTAL_QUERIES = 18;
+  const TOTAL_QUERIES = 19;
   let queryIndex = 0;
   const progress = typeof onProgress === "function" ? onProgress : () => {};
   function queryProgress(label) {
@@ -595,6 +618,37 @@ export async function buildOverviewDashboard({
       })
     : emptyResult;
 
+  // Period-over-period KPIs (B4) — only the launch ranges (today / 7d /
+  // 30d) define a predecessor; anything else returns null and the UI
+  // hides the delta chips. One query covers all 3 KPIs for the prior
+  // window so we don't triple the query count.
+  const prevRange = previousTimeRange(timeRange);
+  const previousKpisResult = (prevRange && hasPageTable)
+    ? await runQuery({
+        tenantId,
+        resourceId,
+        workspaceId,
+        queryName: "previousKpis",
+        templateName: "previous-kpis",
+        params: {
+          timeStart: toKqlDatetime(prevRange.start),
+          timeEnd: toKqlDatetime(prevRange.end),
+          tableName,
+          userIdExpr: userIdExpr || mappingExpressions.userId.anonymous,
+          sessionIdExpr: sessionExpr,
+        },
+        allowedValues: {
+          tableName: ["pageViews", "requests"],
+          ...allowedExpr,
+        },
+        timeRangeKey: prevRange.key,
+        mappingVersion: mapping.version,
+        ttlMs: cacheTtlMs,
+        azureClient,
+      })
+    : emptyResult;
+  if (prevRange) queryProgress("Comparing to previous period");
+
   // --- Process results ---
 
   const uniqueRows = toRows(uniqueVisitorsResult);
@@ -627,13 +681,32 @@ export async function buildOverviewDashboard({
 
   const totalGeo = geoRows.reduce((sum, row) => sum + (row.count || 0), 0);
 
+  const prevRows = toRows(previousKpisResult);
+  const prevUniqueVisitors = toSingleValue(prevRows, "uniqueVisitors");
+  const prevSessions = toSingleValue(prevRows, "sessions");
+  const prevPageViews = toSingleValue(prevRows, "pageViews");
+  const currentPageViews = dailyTrendRows.reduce((sum, r) => sum + (Number(r.pageViews) || 0), 0);
+  const currentVisitors = toSingleValue(uniqueRows, "uniqueVisitors");
+  const currentSessions = toSingleValue(sessionRows, "sessions");
+
+  const comparison = prevRange
+    ? {
+        previousRangeKey: prevRange.key,
+        label: comparisonLabel(timeRange.key),
+        uniqueVisitors: deltaEntry(currentVisitors, prevUniqueVisitors),
+        sessions: deltaEntry(currentSessions, prevSessions),
+        pageViews: deltaEntry(currentPageViews, prevPageViews),
+      }
+    : null;
+
   const result = {
     kpis: {
-      uniqueVisitors: toSingleValue(uniqueRows, "uniqueVisitors"),
-      sessions: toSingleValue(sessionRows, "sessions"),
+      uniqueVisitors: currentVisitors,
+      sessions: currentSessions,
       avgResponseTimeMs: Number(toSingleValue(perfRows, "avgDuration")) || 0,
       p95ResponseTimeMs: Number(toSingleValue(perfRows, "p95Duration")) || 0,
       errorRate: Number(toSingleValue(perfRows, "errorRate")) || 0,
+      comparison,
     },
     charts: {
       dailyTrend: dailyTrendRows.map((row) => ({

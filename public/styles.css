@@ -1695,6 +1695,42 @@ body {
 }
 
 /* ========== Smart Insights ========== */
+.kpi-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.kpi-delta {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 999px;
+  line-height: 1.4;
+}
+
+.kpi-delta[data-direction="up"] {
+  color: #047857;
+  background: rgba(5, 150, 105, 0.10);
+}
+
+.kpi-delta[data-direction="down"] {
+  color: #b91c1c;
+  background: rgba(220, 38, 38, 0.10);
+}
+
+.kpi-delta[data-direction="neutral"] {
+  color: var(--text-secondary, #6b7280);
+  background: rgba(107, 114, 128, 0.10);
+}
+
+.kpi-compare {
+  font-size: 11px;
+  color: var(--text-secondary, #6b7280);
+}
+
 .first-run-banner {
   display: flex;
   align-items: center;
