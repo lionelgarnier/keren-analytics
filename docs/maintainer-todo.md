@@ -166,7 +166,28 @@ action are yours.
 
 ### A3 — Hero GIF / video for README
 - **What**: ≤ 15s screencast of the 2-minute setup → dashboard flow.
+  README has a placeholder block (HTML comment) right under the tagline
+  that should be replaced with `![hero](docs/assets/hero.gif)` once the
+  asset lands. Same screencast doubles as the LinkedIn / Twitter /
+  Show HN preview.
 - **Status**: TODO. Needs Lionel to record from a real session.
+
+### Inline screenshots in the README
+- **What**: the "What's inside" bullet list in `README.md` has an HTML
+  comment marking where one image per group would let the section
+  breathe. Suggested shots: (1) Marketing tab with the narration panel
+  + first-run banner + delta chips visible; (2) Readiness tab showing
+  the 0–100 score + a couple of expanded prompt cards; (3) Technical
+  tab with slow-endpoints table.
+- **Status**: TODO. Pair with the press-kit work.
+
+### Demo URL substitution
+- **What**: README "Live demo" line currently says "_coming with the
+  public launch — see docs/maintainer-todo.md_". Once A1 (demo URL
+  stand-up) ships, replace that line with the real URL. Update the
+  GitHub repo's "Website" field at the same time
+  (Settings § GitHub repo polish).
+- **Status**: TODO.
 
 ---
 

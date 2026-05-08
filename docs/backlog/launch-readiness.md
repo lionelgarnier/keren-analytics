@@ -27,7 +27,7 @@
 - Health check + uptime monitoring (free tier of UptimeRobot or
   BetterStack).
 
-### A2. Root README rewrite [BLOCKER, 6h]
+### A2. Root README rewrite [BLOCKER, 6h] — DONE (asset placeholders await A3 / A1)
 The current README is informative but reads like docs, not like a pitch.
 Rewrite around this structure:
 1. **One-line tagline** that includes "Azure" + "AI" + a number.
@@ -44,6 +44,33 @@ Rewrite around this structure:
 9. **Contributing** + license + ⭐ ask.
 
 The first screen of the README determines 70% of stargazers vs. bouncers.
+
+- **Shipped:** README rewritten end to end. Tagline as suggested
+  ("Turn Azure App Insights into shareable Marketing & Technical
+  dashboards in under 2 minutes — AI-mapped schema, deterministic KQL,
+  nothing raw ever leaves your tenant. MIT."). All 9 sections in
+  order; the "What's inside" list highlights the just-shipped B1-B4
+  surfaces (alias/regex schema mapping, narration panel, first-run
+  banner, period-over-period chips) so a HN visitor can see the
+  product is real, not slideware. Comparison table includes Azure
+  Portal / Datadog / Power BI with a one-line honesty disclaimer
+  underneath ("the columns we're least kind to are also the most
+  mature and have features we don't"). Privacy & security paragraph
+  links the SECURITY.md auditable controls and the seven encoded
+  checks. Roadmap links the per-track backlog and the
+  launch-strategy traction-gate doc. The old "API endpoints" + "Env
+  variables" wall-of-text trimmed to a short Configuration reference
+  pointing at `src/server.js` for the full surface.
+- **Asset placeholders:** the hero GIF block is an HTML comment
+  pointing at `docs/assets/hero.gif` — needs A3. The "What's inside"
+  bullet list has a sibling HTML comment marking where one screenshot
+  per group would let it breathe. The "Live demo · _coming with the
+  public launch_" line waits on A1 for the real URL. All three are
+  now tracked in `docs/maintainer-todo.md` as discrete TODOs so the
+  maintainer can swap them in without spelunking.
+- **Validation:** README renders cleanly (Markdown only, no broken
+  links to the existing tracked files). Tests still 74/74 — README
+  changes are pure-doc and don't touch any code path.
 
 ### A3. Hero GIF / Loom recording [BLOCKER, 4h]
 - 30-45 second screen recording: connect → dashboard renders → switch tabs →

@@ -11,6 +11,25 @@ Pre-launch sprint work that has landed on `main` since v0.1.0 — see
 for the per-track status.
 
 ### Added
+- README rewritten as a launch-pitch (one-line tagline, why-it-exists,
+  try-it-now, what's-inside, comparison table, privacy/security
+  trust paragraph, roadmap, configuration reference, contributing,
+  ⭐ ask). Old docs-style sections (full env list, full API list)
+  trimmed to a short reference block linking to source.
+- Period-over-period comparison on the top 3 KPI tiles (Unique
+  Visitors, Sessions, Page Views) with green/red/neutral delta chip +
+  "vs last week" caption. New `kql/previous-kpis.kql` template; new
+  `previousTimeRange()` and `comparisonLabel()` helpers in
+  `core/timeRange.js`.
+- First-run banner above the tab bar that shows the readiness score
+  + top 2 quick wins as clickable chips; click switches to the
+  Readiness tab and scrolls to the matching signal row.
+  `localStorage`-persisted dismissal.
+- "Environment analysis" panel above the KPI grid — deterministic
+  AI-style narration generated from the dashboard payload (visitors,
+  sessions, top campaign, peak hour, error-rate band, userId mapping
+  type). Mock mode: no badge. Real mode: "Preview — real LLM coming
+  soon" badge (the same generator runs in both modes; no fabrication).
 - `LICENSE` (MIT) and `package.json` license metadata.
 - `CONTRIBUTING.md` short guide that points at `CLAUDE.md` for invariants.
 - `CODE_OF_CONDUCT.md` adopting Contributor Covenant 2.1 by URL reference.
