@@ -248,11 +248,23 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
 
 ## Track E — Anti-fragility for launch day
 
-### E1. Demo rate limiting [BLOCKER, 3h]
+### E1. Demo rate limiting [BLOCKER, 3h] — DONE (LLM cap deferred with B2)
 - Per-IP rate limit on the demo (60 req/min hard cap).
 - Friendly "high traffic, try in a few minutes" page rather than 502/504.
 - Hard daily cap on LLM cost (when B2 ships): cut over to canned responses
   past €10/day on the demo.
+- **Shipped:** `src/core/rateLimit.js` — minimal in-memory fixed-window
+  per-IP limiter, no new dep (CLAUDE.md mandates a minimal dep set, demo
+  is single-instance). Wired in `src/server.js` as two named buckets:
+  `api` (60 req/min, all dynamic routes) and `auth` (stricter 20 req/min,
+  on `/auth/*` so OAuth burning can't also DoS the dashboard). Both
+  bypass `NODE_ENV=test`. Friendly 429 page (HTML or JSON depending on
+  `Accept`) plus `Retry-After`, `X-RateLimit-Limit`, and
+  `X-RateLimit-Remaining` headers. +8 unit tests.
+- **Deferred (with B2):** the daily LLM cost cap. Lives in the same file
+  when the mock-LLM narration ships — needs a separate counter keyed by
+  day and a kill-switch flipping the demo to canned responses past the
+  cap. No mock-LLM = nothing to cap yet.
 
 ### E2. Pre-warm + cache [STRONG, 2h]
 - Pre-cache the mock dashboard for the demo dataset.
