@@ -73,15 +73,10 @@ patterns that depend on them being unaddressed.
 
 - **No CSRF token** — relies on `sameSite=lax` cookies. Acceptable for the
   current API surface (no state-changing POSTs from third-party origins).
-- **No API rate limiting** — `[BLOCKER E1]` in the launch-readiness sprint;
-  ships before the public demo URL.
 - **CDN supply-chain trust** — Leaflet (`unpkg.com`), Chart.js
   (`cdn.jsdelivr.net`), and OpenStreetMap tiles are loaded from public CDNs.
   Acceptable for the OSS-first launch; a self-hosted-assets variant is
   tracked for Phase 3.
-- **Default `SESSION_SECRET` fallback** — `src/config.js` falls back to
-  `dev-secret-change-me` with a console warning instead of failing loud
-  outside `NODE_ENV=test`. Tightening this is on the launch-readiness list.
 
 ## Adding a new check
 
