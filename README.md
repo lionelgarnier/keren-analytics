@@ -44,6 +44,16 @@ account at all.
 For real Azure mode, see [Setup: Entra ID](docs/setup-entra-id.md). Three
 commands and one `.env` file.
 
+> **Heads-up — the setup above is for *the host* only, done once.**
+> Your end users (colleagues, customers, public-demo visitors) do **not**
+> register their own Azure app, do **not** create a client secret, and
+> do **not** manage permissions. They click *"Connect your Azure"* on
+> the landing page and sign in with their normal Microsoft account —
+> same flow as Slack / Loom / Notion. The token Easy Analytics receives
+> is *delegated*, so the app reads only what the user already had access
+> to. Tenant admins may see a one-time consent screen the first time
+> someone from their org signs in; that's a single click.
+
 ## What's inside
 
 <!--

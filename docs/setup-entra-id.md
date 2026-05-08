@@ -1,9 +1,41 @@
 # Setting Up Entra ID (Azure AD) for Easy Analytics
 
-This guide walks you through registering an app in Microsoft Entra ID so that
-Easy Analytics can authenticate users via SSO and query their Azure telemetry.
+> **Who is this guide for?**
+> The **operator** — the person hosting Easy Analytics on a server (you,
+> running it on Render / a VM / Docker on a NAS / your laptop). You do
+> this **once for the whole instance**, not once per user.
+>
+> If you are an **end user** opening Easy Analytics in your browser
+> (the public demo URL or a colleague's hosted instance), you do **not**
+> need any of this. Just click *"Connect your Azure"* and sign in with
+> your normal Microsoft account. The first sign-in from your tenant may
+> show a one-time consent screen ("This app wants to read your Azure
+> resources on your behalf"); a single click and you're in. If your
+> tenant restricts user-consent, an admin needs to consent once for the
+> whole org — same UX as Slack, Loom, Notion.
 
-## Quick start (recommended)
+This guide walks you, the operator, through registering an app in
+Microsoft Entra ID so that Easy Analytics can authenticate users via
+SSO and query their Azure telemetry on their behalf.
+
+## What end users see (no setup required)
+
+```
+Visitor opens https://<your-host>/
+  → clicks "Connect your Azure"
+  → redirected to login.microsoftonline.com
+  → signs in (whatever auth their org uses — password, MFA, Windows Hello)
+  → consent screen the first time (one click)
+  → returned to Easy Analytics
+  → discovers their Application Insights resources, sees their dashboard
+```
+
+That's it. No app to register on their side, no secret to manage, no
+permission to configure. The token issued is **delegated** — Easy
+Analytics acts on the user's behalf with the permissions they already
+have, never with elevated rights.
+
+## Quick start (operator, recommended)
 
 Three commands instead of seven portal clicks. Requires the Azure CLI and a
 recent `az login`.
@@ -29,13 +61,14 @@ Notably it does NOT grant admin consent and does NOT assign the per-user RBAC
 roles; those still live on the IAM blade ([Step 6](#step-6-assign-azure-rbac-roles)
 below).
 
-## Manual setup (fallback)
+## Manual setup (operator fallback)
 
 Use this section if you cannot run the Azure CLI, or if your tenant requires
 clicks to be performed by a different role than the one the script is running
 under.
 
-**Time required:** 5-10 minutes.
+**Time required:** 5-10 minutes. **You do this once for the whole hosted
+instance.** Your end users never see this page.
 
 ### Prerequisites
 
@@ -102,14 +135,24 @@ SESSION_SECRET=<a-random-secure-string>
 - Change to a specific tenant ID to restrict access to your organization only
 - For production, set `AZURE_REDIRECT_URI` to your public URL
 
-## Step 6: Assign Azure RBAC Roles
+## Step 6: RBAC roles (per end user, one time per user)
 
-The signed-in user needs these Azure roles to use Easy Analytics:
+The Entra ID app registration above lets users *sign in*. Whether each
+signed-in user can actually see data is governed by **Azure RBAC roles
+on their own subscription/workspace** — not by the app registration.
+
+The signed-in user needs these roles on the Azure resources they want
+to analyze:
 
 | Role | Scope | Why |
 |------|-------|-----|
 | **Reader** | Subscription | To discover App Insights resources |
 | **Log Analytics Reader** | Workspace | To run KQL queries on telemetry data |
+
+In a typical engagement most engineers and PMs already have Reader on
+their team's subscription, so step 6 is a no-op for them. New users
+who only had Contributor on a single resource may need the workspace
+Reader role granted.
 
 To assign roles:
 1. Go to the Azure Portal
