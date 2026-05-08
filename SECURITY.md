@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 Please report security issues privately rather than opening a public GitHub
-issue. Email **lionel.garnier@protonmail.com** with:
+issue. Email **garniel6@gmail.com** with:
 
 - A description of the issue and its impact.
 - Steps to reproduce (or a proof of concept).

@@ -18,8 +18,8 @@
     "url": "git+https://github.com/lionelgarnier/easy-analytics-for-azure.git"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "Lionel Garnier <garniel6@gmail.com>",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/lionelgarnier/easy-analytics-for-azure/issues"
   },
