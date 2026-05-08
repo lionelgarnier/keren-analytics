@@ -178,7 +178,7 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
   → 8.4.2 and `qs` 6.14.1 → 6.15.1 via `npm audit fix` (no breaking
   changes, tests still 43/43).
 
-### C2. GitHub repo polish [BLOCKER, 3h]
+### C2. GitHub repo polish [BLOCKER, 3h] — DONE (file-tracked items; Settings-side items remain manual)
 - About / topics / website URL / description filled in.
 - Issue templates (bug, feature request, question) in `.github/`.
 - `CONTRIBUTING.md` (short — link to docs).
@@ -187,6 +187,30 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
 - Pin the v0.1.0 release with proper notes.
 - Add badges: license, CI status (if CI is set up — see C3), Docker pull
   count.
+- **Shipped:** `LICENSE` (MIT, copyright Lionel Garnier and contributors)
+  with `package.json` aligned (`"license": "MIT"`, author populated).
+  `CONTRIBUTING.md` is short and points at `CLAUDE.md` for invariants and
+  at the per-track backlog for what's deliberately deferred.
+  `CODE_OF_CONDUCT.md` adopts Contributor Covenant 2.1 by URL reference
+  (avoids inlining the canonical text; reporting goes to the same email
+  as `SECURITY.md`). `.github/ISSUE_TEMPLATE/` ships three structured
+  forms (bug / feature / question) plus `config.yml` that disables blank
+  issues and surfaces the security reporting path. A short
+  `.github/PULL_REQUEST_TEMPLATE.md` reminds contributors to read
+  `CLAUDE.md` and run `npm test` + `npm run audit:security`. README
+  gains license + Node-version badges next to the existing security
+  badge. `SECURITY.md` updated with the real contact email and the
+  closed-as-fixed gaps removed (`SESSION_SECRET` fail-loud + rate
+  limiting). One adjacent fix carried in flight: `src/config.js` now
+  throws when `NODE_ENV=production` and `SESSION_SECRET` is missing or
+  a known placeholder, with 5 new tests in `tests/config.test.js`.
+- **Deferred (Settings-side, not file-tracked):** About / topics /
+  website URL / description on the GitHub repo page; pinning the
+  v0.1.0 release. These need the maintainer to click through GitHub
+  Settings; nothing to commit.
+- **Deferred (depends on other tracks):** the Docker-pull-count badge
+  needs a published Docker image (Track A6 territory); the CI-status
+  badge needs the `npm test` workflow from C3.
 
 ### C3. Minimal CI [STRONG, 3h]
 - GitHub Actions: run `npm install` + `npm test` on push and PR.

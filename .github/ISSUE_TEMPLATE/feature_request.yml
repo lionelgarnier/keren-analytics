@@ -1,0 +1,52 @@
+name: Feature request
+description: Suggest a new capability or an improvement to an existing one.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion. The project deliberately keeps a narrow
+        scope (see [`docs/launch-strategy.md`](../../blob/main/docs/launch-strategy.md)
+        and the per-track files under [`docs/backlog/`](../../blob/main/docs/backlog/));
+        please skim those first so we can have an informed conversation.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe the user pain, not the proposed solution.
+      placeholder: "I can't tell which pages of my SPA drove the most signups last week."
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: One paragraph. Sketch a UI / API surface if helpful.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds today, off-the-shelf tools, related issues.
+  - type: dropdown
+    id: audience
+    attributes:
+      label: Primary audience
+      options:
+        - Marketing / Growth view
+        - Technical / Reliability view
+        - Readiness / Setup
+        - Plumbing (KQL, mapping, OAuth)
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: I read [`docs/launch-strategy.md`](../../blob/main/docs/launch-strategy.md) and this is not explicitly out of scope.
+          required: true
+        - label: This is not better filed as a multi-tenant / persistence (Phase 3) or multi-cloud (Phase 4) request.
+          required: true

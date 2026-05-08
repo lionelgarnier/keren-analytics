@@ -1,0 +1,81 @@
+name: Bug report
+description: Something is broken or behaving differently than documented.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. The more reproducible the
+        report, the faster a fix lands.
+
+        **Security issues**: please do *not* file a public bug. See
+        [SECURITY.md](../../blob/main/SECURITY.md) for the private path.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the unexpected behavior.
+      placeholder: "When I open /dashboard with the demo dataset, the map renders empty."
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps a stranger could follow on a clean clone.
+      placeholder: |
+        1. `git clone …`
+        2. `npm install`
+        3. `npm run dev`
+        4. Open http://localhost:3000 …
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode
+      options:
+        - mock (default)
+        - real (Azure)
+        - both / not sure
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      description: Output of `git rev-parse --short HEAD` or the release tag.
+      placeholder: "v0.1.0 or 5878656"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Node version, OS, and browser if frontend-related.
+      placeholder: "Node 22.5.1, macOS 14.5, Chrome 126"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs / screenshots
+      description: |
+        Please scrub access tokens, refresh tokens, `code_verifier`, session
+        cookies, and `AZURE_CLIENT_SECRET` before pasting.
+      render: shell
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I searched [existing issues](../) for duplicates.
+          required: true
+        - label: I removed any tokens / secrets from logs.
+          required: true

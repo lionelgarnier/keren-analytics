@@ -1,6 +1,8 @@
 # Easy Analytics
 
 [![Security audit](https://github.com/lionelgarnier/easy-analytics-for-azure/actions/workflows/security-audit.yml/badge.svg?branch=main)](https://github.com/lionelgarnier/easy-analytics-for-azure/actions/workflows/security-audit.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Node 22+](https://img.shields.io/badge/node-%3E%3D22-brightgreen.svg)](package.json)
 
 Plug-and-play analytics platform that transforms existing cloud telemetry into
 actionable dashboards in under 2 minutes. Starting with Azure Application Insights,
