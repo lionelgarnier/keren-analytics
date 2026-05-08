@@ -70,7 +70,7 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
 - No tracking beyond Plausible/Umami self-hosted (privacy-aligned with
   product positioning).
 
-### A6. `docs/setup-entra-id.md` slim version [BLOCKER, 4h]
+### A6. `docs/setup-entra-id.md` slim version [BLOCKER, 4h] — DONE
 - Today: 13 manual portal steps. Hard wall for non-IT users.
 - Goal: 3-5 steps OR one Bicep one-click.
 - Ship a `deploy/azure-app-registration.bicep` that creates the app
@@ -83,6 +83,14 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
   docker run -p 3000:3000 -e AZURE_CLIENT_ID=... easy-analytics
   ```
 - Keep the long manual guide as a fallback section.
+- **Shipped:** went with a single bash script (`deploy/azure-app-registration.sh`)
+  rather than Bicep — the Microsoft.Graph Bicep extension can't surface a
+  client-secret value, so a pure-IaC path would still need an out-of-band
+  step. The script is idempotent (re-runs reuse the app and append a fresh
+  secret), GNU/BSD-portable, and prints the exact env vars to paste. README
+  install path now reads `az login` → run script → `docker compose up -d`.
+  `docs/setup-entra-id.md` keeps the manual portal flow as a fallback for
+  tenants where CLI app-registration is restricted.
 
 ## Track B — Product polish (what they see after they install)
 

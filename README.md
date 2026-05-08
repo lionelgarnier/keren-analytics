@@ -32,18 +32,27 @@ Open http://localhost:3000. For real Azure mode, create a `.env` file from
 
 ## Real Azure mode
 
-See `docs/setup-entra-id.md` for the full step-by-step guide.
+Three commands to provision the Entra ID app registration + secret + delegated
+permission, then start Easy Analytics:
 
-Quick start with a CLI token:
+```bash
+az login
+./deploy/azure-app-registration.sh --redirect-uri http://localhost:3000/auth/callback
+# Paste the printed env vars into .env, then:
+docker compose up -d
+```
+
+The script is idempotent and works on Linux + macOS. Full details and a
+manual portal-click fallback live in `docs/setup-entra-id.md`.
+
+If you already have an access token (e.g. from CI), you can skip the app
+registration entirely:
 
 ```bash
 export AZURE_MODE=real
 export AZURE_ACCESS_TOKEN="$(az account get-access-token --resource=https://management.azure.com --query accessToken -o tsv)"
 npm run dev
 ```
-
-For browser-based SSO (recommended), register an Entra ID app and configure
-`AZURE_CLIENT_ID` and `AZURE_CLIENT_SECRET` in `.env`.
 
 Requirements:
 - **Reader** on the subscription (resource discovery)

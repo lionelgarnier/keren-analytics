@@ -3,9 +3,41 @@
 This guide walks you through registering an app in Microsoft Entra ID so that
 Easy Analytics can authenticate users via SSO and query their Azure telemetry.
 
-**Time required:** 5-10 minutes
+## Quick start (recommended)
 
-## Prerequisites
+Three commands instead of seven portal clicks. Requires the Azure CLI and a
+recent `az login`.
+
+```bash
+# 1. Sign in to the tenant where you want the app registration to live.
+az login
+
+# 2. Provision the app registration + secret + delegated permission.
+./deploy/azure-app-registration.sh \
+  --redirect-uri http://localhost:3000/auth/callback
+
+# 3. Copy the printed env vars into .env, then start Easy Analytics.
+docker compose up -d
+```
+
+The script is idempotent: re-runs reuse the existing app registration and
+append a fresh secret. Pass `--display-name` or `--secret-years` to customize.
+
+What it does and does NOT do is documented at the top of
+[`deploy/azure-app-registration.sh`](../deploy/azure-app-registration.sh).
+Notably it does NOT grant admin consent and does NOT assign the per-user RBAC
+roles; those still live on the IAM blade ([Step 6](#step-6-assign-azure-rbac-roles)
+below).
+
+## Manual setup (fallback)
+
+Use this section if you cannot run the Azure CLI, or if your tenant requires
+clicks to be performed by a different role than the one the script is running
+under.
+
+**Time required:** 5-10 minutes.
+
+### Prerequisites
 
 - An Azure account with access to Entra ID (Azure Active Directory)
 - Admin consent rights (or an admin who can grant consent)
