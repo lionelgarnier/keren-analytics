@@ -35,51 +35,187 @@
       <!-- ========== Landing page (shown before login) ========== -->
       <section id="landingPage" class="hidden">
         <div class="landing-hero">
-          <h2 class="landing-title">Your cloud telemetry,<br>transformed into insights</h2>
-          <p class="landing-subtitle">Connect your Azure tenant and get a complete analytics dashboard in under 2 minutes. No agent to deploy, no data stored, no KQL to write.</p>
+          <h2 class="landing-title">Azure App Insights → Marketing &amp; Technical dashboards in 2 minutes.</h2>
+          <p class="landing-subtitle">AI-mapped schema. 22 KQL templates. Nothing raw ever leaves your tenant. MIT.</p>
           <div class="landing-actions">
-            <button id="landingConnectBtn" class="btn btn-primary btn-lg">Connect Azure</button>
-            <button id="landingPreviewBtn" class="btn btn-ghost btn-lg">See live preview</button>
+            <button id="landingPreviewBtn" class="btn btn-primary btn-lg">Try the demo</button>
+            <button id="landingConnectBtn" class="btn btn-ghost btn-lg">Connect your Azure</button>
+            <a class="btn btn-ghost btn-lg landing-star-btn" href="https://github.com/lionelgarnier/easy-analytics-for-azure" target="_blank" rel="noopener">★ Star on GitHub</a>
           </div>
+          <!--
+          HERO SCREENSHOT placeholder (A3 / A5 — see docs/maintainer-todo.md).
+          Drop into <img class="landing-hero-shot"> once available.
+          Suggested: Marketing tab with narration + first-run banner + delta chips visible.
+          -->
         </div>
+
         <div class="landing-features">
           <div class="landing-card">
             <div class="landing-card-icon">M</div>
             <h3>Marketing Analytics</h3>
-            <p>Visitors, sessions, top pages, geo distribution, navigation paths, browser and device breakdown.</p>
+            <p>Visitors, sessions, top pages, geo distribution, navigation paths, browser and device breakdown — with period-over-period delta chips.</p>
           </div>
           <div class="landing-card">
             <div class="landing-card-icon">T</div>
             <h3>Technical Monitoring</h3>
-            <p>Response times, error rates, slow endpoints, frontend performance -- all from existing telemetry.</p>
+            <p>Response time percentiles, error rates, slow endpoints, frontend perf — all from existing telemetry, no agent to deploy.</p>
           </div>
           <div class="landing-card">
             <div class="landing-card-icon">R</div>
             <h3>Smart Readiness</h3>
-            <p>Readiness score, signal breakdown, and AI-ready prompts to improve your telemetry coverage.</p>
+            <p>0–100 readiness score, signal breakdown, and AI-ready prompts you can paste into Cursor or Copilot to fill the gaps.</p>
           </div>
         </div>
+
+        <div class="landing-section landing-compare">
+          <h3 class="landing-section-title">How it compares</h3>
+          <div class="landing-compare-table-wrap">
+            <table class="landing-compare-table">
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Easy Analytics</th>
+                  <th>Azure Portal</th>
+                  <th>Datadog</th>
+                  <th>Power BI</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row">Time to first dashboard</th>
+                  <td class="cell-strong">~2 min (Docker)</td>
+                  <td>30+ min (write KQL)</td>
+                  <td>1–2h (agent + setup)</td>
+                  <td>Hours (data prep)</td>
+                </tr>
+                <tr>
+                  <th scope="row">Marketing vs Technical separation</th>
+                  <td class="cell-strong">Built-in</td>
+                  <td>Manual workbook</td>
+                  <td>Add-on</td>
+                  <td>Manual report</td>
+                </tr>
+                <tr>
+                  <th scope="row">Readiness scoring + AI prompts</th>
+                  <td class="cell-strong">0–100, LLM-ready</td>
+                  <td>—</td>
+                  <td>Limited</td>
+                  <td>—</td>
+                </tr>
+                <tr>
+                  <th scope="row">Custom-dimension auto-mapping</th>
+                  <td class="cell-strong">Alias + regex (LLM optional)</td>
+                  <td>Manual</td>
+                  <td>Manual</td>
+                  <td>Manual</td>
+                </tr>
+                <tr>
+                  <th scope="row">Data residency</th>
+                  <td class="cell-strong">No raw data leaves your tenant</td>
+                  <td>Native</td>
+                  <td>New endpoint</td>
+                  <td>New endpoint</td>
+                </tr>
+                <tr>
+                  <th scope="row">License / cost</th>
+                  <td class="cell-strong">MIT, free</td>
+                  <td>Included w/ Azure</td>
+                  <td>Per-host $$$</td>
+                  <td>Per-user $$</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="landing-compare-disclaimer">
+            Launch-time positions; the gaps narrow as each tool evolves. The
+            columns we're least kind to (Datadog, Power BI) are also the most
+            mature and have features we don't.
+          </p>
+        </div>
+
+        <div class="landing-section landing-security">
+          <h3 class="landing-section-title">Privacy &amp; security</h3>
+          <p>
+            User telemetry rows never leave your Azure tenant via this
+            service. Only <strong>aggregated metrics</strong> (counts,
+            percentiles, geo / browser distributions, top-N pages) and
+            <strong>setup metadata</strong> (mapping, schema profile, dashboard
+            payload) ever cross the wire.
+          </p>
+          <p>
+            That promise is encoded as automated checks in
+            <a href="https://github.com/lionelgarnier/easy-analytics-for-azure/blob/main/scripts/security-audit.mjs" target="_blank" rel="noopener"><code>scripts/security-audit.mjs</code></a>.
+            Seven controls run on every push &amp; PR plus a Monday cron —
+            sensitive-data logging, session-cookie hardening, CSP purity,
+            no-raw-telemetry-persistence, committed env-files placeholder,
+            <code>npm audit</code> high+. Production refuses to boot without a
+            real <code>SESSION_SECRET</code>; per-IP rate limiting protects the
+            public demo. See the
+            <a href="https://github.com/lionelgarnier/easy-analytics-for-azure/blob/main/SECURITY.md" target="_blank" rel="noopener">security policy</a>
+            for the auditable controls and the private reporting path.
+          </p>
+        </div>
+
+        <div class="landing-section landing-faq">
+          <h3 class="landing-section-title">FAQ</h3>
+          <details>
+            <summary>Does it store my telemetry data?</summary>
+            <p>
+              No raw rows. Only aggregated metrics and setup metadata
+              (mapping, dashboard payload). Two filesystem sinks exist on the
+              server, both documented in <code>SECURITY.md</code>; any other
+              <code>fs.write</code> in <code>src/</code> fails the security
+              audit.
+            </p>
+          </details>
+          <details>
+            <summary>How does it connect to Azure?</summary>
+            <p>
+              OAuth (PKCE) against Entra ID. You sign in once, the service
+              exchanges the code for a delegated token, and queries run with
+              <em>your</em> permissions — Reader on the subscription, Log
+              Analytics Reader on the workspace. No client secret to manage on
+              your side. Full setup in
+              <a href="https://github.com/lionelgarnier/easy-analytics-for-azure/blob/main/docs/setup-entra-id.md" target="_blank" rel="noopener">docs/setup-entra-id.md</a>.
+            </p>
+          </details>
+          <details>
+            <summary>Is the AI part required?</summary>
+            <p>
+              No. The launch ships with deterministic schema mapping (alias
+              table + regex patterns covering ~80% of real-world naming) and
+              a deterministic "Environment analysis" panel that reads from the
+              dashboard payload. Real Azure OpenAI integration is an opt-in
+              post-launch layer — the dashboard works fully without it.
+            </p>
+          </details>
+        </div>
+
         <div class="landing-docs-link">
-          <a href="/docs">Read the documentation</a> -- setup guides, campaign tracking, A/B tests, API reference
+          <a href="/docs">Read the documentation</a> — setup guides, campaign tracking, A/B tests, API reference
         </div>
-        <div class="landing-trust">
-          <div class="trust-item">
-            <strong>Zero data storage</strong>
-            <span>Your data stays in your Azure tenant</span>
+
+        <footer class="landing-footer">
+          <div class="landing-footer-links">
+            <a href="https://github.com/lionelgarnier/easy-analytics-for-azure" target="_blank" rel="noopener">GitHub</a>
+            <span class="landing-footer-sep">·</span>
+            <a href="https://github.com/lionelgarnier/easy-analytics-for-azure/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
+            <span class="landing-footer-sep">·</span>
+            <a href="https://github.com/lionelgarnier/easy-analytics-for-azure/blob/main/SECURITY.md" target="_blank" rel="noopener">Security</a>
+            <span class="landing-footer-sep">·</span>
+            <a href="mailto:garniel6@gmail.com">Contact</a>
           </div>
-          <div class="trust-item">
-            <strong>SSO via Azure AD</strong>
-            <span>One-click sign-in, no forms</span>
+          <div class="landing-footer-meta">
+            Easy Analytics — © Lionel Garnier and contributors. No tracking
+            cookies; the only analytics on this page is whatever Plausible /
+            Umami snippet the operator pastes in (none by default).
           </div>
-          <div class="trust-item">
-            <strong>Dashboard in 2 min</strong>
-            <span>Auto-discovery, zero configuration</span>
-          </div>
-          <div class="trust-item">
-            <strong>Multi-cloud ready</strong>
-            <span>Azure first, AWS and GCP planned</span>
-          </div>
-        </div>
+        </footer>
+        <!--
+        Plausible / Umami snippet slot (D5 — see docs/maintainer-todo.md).
+        When the launch-day analytics ship, paste the script tag right here,
+        not site-wide. Privacy stays the headline.
+        -->
       </section>
 
       <!-- Preview mode banner -->

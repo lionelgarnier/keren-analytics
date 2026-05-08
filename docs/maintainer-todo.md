@@ -92,6 +92,10 @@ These need a human to click through `Settings` on
 - **How**: self-host Umami on the same Render account, or use Plausible
   Cloud (€9/mo). Embed the script in the landing page only (not the
   dashboard — we don't want to phone home from the analytics product).
+  The landing page (`public/index.html`) has an HTML-comment slot near
+  the bottom of the `#landingPage` section marking where the snippet
+  goes; the footer copy already promises "no tracking by default" so
+  please don't add it site-wide.
 - **Status**: TODO. Blocked on D5.
 
 ### Domain registrar (note for the runbook)

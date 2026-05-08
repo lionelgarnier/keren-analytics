@@ -11,6 +11,12 @@ Pre-launch sprint work that has landed on `main` since v0.1.0 — see
 for the per-track status.
 
 ### Added
+- Landing page on `/` rewritten as a launch one-pager — tagline, three
+  CTAs (Try the demo / Connect your Azure / ★ Star on GitHub),
+  comparison table (Easy Analytics vs Azure Portal / Datadog / Power
+  BI), security trust paragraph, 3-question FAQ, and a privacy-clean
+  footer (no tracking by default; explicit Plausible/Umami slot for
+  the operator).
 - README rewritten as a launch-pitch (one-line tagline, why-it-exists,
   try-it-now, what's-inside, comparison table, privacy/security
   trust paragraph, roadmap, configuration reference, contributing,

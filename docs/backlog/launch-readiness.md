@@ -88,7 +88,7 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
 - Every share link must visually look like a real product, not a GitHub
   fallback card.
 
-### A5. One-page landing on the demo URL [STRONG, 5h]
+### A5. One-page landing on the demo URL [STRONG, 5h] — DONE (hero shot + Plausible await maintainer)
 - Above the fold: tagline + screenshot + two CTAs ("Try the demo",
   "Star on GitHub").
 - Below: comparison table, security paragraph, FAQ (3 questions: "does it
@@ -96,6 +96,35 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
 - Footer: GitHub link, license, contact email.
 - No tracking beyond Plausible/Umami self-hosted (privacy-aligned with
   product positioning).
+- **Shipped:** `public/index.html` `#landingPage` rewritten with the
+  spec's structure end to end. Tagline now matches the README
+  ("Azure App Insights → Marketing & Technical dashboards in 2
+  minutes. AI-mapped schema. 22 KQL templates. Nothing raw ever
+  leaves your tenant. MIT."). CTAs reordered so the demo button is
+  primary, Connect-Azure is ghost, and a third button links the repo
+  with a ★ icon. Below-the-fold sections, in order: feature cards
+  (lightly updated copy to mention period-over-period chips and the
+  paste-into-Cursor framing), comparison table (Easy Analytics vs
+  Azure Portal / Datadog / Power BI; 6 rows; honesty disclaimer
+  underneath), security paragraph (links the seven encoded controls
+  + the SECURITY.md reporting path), 3-question FAQ (data storage /
+  Azure connection / AI required), docs link, and a footer with
+  GitHub / MIT License / Security / Contact. All sections styled in
+  `public/styles.css` using the existing accent palette so the page
+  works in both light and dark mode without a second pass.
+- **No new tracking:** the landing footer copy promises "no tracking
+  cookies; the only analytics is whatever Plausible / Umami snippet
+  the operator pastes in." An HTML-comment slot at the bottom of
+  `#landingPage` marks the exact insertion point so the snippet
+  doesn't leak into the dashboard. Tracked in
+  `docs/maintainer-todo.md` under §3 Plausible / Umami.
+- **Tests:** new supertest case in `tests/api.test.js` asserts the
+  landing copy is wired (tagline, CTAs, comparison table headers,
+  FAQ questions, footer email). 74 → 75 tests; security audit clean.
+- **Asset placeholders (maintainer-side):** the hero screenshot above
+  the fold is an HTML-comment block expecting `<img class="landing
+  -hero-shot">`; the Plausible/Umami slot is a similar comment near
+  the bottom. Both land in `docs/maintainer-todo.md`.
 
 ### A6. `docs/setup-entra-id.md` slim version [BLOCKER, 4h] — DONE
 - Today: 13 manual portal steps. Hard wall for non-IT users.
