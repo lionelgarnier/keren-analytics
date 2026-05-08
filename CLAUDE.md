@@ -9,8 +9,11 @@ Plug-and-play analytics dashboard that turns Azure Application Insights telemetr
 into Marketing / Technical / Readiness views in under 2 minutes. Zero agent
 deployment, zero raw data storage, KQL-only.
 
-Status: Phase 1 + Phase 2 DONE. Phase 3 (production hardening, persistence,
-multi-tenant) and Phase 4 (multi-cloud) are open. See `docs/backlog/`.
+Status: Phase 1 + Phase 2 DONE. **Pre-launch sprint** (OSS-first go-to-market,
+~80h, see `docs/backlog/launch-readiness.md`) is the next active workstream.
+Phase 3 (multi-tenant SaaS, persistence) and Phase 4 (multi-cloud) are
+**gated on traction signals** — do not start them speculatively. See
+`docs/launch-strategy.md` §3 for the gate criteria.
 
 ## Stack
 
@@ -112,11 +115,18 @@ If a task explicitly asks to harden one of these, do it. Otherwise leave alone.
 
 ## Docs to read before non-trivial work
 
+- **`docs/launch-strategy.md`** — go-to-market, traction gates, what's
+  in/out of scope for the pre-launch sprint (read this first if the work
+  touches the public surface)
+- `docs/backlog/launch-readiness.md` — pre-launch task list with effort
+  estimates and BLOCKER/STRONG/OPTIONAL flags
 - `docs/product.md` — product scope and audiences
 - `docs/technical.md` — architecture overview
 - `docs/architecture-auth.md` — auth flow, token handling
 - `docs/architecture-multicloud.md` — provider interface for Phase 3/4
 - `docs/backlog/phase-{1..4}.md` — what's done, what's planned, what's out of scope
+- `docs/backlog/adoption-drivers.md` — product features ranked by adoption ROI
+- `docs/backlog/ai-{setup-wizard,environment-analysis,natural-language-queries,instrumentation-assistant}.md` — AI surfaces
 - `docs/setup-entra-id.md` — real Azure mode setup
 
 ## Testing notes

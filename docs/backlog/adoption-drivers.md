@@ -12,6 +12,16 @@ technically-correct dashboard into a tool people actually share, return to,
 and pay for. This document captures those levers and the AI-first vision that
 binds them together.
 
+> **Sequencing note (OSS-first strategy).**
+> Per [`docs/launch-strategy.md`](../launch-strategy.md), most of this list
+> ships **post-launch, gated on traction**. The pre-launch sprint cherry-picks
+> a small subset (one comparison KPI tile + Layer 1 mapping intelligence)
+> because they are demo-visible and shape the launch narrative. The full list
+> below is the 90-day post-launch product roadmap, prioritized iteratively
+> based on what design partners actually ask for.
+> See [`launch-readiness.md`](launch-readiness.md) for what specifically
+> ships pre-launch.
+
 ## Top 5 — features with the highest adoption ROI
 
 ### 1. Period-over-period comparison + deployment markers
@@ -168,16 +178,34 @@ for those LLM moments.
 
 ## Recommended sequencing
 
-If only 2-3 features can ship before the Phase 3 infra work begins, prioritize:
+The original "ship 2-3 features before Phase 3" framing is **superseded** by
+the OSS-first launch strategy. The new sequencing is:
 
-1. **Period-over-period comparison + deployment markers** — small, high-value,
-   unlocks half the Tier 2 list.
-2. **Snapshot export + share links** — viral mechanic, also unlocks weekly
+### Pre-launch sprint (~80h, 2 weeks) — ship just enough to make the demo legible
+
+A trimmed subset of this backlog, defined precisely in
+[`launch-readiness.md`](launch-readiness.md):
+- Layer 1 of `ai-environment-analysis.md` (alias heuristics) — real value,
+  no LLM dependency.
+- Layer 2 mock-mode narration on the demo URL — sells the AI angle for
+  zero inference cost.
+- Period-over-period delta on the top 3 KPI tiles (not the full feature) —
+  small visual change, high marketing impact.
+- First-run banner — deterministic v1, LLM v2 post-launch.
+
+### Post-traction (after the gate in `launch-strategy.md` §3) — full versions
+
+Driven by what design partners and active users actually request. Likely
+order, subject to revision based on the 90-day signal:
+
+1. **Snapshot export + share links** — viral mechanic, unlocks weekly
    digest emails.
-3. **AI setup wizard (Layer 1 + Layer 2 of `ai-environment-analysis.md`)** —
-   sets the AI-first narrative and dramatically reduces time-to-first-value
-   for anyone whose telemetry uses non-standard naming.
+2. **Custom events / conversion funnels** — the Marketing tab's killer
+   feature; pairs with `ai-instrumentation-assistant.md`.
+3. **Full period-over-period comparison + deployment markers** — extends
+   the launch v1 tile delta to all charts.
+4. **Multi-resource aggregation** — unblocks mid-market.
+5. **Goals + weekly digest** — pairs with hosted offering.
 
-These three change the product's perception from "Azure portal alternative"
-to "AI-native analytics that anyone can share". The infra work in Phase 3
-then has a much stronger product to scale.
+Items 1-3 typically ship as part of the hosted SaaS launch (post-traction).
+Item 5 explicitly requires the hosting layer.
