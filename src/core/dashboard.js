@@ -228,7 +228,7 @@ export async function buildOverviewDashboard({
     progress(label, queryIndex / TOTAL_QUERIES);
     queryIndex++;
   }
-  const allowedExpr = allowedKqlExpressions();
+  const allowedExpr = allowedKqlExpressions(mapping);
   const pageTable = mapping.pageTable || (schemaProfile?.tables?.requests ? "requests" : "pageViews");
   const tableName = schemaProfile?.tables?.[pageTable] ? pageTable : "requests";
   const hasPageTable = schemaProfile?.tables?.pageViews || schemaProfile?.tables?.requests;
