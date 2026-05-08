@@ -86,7 +86,7 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
 
 ## Track B — Product polish (what they see after they install)
 
-### B1. Layer 1 of `ai-environment-analysis.md` (alias heuristics) [BLOCKER, 12h]
+### B1. Layer 1 of `ai-environment-analysis.md` (alias heuristics) [BLOCKER, 12h] — DONE
 - Implement the alias table + regex patterns for userId / sessionId /
   pagePath / referrer in `src/core/mapping.js`.
 - Add `matchType` field (`builtin` | `alias` | `pattern`) to mapping output.
@@ -95,6 +95,11 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
 - **Why it's a blocker:** the current mapping is exact-match-only. Half of
   HN visitors trying their own tenant will see "no userId mapping" because
   they used `uid` or `visitorId`. That's a launch-killing first impression.
+- **Shipped:** `ALIASES` table + regex per canonical field, cross-table
+  consistency boost (`confidence: high` on 2+ tables), `matchType` /
+  `matchedKey` / `tablesSeen` exposed on each canonical mapping, custom
+  keys sanitized before injection, `allowedKqlExpressions(mapping)`
+  extends the renderer whitelist with alias-derived exprs. +11 tests.
 
 ### B2. Layer 2 mock LLM narration on demo [STRONG, 8h]
 - On the demo URL only (mock mode), surface a "What we found" panel that
@@ -124,13 +129,21 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
 - One button on every dashboard tab.
 - HN demographic loves "screenshot for Slack" workflows. Cheap viral lever.
 
-### B6. Demo dataset polish [BLOCKER, 3h]
+### B6. Demo dataset polish [BLOCKER, 3h] — DONE
 - Audit `src/azure/mockData.js`: every chart on every tab must have a
   visually interesting story.
 - Ensure: visible weekly seasonality, one anomaly day, one slow endpoint,
   meaningful geo distribution, varied browser mix.
 - The demo is also the launch screenshot source — boring data = boring
   launch.
+- **Shipped:** visitor traffic spike 4 days ago (×2.4, deterministic so
+  it lands in both 7d and 30d windows, marked `anomaly: "traffic_spike"`),
+  `/api/checkout` is the unmistakable slow + error outlier (p99 ~6s, 8.2%
+  error rate), 12-country geo distribution with Spain/Italy added, browser
+  mix expanded to 6 entries (Mobile Safari + Samsung Internet) and OS to 5
+  (Android added), KPI sparklines have a clearer upward trend on
+  visitors/sessions and a subtle improving-perf trend on response time
+  alongside the existing trailing error spike, lunch dip on hourly trend.
 
 ## Track C — Trust signals (security + project quality)
 

@@ -72,7 +72,8 @@ function generateHourlyTrend() {
     const h = d.getUTCHours();
     const isActive = h >= 7 && h <= 22;
     const isPeak = (h >= 9 && h <= 12) || (h >= 14 && h <= 18);
-    const base = isPeak ? 14 : isActive ? 7 : 2;
+    const isLunchDip = h === 13;
+    const base = isLunchDip ? 9 : isPeak ? 14 : isActive ? 7 : 2;
     const visitors = vary(base, 25, rng);
     hours.push({
       period: d.toISOString(),
@@ -82,6 +83,12 @@ function generateHourlyTrend() {
   }
   return hours;
 }
+
+// Day of the launch spike inside the demo dataset. Placed 4 days ago so it
+// lands inside both the 7d and 30d windows and tells the same story
+// regardless of which range the visitor selects on first load.
+const ANOMALY_DAYS_AGO = 4;
+const ANOMALY_VISITORS_MULTIPLIER = 2.4;
 
 function generateDailyTrend(numDays) {
   const days = [];
@@ -94,12 +101,17 @@ function generateDailyTrend(numDays) {
     const dow = d.getUTCDay();
     const isWeekend = dow === 0 || dow === 6;
     const base = isWeekend ? 35 : 58;
-    const growth = Math.floor((numDays - 1 - i) * 0.5);
-    const visitors = vary(base + growth, 18, rng);
+    const growth = Math.floor((numDays - 1 - i) * 0.7);
+    const isAnomaly = i === ANOMALY_DAYS_AGO;
+    const rawBase = base + growth;
+    const visitors = isAnomaly
+      ? Math.round(rawBase * ANOMALY_VISITORS_MULTIPLIER)
+      : vary(rawBase, 18, rng);
     days.push({
       period: d.toISOString(),
       visitors,
-      pageViews: vary(visitors * 3, 12, rng),
+      pageViews: isAnomaly ? Math.round(visitors * 3.4) : vary(visitors * 3, 12, rng),
+      anomaly: isAnomaly ? "traffic_spike" : undefined,
     });
   }
   return days;
@@ -289,10 +301,14 @@ function generateKpiSparklines(rng) {
     return null;
   }
 
-  const visitors = sparkline(220, 15, 3);
-  const sessions = sparkline(260, 12, 4);
-  const errorRate = [0.018, 0.021, 0.019, 0.022, 0.020, 0.019, 0.032].map(v => vary(Math.round(v * 1000), 10, rng) / 1000);
-  const avgResponse = sparkline(248, 10, 0);
+  const visitors = sparkline(220, 12, 7);
+  const sessions = sparkline(260, 10, 9);
+  // Trailing spike — tells a "errors just regressed, look here" story on the
+  // KPI tile. Pairs with the visitor anomaly four days ago (separate signal).
+  const errorRate = [0.018, 0.021, 0.019, 0.022, 0.020, 0.019, 0.034].map(v => vary(Math.round(v * 1000), 8, rng) / 1000);
+  // Subtle downward trend on response time (perf is improving) — gives the
+  // dashboard a positive secondary signal alongside the error regression.
+  const avgResponse = sparkline(258, 8, -2);
 
   return {
     visitors: { points: visitors, anomaly: detectAnomaly(visitors) },
@@ -571,21 +587,24 @@ function generateBaseline() {
       { from: "/blog", to: "/signup", transitions: vary(95, 20, rng) },
     ],
     techBrowser: [
-      { browser: "Chrome", count: vary(2300, 8, rng), total: vary(3600, 8, rng) },
-      { browser: "Edge", count: vary(700, 12, rng), total: vary(3600, 8, rng) },
-      { browser: "Safari", count: vary(400, 15, rng), total: vary(3600, 8, rng) },
-      { browser: "Firefox", count: vary(200, 18, rng), total: vary(3600, 8, rng) },
+      { browser: "Chrome", count: vary(2200, 8, rng), total: vary(3800, 8, rng) },
+      { browser: "Mobile Safari", count: vary(560, 12, rng), total: vary(3800, 8, rng) },
+      { browser: "Edge", count: vary(520, 12, rng), total: vary(3800, 8, rng) },
+      { browser: "Safari", count: vary(310, 14, rng), total: vary(3800, 8, rng) },
+      { browser: "Firefox", count: vary(150, 18, rng), total: vary(3800, 8, rng) },
+      { browser: "Samsung Internet", count: vary(80, 22, rng), total: vary(3800, 8, rng) },
     ],
     techOs: [
-      { os: "Windows", count: vary(1900, 8, rng), total: vary(3600, 8, rng) },
-      { os: "macOS", count: vary(900, 12, rng), total: vary(3600, 8, rng) },
-      { os: "Linux", count: vary(500, 15, rng), total: vary(3600, 8, rng) },
-      { os: "iOS", count: vary(200, 18, rng), total: vary(3600, 8, rng) },
+      { os: "Windows", count: vary(1700, 8, rng), total: vary(3800, 8, rng) },
+      { os: "macOS", count: vary(820, 12, rng), total: vary(3800, 8, rng) },
+      { os: "iOS", count: vary(560, 14, rng), total: vary(3800, 8, rng) },
+      { os: "Linux", count: vary(380, 15, rng), total: vary(3800, 8, rng) },
+      { os: "Android", count: vary(280, 16, rng), total: vary(3800, 8, rng) },
     ],
     techDevice: [
-      { device: "Desktop", count: vary(2500, 8, rng), total: vary(3600, 8, rng) },
-      { device: "Mobile", count: vary(900, 12, rng), total: vary(3600, 8, rng) },
-      { device: "Tablet", count: vary(200, 20, rng), total: vary(3600, 8, rng) },
+      { device: "Desktop", count: vary(2400, 8, rng), total: vary(3800, 8, rng) },
+      { device: "Mobile", count: vary(1100, 10, rng), total: vary(3800, 8, rng) },
+      { device: "Tablet", count: vary(260, 18, rng), total: vary(3800, 8, rng) },
     ],
     performance: [
       {
@@ -594,26 +613,30 @@ function generateBaseline() {
         errorRate: Math.round((0.015 + seededRandom(sessionSeed()) * 0.02) * 1000) / 1000,
       },
     ],
+    // /api/checkout is intentionally the unmistakable outlier so the demo
+    // tells a clean "fix this first" story on the Technical tab.
     slowEndpoints: [
+      { path: "/api/checkout", p50: vary(720, 10, rng), p95: vary(2400, 8, rng), p99: vary(6100, 8, rng), avgDuration: vary(1180, 10, rng), count: vary(210, 18, rng), errorRate: 0.082 },
+      { path: "/api/analytics", p50: vary(520, 12, rng), p95: vary(1400, 10, rng), p99: vary(3800, 8, rng), avgDuration: vary(680, 12, rng), count: vary(150, 20, rng), errorRate: 0.06 },
       { path: "/api/orders", p50: vary(320, 12, rng), p95: vary(980, 10, rng), p99: vary(2400, 10, rng), avgDuration: vary(450, 12, rng), count: vary(420, 15, rng), errorRate: 0.03 },
+      { path: "/api/search", p50: vary(250, 14, rng), p95: vary(720, 12, rng), p99: vary(1900, 10, rng), avgDuration: vary(390, 14, rng), count: vary(560, 14, rng), errorRate: 0.02 },
       { path: "/api/login", p50: vary(210, 15, rng), p95: vary(870, 12, rng), p99: vary(1800, 10, rng), avgDuration: vary(340, 15, rng), count: vary(300, 18, rng), errorRate: 0.01 },
       { path: "/api/products", p50: vary(180, 12, rng), p95: vary(650, 10, rng), p99: vary(1500, 10, rng), avgDuration: vary(280, 12, rng), count: vary(890, 12, rng), errorRate: 0.005 },
-      { path: "/api/search", p50: vary(250, 14, rng), p95: vary(720, 12, rng), p99: vary(1900, 10, rng), avgDuration: vary(390, 14, rng), count: vary(560, 14, rng), errorRate: 0.02 },
-      { path: "/api/checkout", p50: vary(340, 12, rng), p95: vary(1100, 10, rng), p99: vary(3200, 8, rng), avgDuration: vary(520, 12, rng), count: vary(210, 18, rng), errorRate: 0.045 },
       { path: "/api/users/me", p50: vary(45, 20, rng), p95: vary(180, 15, rng), p99: vary(450, 12, rng), avgDuration: vary(80, 18, rng), count: vary(1200, 10, rng), errorRate: 0.002 },
-      { path: "/api/analytics", p50: vary(520, 12, rng), p95: vary(1400, 10, rng), p99: vary(3800, 8, rng), avgDuration: vary(680, 12, rng), count: vary(150, 20, rng), errorRate: 0.06 },
     ],
     geoDistribution: [
-      { country: "United States", count: vary(1200, 10, rng), share: 0.36 },
-      { country: "France", count: vary(450, 14, rng), share: 0.13 },
-      { country: "Germany", count: vary(380, 14, rng), share: 0.11 },
-      { country: "United Kingdom", count: vary(320, 15, rng), share: 0.10 },
-      { country: "Canada", count: vary(280, 15, rng), share: 0.08 },
-      { country: "Netherlands", count: vary(190, 18, rng), share: 0.06 },
+      { country: "United States", count: vary(1200, 10, rng), share: 0.31 },
+      { country: "France", count: vary(450, 14, rng), share: 0.12 },
+      { country: "Germany", count: vary(380, 14, rng), share: 0.10 },
+      { country: "United Kingdom", count: vary(330, 14, rng), share: 0.09 },
+      { country: "Canada", count: vary(280, 15, rng), share: 0.07 },
+      { country: "Netherlands", count: vary(220, 16, rng), share: 0.06 },
+      { country: "Spain", count: vary(190, 16, rng), share: 0.05 },
+      { country: "Italy", count: vary(170, 17, rng), share: 0.045 },
+      { country: "Australia", count: vary(150, 18, rng), share: 0.04 },
       { country: "Japan", count: vary(150, 20, rng), share: 0.04 },
-      { country: "Australia", count: vary(120, 20, rng), share: 0.04 },
-      { country: "Brazil", count: vary(95, 22, rng), share: 0.03 },
-      { country: "India", count: vary(80, 25, rng), share: 0.02 },
+      { country: "Brazil", count: vary(110, 20, rng), share: 0.03 },
+      { country: "India", count: vary(95, 22, rng), share: 0.025 },
     ],
     browserTimings: [
       {
