@@ -155,7 +155,7 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
 
 ## Track C — Trust signals (security + project quality)
 
-### C1. Pre-launch security pass [BLOCKER, 4h]
+### C1. Pre-launch security pass [BLOCKER, 4h] — DONE
 - Verify no token / `code_verifier` / session secret is logged anywhere
   (grep + manual review of `src/server.js`, `src/azure/realClient.js`,
   `src/azure/tokenStore.js`).
@@ -164,6 +164,19 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
 - CSP review: minimize `unsafe-inline`, justify CDN allowlist.
 - Make the "no raw data leaves your tenant" claim provable: link to the
   exact lines in the code from the README/landing FAQ.
+- **Shipped:** turned the audit into a repeatable check
+  (`scripts/security-audit.mjs`, `npm run audit:security`) with 7
+  encoded controls (sensitive logging, session hardening, CSP, raw
+  telemetry persistence, committed env files, npm audit). GitHub
+  Actions workflow runs it on push/PR plus a Monday cron, so newly
+  disclosed transitive vulnerabilities turn the badge red even
+  without commits. README gains the green badge; `SECURITY.md`
+  documents the reporting policy, the audited posture, and the two
+  legitimate fs sinks (`core/audit.js` metadata events,
+  `core/metadataStore.js` setup-state JSON — no raw rows). One real
+  finding fixed in flight: bumped transitive `path-to-regexp` 8.3.0
+  → 8.4.2 and `qs` 6.14.1 → 6.15.1 via `npm audit fix` (no breaking
+  changes, tests still 43/43).
 
 ### C2. GitHub repo polish [BLOCKER, 3h]
 - About / topics / website URL / description filled in.

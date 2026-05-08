@@ -10,7 +10,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node src/server.js",
-    "test": "node --env-file=.env.test --test"
+    "test": "node --env-file=.env.test --test",
+    "audit:security": "node scripts/security-audit.mjs"
   },
   "repository": {
     "type": "git",

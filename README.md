@@ -1,9 +1,16 @@
 # Easy Analytics
 
+[![Security audit](https://github.com/lionelgarnier/easy-analytics-for-azure/actions/workflows/security-audit.yml/badge.svg?branch=main)](https://github.com/lionelgarnier/easy-analytics-for-azure/actions/workflows/security-audit.yml)
+
 Plug-and-play analytics platform that transforms existing cloud telemetry into
 actionable dashboards in under 2 minutes. Starting with Azure Application Insights,
 it provides separate Marketing and Technical views with zero agent deployment,
 zero raw data storage, and intelligent recommendations to improve telemetry coverage.
+
+The "no raw data leaves your tenant" promise is enforced by
+[`scripts/security-audit.mjs`](scripts/security-audit.mjs) — see
+[`SECURITY.md`](SECURITY.md) for the audited checks and how to run them
+locally with `npm run audit:security`.
 
 ## Quick start (mock mode)
 
