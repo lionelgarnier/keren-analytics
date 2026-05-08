@@ -120,6 +120,11 @@ If a task explicitly asks to harden one of these, do it. Otherwise leave alone.
   touches the public surface)
 - `docs/backlog/launch-readiness.md` — pre-launch task list with effort
   estimates and BLOCKER/STRONG/OPTIONAL flags
+- **`docs/maintainer-todo.md`** — items only the maintainer can do
+  (secrets, deploy targets, GitHub Settings, third-party accounts,
+  author-voice content). When you discover a new manual dependency
+  while working on any track, append it here with what / why / when /
+  how. Don't tick items off — only the maintainer does that.
 - `docs/product.md` — product scope and audiences
 - `docs/technical.md` — architecture overview
 - `docs/architecture-auth.md` — auth flow, token handling
