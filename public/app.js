@@ -1211,6 +1211,33 @@ function renderSessionReplays(sessions) {
   });
 }
 
+/* ========== Render: Environment analysis narration ========== */
+function renderNarration(narration) {
+  const panel = document.getElementById("narrationPanel");
+  if (!panel) return;
+  if (!narration || !narration.enabled || !narration.paragraph) {
+    panel.classList.add("hidden");
+    return;
+  }
+  const headline = document.getElementById("narrationHeadline");
+  const paragraph = document.getElementById("narrationParagraph");
+  const tagline = document.getElementById("narrationTagline");
+  const badge = document.getElementById("narrationBadge");
+  if (headline) headline.textContent = narration.headline || "Environment analysis";
+  if (paragraph) paragraph.textContent = narration.paragraph;
+  if (tagline) tagline.textContent = narration.tagline || "";
+  if (badge) {
+    if (narration.badge) {
+      badge.textContent = narration.badge;
+      badge.classList.remove("hidden");
+    } else {
+      badge.classList.add("hidden");
+    }
+  }
+  panel.dataset.mode = narration.mode || "";
+  panel.classList.remove("hidden");
+}
+
 /* ========== Render: Smart Insights ========== */
 function renderInsights(dashboard) {
   const panel = document.getElementById("insightsPanel");
@@ -2252,6 +2279,9 @@ function renderDashboard(data) {
 
   // KPI Sparklines with anomaly detection
   safeRender("Sparklines", () => renderAllSparklines(dashboard.charts.kpiSparklines));
+
+  // Environment analysis narration (deterministic; AI-style framing)
+  safeRender("Narration", () => renderNarration(dashboard.narration));
 
   // Smart Insights (auto-generated from all data)
   safeRender("Insights", () => renderInsights(dashboard));

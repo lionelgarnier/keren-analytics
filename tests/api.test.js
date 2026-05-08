@@ -13,4 +13,12 @@ test("mock auth and dashboard overview flow", async () => {
   const dashboard = await request.get("/dashboard/overview?range=7d").expect(200);
   assert.ok(dashboard.body.dashboard);
   assert.ok(dashboard.body.readiness);
+
+  // Narration panel is wired into the dashboard payload (B2). Tests run in
+  // mock mode (.env.test) so the panel reports `mode: "mock"` and no badge.
+  const narration = dashboard.body.dashboard.narration;
+  assert.ok(narration, "dashboard payload should include narration");
+  assert.equal(narration.mode, "mock");
+  assert.equal(narration.badge, null);
+  assert.ok(narration.paragraph && narration.paragraph.length > 0);
 });

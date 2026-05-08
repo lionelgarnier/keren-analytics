@@ -3,6 +3,7 @@ import { buildCacheKey, cacheStore } from "./cache.js";
 import { loadKqlTemplate, renderTemplate } from "./kql.js";
 import { toKqlDatetime } from "./timeRange.js";
 import { allowedKqlExpressions, mappingExpressions } from "./mapping.js";
+import { buildNarration } from "./narration.js";
 
 function toRows(result) {
   if (!result || !result.tables || result.tables.length === 0) return [];
@@ -220,6 +221,7 @@ export async function buildOverviewDashboard({
   azureClient,
   readinessReport,
   onProgress,
+  azureMode,
 }) {
   const TOTAL_QUERIES = 18;
   let queryIndex = 0;
@@ -625,7 +627,7 @@ export async function buildOverviewDashboard({
 
   const totalGeo = geoRows.reduce((sum, row) => sum + (row.count || 0), 0);
 
-  return {
+  const result = {
     kpis: {
       uniqueVisitors: toSingleValue(uniqueRows, "uniqueVisitors"),
       sessions: toSingleValue(sessionRows, "sessions"),
@@ -760,4 +762,13 @@ export async function buildOverviewDashboard({
       },
     },
   };
+
+  result.narration = buildNarration({
+    azureMode,
+    dashboard: result,
+    mapping,
+    range: timeRange.key,
+  });
+
+  return result;
 }

@@ -109,13 +109,40 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
   keys sanitized before injection, `allowedKqlExpressions(mapping)`
   extends the renderer whitelist with alias-derived exprs. +11 tests.
 
-### B2. Layer 2 mock LLM narration on demo [STRONG, 8h]
+### B2. Layer 2 mock LLM narration on demo [STRONG, 8h] — DONE
 - On the demo URL only (mock mode), surface a "What we found" panel that
   reads like the LLM output described in `ai-environment-analysis.md`.
 - Canned response, no actual LLM call. Cost: 0 €.
 - Tagline appears in screenshots and the hero GIF: "AI explains what your
   telemetry looks like."
 - Real LLM integration ships post-launch (`ai-setup-wizard.md` proper).
+- **Shipped:** `src/core/narration.js` — deterministic generator that
+  composes a 3-4 sentence "Environment analysis" paragraph from the
+  dashboard payload (visitors, sessions, top campaign source, peak
+  hour, error-rate band, userId mapping type). Wired into
+  `buildOverviewDashboard` so the payload now carries `narration: {
+  headline, paragraph, badge, tagline, mode }`. Frontend renders it in
+  a new panel above the KPIs on the Marketing tab
+  (`public/index.html` → `#narrationPanel`,
+  `public/app.js` → `renderNarration`,
+  `public/styles.css` → `.narration-*`).
+- **Honesty tweak vs original spec:** rather than a fully canned string,
+  the same generator runs in both modes — mock mode shows it without
+  badge, real mode shows it with a "Preview — real LLM coming soon"
+  badge. The numbers come from the dashboard the user already sees,
+  so nothing is invented; the "AI explains" tagline is honest because
+  the panel does interpret the data, just deterministically. When
+  Azure OpenAI integration ships post-launch, the same payload shape
+  is what the frontend consumes — only the `paragraph` gets richer.
+- **Tests:** 10 unit tests in `tests/narration.test.js` (mode toggle,
+  badge presence, KPI presence in paragraph, peak-hour formatting,
+  error-rate threshold branch, mapping-type branches, empty-data
+  fallback, no template-token leakage, length bounds). Plus the api
+  integration test asserts `dashboard.narration.mode === "mock"` end
+  to end. 56 → 66 tests.
+- **Maintainer-side:** screenshots for the launch should include the
+  Marketing tab with this panel visible (above the fold). Tracked in
+  `docs/maintainer-todo.md` under the press-kit / hero-GIF items.
 
 ### B3. First-run banner on dashboard [STRONG, 6h]
 - Compose a deterministic banner from existing readiness + mapping data:

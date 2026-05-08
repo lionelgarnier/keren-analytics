@@ -504,6 +504,7 @@ app.get("/readiness", ensureAuth, async (req, res) => {
     rangeKey,
     azureClient,
     cacheTtlMs: config.cacheTtlMs[rangeKey] || config.cacheTtlMs["7d"],
+    azureMode: config.azureMode,
   });
   if (result.error) {
     return res.status(errorStatusCode(result)).json(result);
@@ -546,6 +547,7 @@ app.get("/dashboard/overview", ensureAuth, async (req, res) => {
       const result = await runOverviewPipeline({
         tenantId, rangeKey, azureClient,
         cacheTtlMs: config.cacheTtlMs[rangeKey] || config.cacheTtlMs["7d"],
+        azureMode: config.azureMode,
         onProgress(label, pct) { send({ type: "progress", label, pct: Math.round(pct * 100) }); },
       });
       console.log("[stream] pipeline done, requiresSelection:", !!result.requiresSelection, "error:", !!result.error);
@@ -572,6 +574,7 @@ app.get("/dashboard/overview", ensureAuth, async (req, res) => {
       rangeKey,
       azureClient,
       cacheTtlMs: config.cacheTtlMs[rangeKey] || config.cacheTtlMs["7d"],
+      azureMode: config.azureMode,
     });
 
     if (result.requiresSelection) {
@@ -663,6 +666,7 @@ app.get("/preview/dashboard", async (req, res) => {
       const result = await runOverviewPipeline({
         tenantId: "preview-tenant", rangeKey, azureClient: previewClient,
         cacheTtlMs: config.cacheTtlMs[rangeKey] || config.cacheTtlMs["7d"],
+        azureMode: "mock",
         onProgress(label, pct) { send({ type: "progress", label, pct: Math.round(pct * 100) }); },
       });
       if (result.error) {
@@ -684,6 +688,7 @@ app.get("/preview/dashboard", async (req, res) => {
       rangeKey,
       azureClient: previewClient,
       cacheTtlMs: config.cacheTtlMs[rangeKey] || config.cacheTtlMs["7d"],
+      azureMode: "mock",
     });
     if (result.error) {
       return res.status(500).json(result);
