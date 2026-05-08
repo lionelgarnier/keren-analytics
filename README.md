@@ -1,5 +1,6 @@
 # Easy Analytics
 
+[![Tests](https://github.com/lionelgarnier/easy-analytics-for-azure/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/lionelgarnier/easy-analytics-for-azure/actions/workflows/tests.yml)
 [![Security audit](https://github.com/lionelgarnier/easy-analytics-for-azure/actions/workflows/security-audit.yml/badge.svg?branch=main)](https://github.com/lionelgarnier/easy-analytics-for-azure/actions/workflows/security-audit.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node 22+](https://img.shields.io/badge/node-%3E%3D22-brightgreen.svg)](package.json)

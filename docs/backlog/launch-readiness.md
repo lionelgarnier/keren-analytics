@@ -212,14 +212,31 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
   needs a published Docker image (Track A6 territory); the CI-status
   badge needs the `npm test` workflow from C3.
 
-### C3. Minimal CI [STRONG, 3h]
+### C3. Minimal CI [STRONG, 3h] — DONE
 - GitHub Actions: run `npm install` + `npm test` on push and PR.
 - Status badge in README.
 - Without this, "MIT-licensed" feels less production. Cheap signal.
+- **Shipped:** `.github/workflows/tests.yml` runs `npm ci` + `npm test`
+  on push and PR to `main` (also `workflow_dispatch` for manual reruns)
+  on Node 22 with the npm cache. Status badge added to the README right
+  next to the existing security-audit badge. The redundant `npm test`
+  step inside `security-audit.yml` is left in place as a belt-and-braces
+  sanity check (the audit asserts the tests still pass before declaring
+  the security posture green); both workflows are independent so a
+  failing test does not red-badge the audit and vice versa, but a
+  regression that breaks `npm test` is now surfaced under the
+  unambiguous "Tests" name rather than buried under "Security audit".
 
-### C4. CHANGELOG.md [OPTIONAL, 1h]
+### C4. CHANGELOG.md [OPTIONAL, 1h] — DONE
 - Document v0.1.0 launch contents.
 - Future commits append.
+- **Shipped:** `CHANGELOG.md` follows Keep-a-Changelog 1.1.0 with two
+  sections: `[Unreleased]` for what's landed since v0.1.0 (the C1-C4
+  trust track + LICENSE/CoC/templates/CI badge), and `[0.1.0]` for the
+  initial public release grouped as Added (product), Added
+  (distribution), Security, Documentation, and Tests. Doubles as the
+  v0.1.0 release-notes draft when the maintainer pins the release in
+  GitHub Settings (see `docs/maintainer-todo.md` §2).
 
 ## Track D — Distribution prep (the launch ammunition)
 
@@ -299,10 +316,20 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
 - Linked from the demo footer.
 - During an outage, "we're aware" beats silence by a wide margin.
 
-### E4. Launch day runbook [STRONG, 1h]
+### E4. Launch day runbook [STRONG, 1h] — DONE
 - Single doc: how to roll back the demo, how to rate-limit harder, who to
   contact at Render/Cloudflare, where the LLM kill switch is.
 - Founder reads it the morning of launch. Saves hours under stress.
+- **Shipped:** `docs/launch-day-runbook.md` — single page intentionally
+  short and copy-pasteable: T-2h pre-launch checklist (gated on the
+  same "ready to launch" definition this file has), what to watch
+  during the window (Plausible / GitHub stars / Render / demo URL),
+  triage trees for "it's slow / it's down" and "someone found a
+  security issue", how to rate-limit harder (specific edits to
+  `src/server.js:83-98`), rollback recipe (revert + push, never
+  force-push to `main`), HN/Reddit moderation playbook, and a
+  contacts section. The LLM kill-switch section is stubbed with a
+  pointer to where it'll live when B2 ships.
 
 ## Effort summary
 

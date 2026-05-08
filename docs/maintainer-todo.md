@@ -94,6 +94,15 @@ These need a human to click through `Settings` on
   dashboard — we don't want to phone home from the analytics product).
 - **Status**: TODO. Blocked on D5.
 
+### Domain registrar (note for the runbook)
+- **Why**: `docs/launch-day-runbook.md` Contacts section needs to know
+  which registrar holds the demo domain so you can transfer / change
+  nameservers under stress.
+- **How**: write the registrar name + login URL into the runbook's
+  Contacts section before launch eve. Keep credentials in your
+  password manager, not in the repo.
+- **Status**: TODO.
+
 ### Cloudflare in front of the demo (E2)
 - **Why**: caches static assets, absorbs the HN front-page spike, gives
   a status page if Render goes down.
