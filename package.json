@@ -11,7 +11,8 @@
     "start": "node src/server.js",
     "dev": "node src/server.js",
     "test": "node --env-file=.env.test --test",
-    "audit:security": "node scripts/security-audit.mjs"
+    "audit:security": "node scripts/security-audit.mjs",
+    "docs:bundle": "bash scripts/build-strategy-bundle.sh"
   },
   "repository": {
     "type": "git",

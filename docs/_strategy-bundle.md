@@ -1,0 +1,2040 @@
+# Easy Analytics — Strategy & Product Bundle
+
+> **Generated artifact** — do not edit by hand. Regenerate with
+> `npm run docs:bundle` or `./scripts/build-strategy-bundle.sh`.
+>
+> This file concatenates the seven docs you'd hand a strategy / GTM /
+> marketing collaborator who'd never seen the project. It's the
+> right-shaped knowledge for an LLM Project (claude.ai Project, ChatGPT
+> custom GPT, etc.) when you want a discussion-mode chat about naming,
+> positioning, launch sequencing, or roadmap.
+>
+> **What it does NOT contain:** source code, KQL templates, tests,
+> `public/app.js`. Drop the upstream repo into a Project if you also
+> need code-level context.
+>
+> **Files merged (in this order):**
+> 1. `README.md` — the pitch.
+> 2. `docs/launch-strategy.md` — GTM + traction gates.
+> 3. `docs/product.md` — scope + audiences.
+> 4. `docs/vision.md` — long-term direction.
+> 5. `docs/maintainer-todo.md` — what only the maintainer can do.
+> 6. `docs/backlog/launch-readiness.md` — current sprint status.
+> 7. `CHANGELOG.md` — what's shipped.
+
+---
+
+
+
+=====================================================================
+# Source file: `README.md`
+=====================================================================
+
+# Easy Analytics
+
+[![Tests](https://github.com/lionelgarnier/easy-analytics-for-azure/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/lionelgarnier/easy-analytics-for-azure/actions/workflows/tests.yml)
+[![Security audit](https://github.com/lionelgarnier/easy-analytics-for-azure/actions/workflows/security-audit.yml/badge.svg?branch=main)](https://github.com/lionelgarnier/easy-analytics-for-azure/actions/workflows/security-audit.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Node 22+](https://img.shields.io/badge/node-%3E%3D22-brightgreen.svg)](package.json)
+
+> Turn Azure Application Insights into shareable **Marketing & Technical
+> dashboards in under 2 minutes** — AI-mapped schema, deterministic KQL,
+> nothing raw ever leaves your tenant. MIT.
+
+<!--
+HERO GIF placeholder (A3 — see docs/maintainer-todo.md).
+30-45s screencast: connect → dashboard renders → tabs → readiness → copy prompt.
+Replace this block with: ![hero](docs/assets/hero.gif)
+-->
+
+**Live demo** · _coming with the public launch — see
+[docs/maintainer-todo.md](docs/maintainer-todo.md)._
+
+---
+
+## Why it exists
+
+The Azure portal can answer "how many requests came in last hour?", but
+turning App Insights into a *Marketing* dashboard (campaigns, geo,
+funnels) or a clean *Technical* view (top slow endpoints, error rate
+trends) means hand-writing KQL and rebuilding the same charts every
+project. Easy Analytics gives you both views, plus a readiness score
+that tells you which signals are missing before you ask.
+
+## Try it now
+
+```bash
+git clone https://github.com/lionelgarnier/easy-analytics-for-azure.git
+cd easy-analytics-for-azure
+docker compose up --build
+```
+
+Then open `http://localhost:3000`. The default mode is **mock** — a
+deterministic sample dataset that lets you click around with no Azure
+account at all.
+
+For real Azure mode, see [Setup: Entra ID](docs/setup-entra-id.md). Three
+commands and one `.env` file.
+
+> **Heads-up — the setup above is for *the host* only, done once.**
+> Your end users (colleagues, customers, public-demo visitors) do **not**
+> register their own Azure app, do **not** create a client secret, and
+> do **not** manage permissions. They click *"Connect your Azure"* on
+> the landing page and sign in with their normal Microsoft account —
+> same flow as Slack / Loom / Notion. The token Easy Analytics receives
+> is *delegated*, so the app reads only what the user already had access
+> to. Tenant admins may see a one-time consent screen the first time
+> someone from their org signs in; that's a single click.
+
+## What's inside
+
+<!--
+Screenshots placeholder (A3 / press-kit — see docs/maintainer-todo.md).
+One image per group below would let the bullet list breathe.
+-->
+
+- **Three pre-built views** — Marketing (acquisition, geo, funnels,
+  campaigns), Technical (latency percentiles, error rate, top slow
+  endpoints), Readiness (telemetry coverage 0–100 + AI prompts).
+- **AI-style "Environment analysis" panel** that narrates your data in
+  plain English from the same numbers the dashboard shows — no LLM call
+  required at v0.1; real Azure OpenAI integration is post-launch.
+- **First-run banner** that surfaces the two highest-leverage telemetry
+  improvements (e.g. *"Add user identity (+15)"*) and scrolls you to the
+  matching prompt card on the Readiness tab.
+- **Period-over-period KPI deltas** — the top 3 tiles show
+  `+13.6% vs last week` style chips; configurable today / 7d / 30d
+  windows.
+- **Schema auto-mapping** — alias table + regex pattern matching covers
+  ~80% of real-world custom dimension naming (`uid`, `visitor_id`,
+  `accountId`, etc.) with zero config; LLM-assisted mapping is an
+  opt-in post-launch layer.
+- **22 versioned KQL templates** rendered server-side with strict
+  parameter substitution. Tenant identifiers never reach a query
+  string.
+- **MIT-licensed, single binary** — Node 22, Express 5, Helmet,
+  in-memory cache. No DB, no Redis, no agent to deploy on your apps.
+
+## How it compares
+
+| | **Easy Analytics** | Azure Portal | Datadog | Power BI |
+|---|---|---|---|---|
+| Time to first dashboard          | **~2 min** (Docker) | 30+ min (write KQL) | 1–2h (agent + setup) | hours (data prep) |
+| Marketing vs Technical separation| Built-in            | Manual workbook     | Add-on                | Manual report      |
+| Readiness scoring + AI prompts   | **0–100, LLM-ready prompts** | No        | Limited                | No                 |
+| Custom-dimension auto-mapping    | Alias + regex (LLM optional) | Manual    | Manual                | Manual             |
+| Data residency                   | **No raw data leaves your tenant** | Native | New endpoint   | New endpoint       |
+| License / cost                   | **MIT, free**       | Included w/ Azure   | Per-host $$$          | Per-user $$        |
+| Self-hostable                    | Yes (`docker compose up`) | N/A           | No (SaaS)             | Limited            |
+
+These are launch-time positions; the gaps narrow as each tool evolves.
+The columns we're least kind to (Datadog, Power BI) are also the most
+mature and have features we don't.
+
+## Privacy & security
+
+The product promise is that **user telemetry rows never leave your
+Azure tenant via this service**. Only **aggregated metrics** (counts,
+percentiles, geo / browser distributions, top-N pages) and **setup
+metadata** (mapping, schema profile, dashboard payload) ever cross the
+wire to the browser or hit disk on the server.
+
+That promise is encoded as automated checks in
+[`scripts/security-audit.mjs`](scripts/security-audit.mjs). Seven
+controls run on every push & PR plus a Monday cron — sensitive-data
+logging, session-cookie hardening, CSP `script-src` purity, no-raw-
+telemetry-persistence, committed `.env*` placeholders, `npm audit`
+high+. The Security audit badge above is the green light.
+
+A separate badge for `npm test` makes regressions visible the moment
+they land. Production refuses to boot without a real `SESSION_SECRET`
+(no silent fallback). Per-IP rate limiting (60 req/min on dynamic
+routes, 20 req/min on `/auth/*`) protects the public demo URL.
+
+Security policy and reporting path: [`SECURITY.md`](SECURITY.md).
+
+## Roadmap
+
+- **v0.1.x** — what's on `main` and the launch-readiness sprint
+  ([docs/backlog/launch-readiness.md](docs/backlog/launch-readiness.md))
+- **Phase 3** — multi-tenant SaaS, persistence, real Azure OpenAI
+  integration. Gated on traction signals
+  ([docs/launch-strategy.md](docs/launch-strategy.md) §3).
+- **Phase 4** — multi-cloud (AWS CloudWatch, GCP Cloud Logging) via
+  the provider interface in
+  [docs/architecture-multicloud.md](docs/architecture-multicloud.md).
+
+The full per-track backlog lives under
+[docs/backlog/](docs/backlog/) — each track marks what's BLOCKER,
+STRONG, OPTIONAL, and what's deliberately out of scope.
+
+## Configuration
+
+Set in `.env` (copy from `.env.example`):
+
+| Variable                   | Default     | Notes                                                                 |
+|----------------------------|-------------|-----------------------------------------------------------------------|
+| `AZURE_MODE`               | `mock`      | `mock` for the sample dataset, `real` for OAuth + your Azure tenant.  |
+| `SESSION_SECRET`           | _required_  | 32+ random bytes in production; app refuses to boot otherwise.        |
+| `AZURE_CLIENT_ID` / `_SECRET` / `_REDIRECT_URI` / `_TENANT_ID` | — | Entra ID app registration; see [docs/setup-entra-id.md](docs/setup-entra-id.md). |
+| `MOCK_RESOURCES=multiple`  | _unset_     | Mock mode toggle to simulate multiple App Insights resources.         |
+
+Selected API surface (full list in [`src/server.js`](src/server.js)):
+
+- `GET /dashboard/overview?range=7d` — dashboard payload (KPIs, charts,
+  narration, period-over-period comparison) plus readiness + score.
+- `GET /readiness` — telemetry coverage report.
+- `GET /prompts` — LLM-ready prompts for missing signals.
+- `GET /preview/dashboard?range=7d` — no-auth sample dashboard.
+
+## Contributing
+
+PRs welcome. Read [CLAUDE.md](CLAUDE.md) first — it documents the
+invariants (mock parity, no raw log persistence, KQL substitution-only,
+range whitelist, OAuth secret handling) that PRs must respect. Short
+[`CONTRIBUTING.md`](CONTRIBUTING.md) has the dev-loop and the
+file-an-issue paths.
+
+Code of conduct: [Contributor Covenant 2.1](CODE_OF_CONDUCT.md).
+
+## License
+
+[MIT](LICENSE) — see the LICENSE file. © Lionel Garnier and contributors.
+
+---
+
+If this saves you a Tuesday afternoon of writing KQL by hand, please
+**⭐ star the repo** — it's how the project finds its next 100 users.
+
+
+=====================================================================
+# Source file: `docs/launch-strategy.md`
+=====================================================================
+
+# OSS-First Launch Strategy
+
+> **Audience.** Founder + future agents working on this repo. Read this before
+> shipping anything that affects the public surface of the product (README,
+> demo, landing, docs).
+>
+> **Status.** Draft — adopted as the working strategy, pending the founder's
+> explicit go for the launch sprint.
+
+## 1. Thesis
+
+We will go to market as **open-source first**, with a single hard launch, then
+gate any commercial / hosted investment behind objective traction signals.
+
+The constraints that drive this decision:
+
+- **No marketing budget** (cap: a few hundred €/month, all-in).
+- **No founder time for ongoing distribution work** (content marketing,
+  outbound sales, paid ads are out).
+- **Niche product** — Azure App Insights users, dissatisfied with the portal,
+  not ready to pay for Datadog. Real but bounded TAM, no organic search lane
+  to win against Microsoft.
+
+Under these constraints, the only paths that "scale by themselves" are:
+
+| Path                              | Viable here? | Why |
+|-----------------------------------|--------------|-----|
+| Paid ads / SEO                    | No           | No budget, no time, owned keyword by MS |
+| End-user virality (Slack-style)   | No           | A dashboard is not invitation-shaped |
+| Founder personal brand            | No (today)   | Out of scope by user constraint |
+| **Open-source + one hard launch** | **Yes**      | Bounded effort, asymmetric upside, fits the product trust angle |
+| Freemium SaaS without distribution | No          | Empty pricing page; runs costs + Stripe + GDPR for nothing |
+
+OSS is not free — it costs ~80 hours of polish + launch + 12 weeks of light
+babysitting. But it is **bounded** and produces a portfolio asset even if
+traction never materializes.
+
+## 2. Why OSS specifically fits this product
+
+Five product-specific reasons (not generic OSS arguments):
+
+1. **Trust angle.** Telemetry tools have a credibility problem. "No raw data
+   leaves your tenant" is dramatically more believable when the source is
+   auditable. This is a moat against hosted competitors.
+
+2. **Microsoft ecosystem pull.** Awesome-Azure repos, Microsoft MVPs, MS for
+   Startups blog, internal Microsoft DevRel — all pick up Azure-friendly OSS
+   for free. A hosted SaaS gets none of this distribution.
+
+3. **HN-shaped pitch.** "Plug-and-play 2-minute analytics for Azure App
+   Insights, AI-powered onboarding, MIT-licensed, no data leaves your
+   tenant." This is a canonical Show HN headline.
+
+4. **Self-host unblocks regulated buyers.** Banks, healthcare, public sector
+   will not sign a hosted analytics contract but will deploy a Docker
+   container internally. Future enterprise revenue = support contracts on
+   self-hosted, not per-seat SaaS.
+
+5. **Cost asymmetry under our budget.** Hosting a multi-tenant SaaS for 1k
+   free users → likely 300-800 €/mo (compute + LLM + bandwidth). Hosting one
+   public demo + static docs → < 20 €/mo. Our cap fits OSS comfortably and
+   barely fits SaaS.
+
+## 3. Decision gate (T+90 days)
+
+We commit to **one** binary decision after 90 days. No drift.
+
+**Switch to hosted SaaS** if any **one** of:
+
+- ≥ 500 GitHub stars
+- ≥ 100 detected self-host installs (proxied by Docker pulls + signed-up
+  beta tenants on `demo.easy-analytics.dev` + GitHub forks with commits)
+- ≥ 5 inbound enterprise inquiries (any company asking for a contract, SLA,
+  or self-host support package)
+- ≥ 3 design partners committed to a paid pilot
+
+**Pivot the angle** if signals are weak but qualitative feedback is strong on
+a different positioning (e.g., turns out users want a Datadog alternative,
+not an App Insights one). Re-launch with the new angle once.
+
+**Sunset / portfolio mode** if no signal after the second launch. Keep the
+repo public and maintained at low effort, move on.
+
+## 4. Pre-launch sprint — 2 weeks, ~80 hours
+
+The goal of this phase is **not** to add features. It is to make the existing
+product **legible to a stranger** in 30 seconds. 90% of HN/Reddit traffic
+gives a project less than that.
+
+The detailed task list lives in
+[`backlog/launch-readiness.md`](backlog/launch-readiness.md). The intent here:
+
+| Workstream                    | Why it matters                                    |
+|-------------------------------|---------------------------------------------------|
+| Public demo (`demo.*` URL)    | Click-to-value < 10s. No README can replace this. |
+| README rewrite                | The first 3 lines and the first GIF decide everything. |
+| Animated GIF / loom demo      | Static screenshots lose to videos on HN. |
+| AI angle made visible         | Without it, we're "yet another Azure dashboard". |
+| OG image + share unfurl       | Every social share looks like a real product. |
+| One-paragraph install         | `docker run …` then open browser. Zero config. |
+| Honest comparison table       | "vs Azure portal" / "vs Datadog" / "vs Power BI". |
+| FAQ — security and PII        | Defuses the #1 HN comment ("does it leak data?"). |
+| `docs/setup-entra-id.md` slim | The 13-step guide is a wall. Cut to 5 if possible, or hide behind a Bicep template. |
+| Press kit                     | OG image, logo, one-liner, 280-char pitch — for influencers. |
+
+**Two AI features should ship before launch** because they're the
+differentiator the pitch leans on:
+
+- **Layer 1 of `ai-environment-analysis.md`** (alias heuristics) — 1.5 days,
+  no LLM dependency, ships 80% of the value of "AI-powered mapping" without
+  any runtime cost.
+- **Layer 2 of `ai-environment-analysis.md`** in mock mode — 1.5 days, the
+  demo shows the LLM narration on canned data so HN visitors see the AI
+  story without us paying for inference.
+
+A third AI feature is high-leverage but optional:
+
+- **First-run narration banner** from `ai-setup-wizard.md` — ~1 day, makes
+  the first dashboard load feel "alive". Can be deterministic + optional LLM.
+
+## 5. Launch day playbook
+
+One Tuesday. We do not re-launch.
+
+**T-7 days**
+- Soft test: post the repo link in 1-2 small Discord/Slack communities.
+  Goal: catch broken-on-fresh-install bugs.
+- Confirm demo URL uptime, OG image renders, install instructions work on
+  Mac + Linux + Windows.
+- Pre-write all launch posts. No drafting on launch day.
+
+**T-1 day**
+- Final push to main. Tag a v0.1.0 release on GitHub (release notes matter
+  for HN).
+- Verify analytics is on the demo (so we can see traffic in real time).
+- Check rate limits / queue for the demo (a HN front page = 10-30k visitors
+  in a day).
+
+**Launch day — Tuesday** (US morning, because HN traffic is ~70% US)
+
+| Time (PT)  | Action |
+|------------|--------|
+| 06:00      | Show HN post (title format: "Show HN: Easy Analytics — 2-min Azure App Insights dashboards, MIT-licensed"). |
+| 06:30      | Reply to the first comment yourself with the technical context (depth signal for HN ranking). |
+| 09:00      | r/azure post (different angle: "I built an OSS alternative to the Azure portal analytics — feedback welcome"). |
+| 11:00      | r/devops post if first ones gain traction. |
+| 14:00      | dev.to article: deep dive on the LLM-to-KQL angle (most HN-friendly tech detail). |
+| 17:00      | LinkedIn post on personal account, tagging 5-10 specific Azure MVPs / DevRel folks. |
+| **All day**| Reply to every HN/Reddit comment within 30 minutes. This is the single highest-ROI work of the whole launch. |
+
+**Launch day +1 to +3**
+- Lobste.rs (Wednesday, peer-invited only — skip if no invite).
+- Hacker News "Ask HN" follow-up if the Show HN ranks well: "Built X, here's
+  what I learned."
+- DM 5-10 hand-picked Microsoft MVPs with a short message + demo link. No
+  mass DMs — quality over volume.
+- Post in 1-2 Discord communities you're already in (r/azure unofficial
+  Discord, MS Reactor communities).
+
+**What we do NOT do**
+- Buy any ads.
+- Spam Twitter / X without a personal account that has reach.
+- Cross-post the same thing to 20 subreddits (anti-pattern, gets banned).
+- Try to "go viral" — the tactic is *one well-executed launch*, not 100 small
+  ones.
+
+## 6. Post-launch — 90 days
+
+After day 3, the launch is over. The next 90 days are about:
+
+**Listen → Refine the wedge → Pre-qualify enterprise.**
+
+Concretely, ~3 hours/week:
+
+- **Monday 30 min**: triage GitHub issues. Fix one, label the rest, close
+  the noise.
+- **Wednesday 1h**: respond to threaded HN/Reddit comments still active.
+  Update README with FAQ items as they emerge.
+- **Friday 30 min**: scan demo analytics — are people clicking through? what
+  drops them?
+- **Friday 1h**: identify 2-3 power users (commenters, GitHub stargazers
+  who also opened issues, inbound emails). Reach out individually with a
+  short "what would make this worth paying for?" message.
+
+We aim for 5-7 design partner conversations by day 60. These conversations
+shape the hosted offering — we do not build it speculatively.
+
+**What we explicitly do not do during these 90 days:**
+
+- Build the hosted multi-tenant SaaS (Phase 3 infra). Wait for the gate.
+- Add features no one specifically asked for.
+- Start building Phase 4 multi-cloud (huge effort, dilutes the Azure pitch).
+- Write a content marketing calendar (out of budget, out of time).
+
+## 7. Cost budget
+
+Cap: 300 €/month, all-in. Allocation during the OSS-first phase:
+
+| Item                                    | Estimated monthly cost |
+|-----------------------------------------|------------------------|
+| Demo hosting (Render Pro / Fly.io)      | 25-50 €               |
+| Domain + email forwarding               | 2-5 €                 |
+| OG image generator service (or self-host) | 0-10 €              |
+| LLM inference for demo narration (capped daily) | 30-80 €      |
+| Status page / uptime monitor (free tier) | 0 €                  |
+| GitHub (free for OSS)                   | 0 €                   |
+| Buffer for traffic spikes               | 100 €                 |
+| **Total (typical)**                     | **~150-250 €**        |
+
+If LLM costs grow past budget during a HN spike, we **rate-limit the demo**
+rather than scale up. The demo is a marketing asset, not a service we owe
+SLA on.
+
+Post-traction, the budget shifts toward hosted SaaS infra and is recalibrated
+at that point.
+
+## 8. Success metrics
+
+Three layers, in priority order:
+
+**Acquisition (the launch worked)**
+- HN front page rank ≥ top 10 for ≥ 4 hours
+- ≥ 8,000 unique demo visitors in launch week
+- ≥ 200 GitHub stars in launch week
+
+**Engagement (the product holds attention)**
+- Demo: ≥ 30% of visitors click through past the landing
+- GitHub: ≥ 5% of stargazers open an issue, start a discussion, or fork
+- ≥ 50 Docker pulls in launch week
+
+**Conversion-to-traction (the gate signals)**
+- ≥ 1 inbound enterprise inquiry per week of launch month
+- ≥ 3 design partner candidates by day 60
+- ≥ 10 self-host installs that come back for a second pull within 2 weeks
+
+We instrument these from day one — see launch-readiness for the specific
+analytics setup.
+
+## 9. Risks and mitigations
+
+| Risk                                          | Likelihood | Mitigation |
+|-----------------------------------------------|------------|------------|
+| HN ranks the post but kills the demo with traffic | High      | Pre-warm the cache, rate-limit by IP, show a "high traffic, try in 5 min" page rather than 500s. |
+| Top HN comment is "but Azure portal already does this" | High      | Pre-write the rebuttal in the launch post itself. The pre-emptive answer kills 80% of those comments. |
+| First commenters find a security issue        | Medium     | Pre-launch security checklist (env handling, no token logs, CSP review). Have a paragraph ready. |
+| Project gets stars but no installs            | Medium     | Healthy if engagement metrics are also low. Indicates "interesting demo, not useful product" — re-pitch. |
+| Self-host setup is too hard, users bounce     | Medium     | Bicep one-click + `docker run` one-liner are launch-blockers, not nice-to-haves. |
+| Microsoft ships a competing feature before us | Low        | Out of our control. Our angle is "open, AI-first, cross-cloud-ready" — even if MS ships analytics polish, that angle holds. |
+| Budget blown by LLM costs in launch week      | Low-Medium | Hard daily cap on LLM spend at the demo. Fall back to canned responses past the cap. |
+| Get traction but cannot service support load  | Medium     | Cap response SLA: "1 business day on issues, no SLA on PRs". Document this. |
+
+## 10. What NOT to do — explicit anti-patterns
+
+- **Do not pre-announce.** "Coming soon" landing pages destroy launch
+  momentum. Either we're shipped or we're not visible.
+- **Do not soft-launch.** A small post on a dead subreddit "to test the
+  waters" burns the novelty. We have one shot per angle.
+- **Do not go fishing for press.** We have no story for TechCrunch and the
+  effort/yield ratio is terrible. HN front page > any press hit.
+- **Do not start charging during the OSS phase.** Even if someone offers to
+  pay, redirect them to "design partner program" (free now, paid later with
+  preferential terms). Charging before the hosted offering exists is
+  premature and locks us into a contract before we know the shape.
+- **Do not refactor the codebase before launch.** Polish > rewrite.
+  The README and demo are 100x more impactful than any internal cleanup.
+
+## 11. Relationship to existing backlog
+
+This strategy reorders the existing phases:
+
+- **Phase 2** (DONE) — kept as-is, baseline product surface.
+- **NEW: Launch readiness** — see
+  [`backlog/launch-readiness.md`](backlog/launch-readiness.md).
+  Mostly polish + selected items from `adoption-drivers.md` and AI specs.
+  ~80 hours over 2 weeks.
+- **Phase 3** — gated. Do not start until traction signal hit. Specifically,
+  the persistence and multi-tenant work is post-traction by definition.
+- **Phase 4 (multi-cloud)** — pushed further. The Azure-only positioning is
+  a launch asset; multi-cloud dilutes it during the launch window.
+- **`adoption-drivers.md`** — the top 3 (period comparison, custom events,
+  share/export) are now framed as "ship 1 of 3 before launch, ship the rest
+  in the post-launch 90-day window if traction warrants".
+
+The cross-phase AI specs (`ai-environment-analysis`, `ai-setup-wizard`,
+`ai-natural-language-queries`, `ai-instrumentation-assistant`) are split:
+demo-friendly mock-mode versions ship pre-launch; full implementations ship
+post-traction.
+
+## 12. The honest summary
+
+We bet ~80 hours of work + 12 weeks of light maintenance + ~150 €/mo of
+infra against asymmetric upside (one HN front page = 6+ months of marketing
+in 2 days). The downside is bounded — at worst we keep a public OSS portfolio
+piece and learn from real users.
+
+The alternative (hosted freemium without distribution) costs more in time
+*and* money for strictly worse expected outcomes.
+
+This is the only strategy where the math actually works under the stated
+constraints. Anyone changing direction should re-read section 1 first.
+
+
+=====================================================================
+# Source file: `docs/product.md`
+=====================================================================
+
+# Product Documentation
+
+## Summary
+
+Easy Analytics is a plug-and-play analytics platform that transforms existing cloud
+telemetry into actionable dashboards in under 2 minutes. Starting with Azure
+Application Insights and Log Analytics, it provides a GA-like experience with zero
+agent deployment, zero raw data storage, and intelligent recommendations to
+continuously improve telemetry coverage.
+
+The product targets two audiences through a single entry point:
+- **Marketing / Product teams** : instant behavioral analytics without SDK work
+- **Technical teams** : simplified real-time monitoring without KQL expertise
+
+See `docs/vision.md` for the full product vision and strategy.
+
+## Goals
+- Connect via SSO (Entra ID) and show a dashboard within 60 to 120 seconds.
+- Use existing telemetry only. No agent deployment required.
+- Provide deterministic mapping and fallbacks when signals are missing.
+- Store only metadata and aggregated results (no raw logs).
+- Provide clear readiness feedback, improvement steps, and LLM-ready prompts.
+- Design architecture for multi-cloud expansion (AWS, GCP) from day one.
+
+## Non-goals (current scope)
+- Complex cohorts or retention analysis.
+- Custom report builder.
+- Writing telemetry into customer tenant.
+- Multi-cloud connectors (AWS/GCP are designed for but not yet implemented).
+- A/B test monitoring (frontend ready, no data source yet).
+
+## Target Users
+
+### Primary: Product and Marketing Teams
+- Product Managers who need quick behavioral analytics
+- Growth/Marketing analysts who want GA-like KPIs on Azure apps
+- Anyone who needs to understand user behavior without technical tooling
+
+### Secondary: Technical Teams
+- Platform engineers who manage Azure resources
+- Developers who want a fast view of traffic and performance
+- SREs who need simplified monitoring dashboards
+
+## Core Principles
+
+### 1. Zero Friction
+- SSO via Azure AD (one click)
+- Auto-discovery of resources
+- Dashboard in under 2 minutes
+- No documentation required to get started
+
+### 2. Trust Through Transparency
+- No raw logs stored outside the customer's own Log Analytics workspace
+- No PII lists returned (counts and aggregates only)
+- Tenant isolation for cache and metadata
+- Audit logs capture query names, not data content
+- Ephemeral results with short TTL (5-15 min)
+
+### 3. Cloud-Agnostic Architecture
+- Provider abstraction layer built into the core design
+- Azure first, AWS and GCP planned
+- Consistent dashboard experience regardless of cloud provider
+- See `docs/architecture-multicloud.md` for technical details
+
+## Dashboard (Overview)
+
+### Marketing View
+KPIs:
+- Unique visitors (user or session based)
+- Sessions
+- Page views
+- Avg pages per session
+- KPI sparklines with anomaly detection (derived from daily trends)
+
+Charts and tables:
+- Traffic trend (daily visitors and page views line chart)
+- Top pages with sort/pagination and view share
+- Top navigation paths (table view)
+- User flow (Sankey diagram built from navigation transitions)
+- Referrer / Traffic sources (doughnut chart: Direct, Organic, Social, etc.)
+- Peak hours heatmap (day-of-week x hour-of-day)
+- Content performance scoring (pages driving funnel progression)
+- Conversion funnel (homepage -> pricing -> signup when pages exist)
+- Campaign breakdown (UTM source/medium/campaign table)
+- URL parameters discovery (auto-detected params with frequency)
+
+Distributions:
+- Browser / OS / Device category (doughnut charts)
+- Geo distribution (country bar chart + Leaflet map) when available
+
+Smart insights:
+- Auto-generated insights from traffic sources, peak hours, campaigns, and URL data
+
+### Technical View
+KPIs:
+- Avg response time (backend)
+- P95 response time
+- Error rate
+- Frontend avg (browser timings)
+
+Charts:
+- Frontend performance (browser timings: network/send/receive/processing bar chart)
+
+Tables:
+- Slow endpoints (p50/p95/p99 percentiles, count, error rate)
+
+Session analysis:
+- Session timelines (reconstructed user journeys from page view events)
+
+## User Journey
+1. Connect Azure tenant (OAuth SSO via Entra ID).
+2. Discover App Insights resources and linked workspaces.
+3. Auto-select if only one candidate exists.
+4. Run readiness probes and schema profiling.
+5. Build on-the-fly mappings and run dashboard queries.
+6. Show overview dashboard and readiness panel.
+7. Display recommendations with actionable prompts.
+
+## Readiness Score
+
+The system probes telemetry and produces a gamified readiness score (0-100):
+
+| Signal | Points | Status |
+|--------|--------|--------|
+| Traffic (pageViews) | 20 | Required |
+| Sessions | 15 | Required |
+| Backend performance | 15 | Required |
+| Custom events | 15 | Recommended |
+| Geo enrichment | 10 | Optional |
+| Browser timings | 10 | Optional |
+| Custom user IDs | 15 | Recommended |
+
+The score drives engagement: users are motivated to improve their telemetry
+coverage, which in turn makes the dashboard more valuable.
+
+## Smart Recommendations
+
+When signals are missing, the system generates:
+1. **Diagnosis** : What's missing and why it matters
+2. **Action steps** : Concrete steps to fix it
+3. **LLM-ready prompt** : A copy-paste prompt for code assistants (Copilot, Cursor,
+   ChatGPT) that generates the exact instrumentation code needed
+
+This creates a virtuous cycle: better telemetry leads to a richer dashboard,
+which increases perceived value and drives continued improvement.
+
+## Data Sources
+
+Primary:
+- Application Insights (workspace-based recommended)
+- Log Analytics workspace linked to App Insights
+
+Future:
+- AWS CloudWatch Logs and Metrics
+- AWS X-Ray (traces)
+- GCP Cloud Logging
+- GCP Cloud Trace
+
+Auth:
+- Entra ID for Azure SSO
+- (Future) AWS IAM Identity Center / GCP Identity
+
+## Security and Compliance
+- No raw logs stored outside the cloud provider.
+- No PII lists are ever returned (counts only).
+- Tenant isolation for cache and metadata.
+- Audit logs capture query names, not data.
+- OAuth with PKCE for secure token exchange.
+- Session cookies with httpOnly, secure, sameSite flags.
+
+## Acceptance Criteria (MVP)
+1. Dashboard renders within 60 to 120 seconds for a tenant with telemetry.
+2. No raw log entries stored in the product DB.
+3. Dashboard works with partial telemetry using fallbacks.
+4. Readiness score and recommendations shown when data is missing.
+5. LLM-ready prompts generated for missing signals.
+6. Cached ranges load in under 2 seconds.
+7. Permission errors are detected and explained.
+
+
+=====================================================================
+# Source file: `docs/vision.md`
+=====================================================================
+
+# Vision Produit - Easy Analytics
+
+## TL;DR
+
+Easy Analytics transforme la telemetrie cloud existante en dashboards actionnables
+en moins de 2 minutes, sans agent, sans instrumentation supplementaire, et sans
+stocker aucune donnee brute. Le produit devient le point d'entree unique pour les
+equipes marketing (analyse produit et comportement utilisateur) et techniques
+(monitoring simplifie en temps reel), avec des recommandations intelligentes
+generees par LLM pour ameliorer continuellement la couverture de telemetrie.
+
+---
+
+## 1. Principes Fondateurs
+
+### 1.1 Simplicite radicale ("Zero Friction Onboarding")
+
+| Principe | Implementation |
+|----------|---------------|
+| **Connexion unique** | SSO via Entra ID (Azure AD) - un clic, pas de formulaire |
+| **Zero configuration** | Auto-decouverte des ressources, auto-selection si une seule |
+| **Time to Value < 120s** | Dashboard visible en moins de 2 minutes apres connexion |
+| **Aucun agent a deployer** | Exploite la telemetrie deja collectee par App Insights |
+| **Aucune connaissance KQL requise** | L'utilisateur ne voit jamais de requete |
+
+**Objectif UX** : Un PM marketing ou un dev junior doit pouvoir se connecter et
+comprendre les metriques cles de son application sans lire de documentation.
+
+### 1.2 Securite et Confiance
+
+| Principe | Implementation |
+|----------|---------------|
+| **Zero Data Storage** | Aucun log brut stocke - seulement des mappings et aggregats |
+| **Delegation d'acces** | Le produit agit avec les droits de l'utilisateur (OAuth delegue) |
+| **Isolation tenant** | Cache et metadata isoles par tenant/workspace |
+| **Audit trail** | Chaque requete KQL executee est loguee (nom, pas donnees) |
+| **Pas de PII** | Les resultats sont toujours des comptages, jamais des listes d'utilisateurs |
+| **Ephemere par design** | Les resultats caches expirent (5-15 min TTL) |
+
+**Message confiance** : "Vos donnees restent dans votre tenant Azure. Easy Analytics
+ne stocke que la structure et les comptages, jamais les donnees brutes."
+
+### 1.3 Multi-cloud ("Cloud-Agnostic by Design")
+
+L'architecture actuelle est deja concue avec un pattern d'abstraction
+(`getAzureClient()` retourne un mock ou un real client). Ce pattern est la
+fondation de la strategie multi-cloud :
+
+```
+                    +-------------------+
+                    |   Easy Analytics  |
+                    |   (Core Engine)   |
+                    +--------+----------+
+                             |
+                    +--------+----------+
+                    | Cloud Provider    |
+                    | Abstraction Layer |
+                    +--------+----------+
+                             |
+              +--------------+--------------+
+              |              |              |
+        +-----+-----+  +----+----+  +------+------+
+        |   Azure    |  |   AWS   |  |    GCP      |
+        | App Insight|  |CloudWatch|  |Cloud Logging|
+        | Log Analyt.|  |X-Ray    |  |Cloud Trace  |
+        +------------+  +---------+  +-------------+
+```
+
+**Phase 1 (actuelle)** : Azure Application Insights + Log Analytics
+**Phase future** : AWS CloudWatch/X-Ray, puis GCP Cloud Logging/Trace
+
+Voir `docs/architecture-multicloud.md` pour le design detaille.
+
+---
+
+## 2. Deux Audiences, Un Produit
+
+### 2.1 Audience Marketing / Produit (focus initial)
+
+**Persona** : Product Manager, Growth Manager, Marketing Analyst
+
+**Probleme** : "Je veux comprendre le comportement utilisateur sur mon app Azure
+sans attendre 3 sprints d'integration analytics."
+
+**Valeur** :
+- Dashboard GA-like instantane (visiteurs uniques, sessions, top pages, navigation)
+- Geo-distribution et device breakdown
+- Tendances journalieres sans configuration
+- Recommandations pour enrichir la telemetrie (avec prompts LLM prets a l'emploi)
+
+**Metriques cles affichees** :
+- Visiteurs uniques / Sessions / Pages vues
+- Top pages et parcours de navigation
+- Distribution geographique
+- Repartition navigateurs/OS/devices
+- Taux de rebond (quand les donnees le permettent)
+
+### 2.2 Audience Technique (extension naturelle)
+
+**Persona** : Dev Lead, SRE, Platform Engineer
+
+**Probleme** : "Azure Monitor est puissant mais complexe. Je veux un dashboard
+simple pour monitorer mon app en temps reel sans ecrire de KQL."
+
+**Valeur** :
+- Performance backend (avg/p95 response time, error rate)
+- Slow endpoints avec percentiles
+- Frontend performance (browser timings)
+- Alerting simplifie (seuils preconfigures)
+- Recommandations d'instrumentation (quels logs ajouter, avec prompts)
+
+**Metriques cles affichees** :
+- Temps de reponse moyen / P95
+- Taux d'erreur
+- Endpoints les plus lents
+- Dependencies health
+- Browser timings breakdown
+
+### 2.3 Strategie de positionnement
+
+```
+Phase 1 : Marketing Analytics  -->  Adoption par les equipes produit
+Phase 2 : + Technical Dashboard -->  Adoption par les equipes dev/SRE
+Phase 3 : + Cross-team views    -->  Devient le "hub" de l'application
+```
+
+L'entree par le marketing est strategique car :
+- Le besoin est immediat et universel (tout le monde veut du GA-like)
+- La barriere d'entree est plus basse (pas besoin d'etre expert cloud)
+- Le bouche-a-oreille fonctionne mieux (PM parle a PM, puis PM parle a dev)
+
+---
+
+## 3. Recommandations Intelligentes et Prompts LLM
+
+### 3.1 Le concept "Smart Recommendations"
+
+Apres l'analyse de readiness, le systeme identifie les signaux manquants et genere :
+
+1. **Un diagnostic clair** : "Il manque les pageViews dans votre telemetrie"
+2. **Des etapes d'action** : "Ajoutez le SDK JS Application Insights"
+3. **Un prompt LLM pret a l'emploi** : un texte que l'utilisateur copie-colle
+   directement dans son assistant de code (Copilot, Cursor, ChatGPT) pour obtenir
+   le code d'instrumentation adapte a sa stack
+
+### 3.2 Exemple de prompt genere
+
+Quand les `pageViews` sont manquantes et que le schema detecte une stack React :
+
+```
+Prompt genere par Easy Analytics :
+---
+Je dois ajouter le tracking Application Insights dans mon application React.
+
+Contexte :
+- Resource App Insights : [auto-rempli]
+- Connection string : [auto-rempli ou "voir Azure Portal"]
+- Framework detecte : React (SPA)
+- Signaux manquants : pageViews, customEvents
+
+Ce que je veux :
+1. Installer et configurer le SDK @microsoft/applicationinsights-web
+2. Tracker automatiquement chaque changement de route comme pageView
+3. Ajouter des customEvents pour les actions utilisateur cles
+4. Ne PAS envoyer de PII (pas d'email, pas de nom complet)
+
+Genere le code complet avec les fichiers a modifier.
+---
+```
+
+### 3.3 Avantages de cette approche
+
+- **Pas besoin de lire la codebase** : le prompt suffit pour le LLM
+- **Personnalise** : le prompt inclut le contexte specifique detecte par Easy Analytics
+- **Actionnable** : copier-coller le prompt => obtenir du code fonctionnel
+- **Boucle vertueuse** : plus de telemetrie => meilleur dashboard => plus de valeur
+- **Zero friction** : pas de documentation a lire, pas d'expertise requise
+
+### 3.4 Evolution des recommandations
+
+| Phase | Capacite |
+|-------|----------|
+| **V1 (actuelle)** | Recommandations statiques par categorie de signal |
+| **V2** | Prompts LLM contextuels (stack detectee, signaux manquants) |
+| **V3** | Appel LLM direct pour generer des snippets de code |
+| **V4** | Integration IDE (extension VS Code / Cursor) pour application automatique |
+
+---
+
+## 4. Au-dela de Marketing et Tech : Vision Cross-Departement
+
+### 4.1 Pourquoi elargir ?
+
+La telemetrie cloud contient bien plus que des metriques de trafic ou de performance.
+Les memes donnees, vues sous un angle different, servent d'autres equipes. C'est la
+clef pour transformer Easy Analytics d'un outil d'equipe en une plateforme d'entreprise.
+
+### 4.2 Departements cibles
+
+| Departement | Metriques derivees de la telemetrie existante | Source |
+|-------------|----------------------------------------------|--------|
+| **Finance** | Revenue par session (croise avec events e-commerce), cout infra par segment utilisateur, conversion funnel cost analysis | customEvents + requests |
+| **Legal & Compliance** | Volume de requetes GDPR, monitoring de consentement, data residency (geo des requetes), audit trail des acces | requests + geo + audit logs |
+| **Security** | Patterns d'acces anormaux, tentatives d'auth echouees, anomalies geographiques, signaux de vulnerabilite dependencies | requests + exceptions + dependencies |
+| **Customer Success** | Score d'engagement par utilisateur, taux d'adoption des features, signaux de churn (baisse d'activite), correlation avec tickets support | customEvents + pageViews + sessions |
+| **Product Management** | Feature usage heatmap, funnel d'adoption, A/B test monitoring, time-to-value par feature | customEvents + pageViews |
+
+### 4.3 Comment ca marche techniquement ?
+
+Les donnees sont deja la dans Application Insights / Log Analytics. Easy Analytics
+ajoute des "lenses" (vues) par departement :
+
+```
+Meme telemetrie  -->  Lens Marketing   = comportement utilisateur
+                 -->  Lens Technical   = performance et erreurs
+                 -->  Lens Finance     = revenue et couts
+                 -->  Lens Security    = anomalies et acces
+                 -->  Lens Compliance  = audit et conformite
+```
+
+Chaque lens utilise les memes KQL templates sous-jacents, mais avec des mappings
+et des agregations differents. Pas de duplication de donnees.
+
+### 4.4 Strategie de rollout
+
+1. **Phase 2 (actuelle)** : Marketing + Tech + Readiness. Teaser cross-departement dans l'UI.
+2. **Phase 3** : Customer Success lens (engagement et adoption metrics)
+3. **Phase 4** : Finance lens (requiert customEvents e-commerce), Security lens
+4. **Phase 5** : Legal/Compliance lens, Product Management lens
+
+---
+
+## 5. Strategie d'Adoption Exponentielle
+
+### 5.1 Le "Hook" : Time-to-Value instantane
+
+```
+Connexion AD  -->  Dashboard en 2 min  -->  "Wow, j'ai un GA pour Azure!"
+                                                  |
+                                                  v
+                                         Partage avec l'equipe
+                                                  |
+                                                  v
+                                         Equipe technique voit le dashboard
+                                                  |
+                                                  v
+                                         "On peut avoir un mode tech aussi?"
+```
+
+### 5.2 Mecanismes de viralite
+
+| Mecanisme | Comment |
+|-----------|---------|
+| **Share Dashboard** | Lien de partage read-only (meme tenant AD) |
+| **Screenshot-friendly** | Dashboards concu pour etre captures et partages en Slack/Teams |
+| **Embed mode** | Widget embeddable dans les outils internes (Notion, Confluence) |
+| **Weekly digest** | Email automatique avec les metriques cles de la semaine |
+| **Onboarding in-product** | "Invitez 3 collegues" apres le premier dashboard |
+| **Readiness score** | Score gamifie (ex: "Votre app est a 72% de couverture analytics") |
+
+### 5.3 Le "Readiness Score" comme moteur d'engagement
+
+Le score de readiness n'est pas seulement informatif, il devient un mecanisme
+de gamification et d'engagement :
+
+```
++-------------------------------------------+
+|  Readiness Score : 72/100                  |
+|  ████████████████████░░░░░░░  72%          |
+|                                            |
+|  [x] Traffic (pageViews)     +20 pts       |
+|  [x] Sessions                +15 pts       |
+|  [x] Performance backend     +15 pts       |
+|  [ ] Custom events           +15 pts  <-- "Ajoutez ceci"
+|  [ ] Geo enrichment          +10 pts  <-- "Activez ceci"
+|  [ ] Browser timings         +10 pts  <-- "Ajoutez le SDK JS"
+|  [ ] Custom user IDs         +15 pts  <-- "Prompt LLM disponible"
+|                                            |
+|  [Ameliorer mon score] [Generer un prompt] |
++-------------------------------------------+
+```
+
+### 5.4 Strategie de pricing (reflexion)
+
+| Tier | Cible | Fonctionnalites |
+|------|-------|-----------------|
+| **Free** | Equipe < 5, 1 app | Dashboard overview, readiness, recommandations |
+| **Team** | Equipe < 20, 5 apps | + Alerting, export, embed, digest email |
+| **Enterprise** | Illimite | + Multi-cloud, SSO avance, audit, SLA |
+
+**Cle** : Le tier Free doit etre suffisamment genereux pour creer l'addiction
+avant de monetiser.
+
+---
+
+## 6. Mes Recommandations Supplementaires
+
+### 6.1 Ce qui peut faire de ce produit un "killer"
+
+**A. Le "1-Click Deploy" narratif**
+
+L'experience magique : "Je me connecte avec mon compte Azure AD et en 2 minutes
+j'ai un Google Analytics pour mon app Azure." C'est le pitch. Chaque decision
+produit doit servir ce narratif.
+
+**B. La boucle d'amelioration continue**
+
+```
+Dashboard  -->  Readiness gaps  -->  LLM prompt  -->  Dev implemente
+    ^                                                       |
+    |                                                       |
+    +---- Meilleur dashboard avec plus de donnees <---------+
+```
+
+C'est le vrai differenciateur : le produit ne montre pas seulement des metriques,
+il guide activement l'utilisateur pour ameliorer sa telemetrie. Chaque amelioration
+rend le dashboard plus riche, ce qui augmente la valeur percue.
+
+**C. Comparaison anonymisee (benchmark)**
+
+Ajouter a terme la possibilite de comparer ses metriques a des benchmarks
+anonymises ("Votre taux d'erreur est dans le top 20% des apps similaires").
+Cela cree un engagement additionnel et de la viralite.
+
+**D. "Smart Alerts" au lieu d'alerting classique**
+
+Au lieu de configurer des seuils manuellement :
+- Le systeme apprend les patterns normaux
+- Alerte uniquement sur les anomalies significatives
+- "Votre taux d'erreur a augmente de 300% par rapport a la meme heure hier"
+
+**E. Integration native avec les workflows existants**
+
+- Slack/Teams : notifications et mini-dashboards inline
+- Jira/Azure DevOps : creation automatique de tickets depuis les alertes
+- CI/CD : check de performance avant deployment (quality gate)
+
+### 6.2 Ce qu'il faut absolument eviter
+
+| Anti-pattern | Pourquoi |
+|-------------|----------|
+| Trop de features trop tot | La simplicite est le differenciateur #1 |
+| Dashboard customisable | Ca viendra, mais le MVP doit etre opinionate |
+| Stockage de donnees brutes | Detruit la proposition de confiance |
+| Dependance a un LLM externe pour le core | Les prompts sont generes, pas le dashboard |
+| Multi-cloud trop tot | Azure d'abord, prouver la valeur, puis etendre |
+
+### 6.3 North Star Metrics
+
+Pour mesurer le succes du produit :
+
+| Metrique | Cible Phase 1 | Cible Phase 2 |
+|----------|---------------|---------------|
+| Time to First Dashboard | < 2 min | < 1 min |
+| Weekly Active Users / Registered | > 40% | > 60% |
+| Readiness Score moyen | 60/100 | 80/100 |
+| NPS | > 40 | > 50 |
+| Viralite (invites par user) | 1.5 | 3.0 |
+
+---
+
+## 7. Roadmap Strategique
+
+```
+Q1 2026 : Azure MVP + Marketing Dashboard
+          - SSO Entra ID fonctionnel
+          - Dashboard overview complet
+          - Readiness score gamifie
+          - Recommandations avec prompts LLM
+
+Q2 2026 : Adoption & Polish
+          - Share/embed dashboards
+          - Weekly digest emails
+          - Smart alerts v1
+          - Technical dashboard (perf, errors)
+
+Q3 2026 : Multi-cloud Foundation
+          - Abstraction layer cloud-agnostic
+          - AWS CloudWatch connector (beta)
+          - Benchmark anonymise
+
+Q4 2026 : Scale
+          - GCP connector
+          - Integration Slack/Teams
+          - CI/CD quality gates
+          - Enterprise tier
+```
+
+---
+
+## 8. Resume : Pourquoi ca va marcher
+
+1. **Besoin universel** : Tout le monde veut du GA-like mais personne ne veut
+   configurer Azure Monitor/KQL
+2. **Zero friction** : SSO + auto-decouverte = dashboard en 2 min
+3. **Confiance** : Aucune donnee stockee, transparence totale
+4. **Boucle vertueuse** : Recommandations -> meilleure telemetrie -> meilleur
+   dashboard -> plus de valeur
+5. **Viralite naturelle** : Equipe marketing adopte -> equipe tech veut aussi
+6. **Extensible** : Architecture multi-cloud des le depart
+7. **LLM comme accelerateur** : Pas de dependance, mais acceleration de l'adoption
+
+Le produit n'est pas un dashboard de plus. C'est un **accelerateur de maturite
+observabilite** qui commence par le marketing et contamine toute l'organisation.
+
+
+=====================================================================
+# Source file: `docs/maintainer-todo.md`
+=====================================================================
+
+# Maintainer TODO — actions hors-code
+
+This file tracks work that requires the maintainer (Lionel) personally —
+because it needs credentials, GitHub Settings access, third-party
+accounts, design work, or author voice. Claude Code agents update this
+file when they discover a new manual dependency, but they cannot tick
+items off.
+
+Format: each item has **what**, **why**, **when needed**, **how**, and
+links to the agent-side work that depends on it.
+
+---
+
+## 1. Production environment & secrets
+
+### `SESSION_SECRET` (production)
+- **Why**: `src/config.js` now throws at boot if `NODE_ENV=production`
+  and `SESSION_SECRET` is missing or set to a known placeholder.
+- **When**: before the demo URL goes live.
+- **How**: generate with
+  `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+  and set it on the deploy target (Render env var, or `docker run -e`,
+  etc.). Never commit it.
+- **Status**: TODO.
+
+### Entra ID app registration (real Azure mode)
+- **Why**: required for `AZURE_MODE=real`. Mock mode does not need it.
+- **When**: only if you want the public demo to also let visitors
+  connect their own Azure tenant. The Show-HN-friendly demo can ship
+  in mock mode first.
+- **How**: `docs/setup-entra-id.md` walks through it; A6 added a
+  one-command Bicep registration. Outputs:
+  - `AZURE_CLIENT_ID`
+  - `AZURE_CLIENT_SECRET`
+  - `AZURE_REDIRECT_URI` (must match the deployed origin)
+  - `AZURE_TENANT_ID` (`organizations` for multi-tenant work accounts)
+- **Status**: TODO. Optional for the OSS-first launch.
+
+### Demo deploy target
+- **Why**: the Show HN / Reddit launch needs a clickable URL.
+- **When**: launch eve.
+- **How**: `render.yaml` blueprint exists. Connect the GitHub repo to
+  Render, set `SESSION_SECRET` (and Azure vars if real mode), pick a
+  region. Subdomain on a domain Lionel controls — **not** a
+  Render-generated URL (per `launch-readiness.md` A1).
+- **Status**: TODO.
+
+---
+
+## 2. GitHub repo Settings (not file-tracked)
+
+These need a human to click through `Settings` on
+`github.com/lionelgarnier/easy-analytics-for-azure`:
+
+### About / topics / website / description
+- **Why**: HN/Reddit visitors pattern-match on these in the first 5s.
+- **How**: Settings → top of the repo page →
+  - Description: short pitch (≤ 140 chars).
+  - Website: the demo URL (set this once A1 ships).
+  - Topics: `azure`, `application-insights`, `analytics`, `kql`,
+    `dashboard`, `oss`, `nodejs`, `express`. Add `marketing-analytics`
+    if there's room.
+- **Status**: TODO. Blocked on demo URL for the website field.
+
+### Pin v0.1.0 release with notes
+- **Why**: the right-hand sidebar's "Releases: v0.1.0" is a strong
+  signal of "this is real software, not a weekend hack".
+- **How**: `Releases` → `Draft a new release`. Tag `v0.1.0` on `main`.
+  Notes should mirror the future `CHANGELOG.md` v0.1.0 section
+  (Claude can draft the changelog body — see C4).
+- **Status**: TODO.
+
+### Issue + PR templates UI check
+- **Why**: the `.github/ISSUE_TEMPLATE/*.yml` and
+  `.github/PULL_REQUEST_TEMPLATE.md` files are now in place; worth
+  opening `New issue` and `Compare/PR` once to verify they render.
+- **Status**: TODO (1 minute).
+
+### Branch protection on `main`
+- **Why**: prevents accidental force-push to the deployed branch.
+- **How**: Settings → Branches → Add rule for `main` → require PR
+  before merging, require status checks if/when CI exists (C3).
+- **Status**: TODO. Low priority pre-launch (single-maintainer repo).
+
+---
+
+## 3. Third-party accounts (launch-day infrastructure)
+
+### Plausible / Umami (D5 launch-day analytics)
+- **Why**: track HN / Reddit / Twitter source attribution and
+  conversion to GitHub stars during the launch window.
+- **How**: self-host Umami on the same Render account, or use Plausible
+  Cloud (€9/mo). Embed the script in the landing page only (not the
+  dashboard — we don't want to phone home from the analytics product).
+  The landing page (`public/index.html`) has an HTML-comment slot near
+  the bottom of the `#landingPage` section marking where the snippet
+  goes; the footer copy already promises "no tracking by default" so
+  please don't add it site-wide.
+- **Status**: TODO. Blocked on D5.
+
+### Domain registrar (note for the runbook)
+- **Why**: `docs/launch-day-runbook.md` Contacts section needs to know
+  which registrar holds the demo domain so you can transfer / change
+  nameservers under stress.
+- **How**: write the registrar name + login URL into the runbook's
+  Contacts section before launch eve. Keep credentials in your
+  password manager, not in the repo.
+- **Status**: TODO.
+
+### Cloudflare in front of the demo (E2)
+- **Why**: caches static assets, absorbs the HN front-page spike, gives
+  a status page if Render goes down.
+- **How**: free tier; point DNS at Cloudflare, set Render origin as
+  pull, cache `*.svg`, `*.css`, `*.js`, `*.png` aggressively.
+- **Status**: TODO. STRONG, not BLOCKER.
+
+### BetterStack status page (E3, OPTIONAL)
+- **Why**: "we're aware" beats silence during an outage.
+- **How**: free tier, link from the demo footer.
+- **Status**: TODO.
+
+### Docker Hub / GHCR
+- **Why**: published image enables the Docker-pull-count badge and the
+  one-line `docker run` quickstart.
+- **How**: GitHub Action that builds + pushes on tag (`v*`); a manual
+  first push to claim the namespace.
+- **Status**: TODO. Tied to A6.
+
+---
+
+## 4. Author-voice content (Claude can draft, you must approve / publish)
+
+These can be drafted by Claude but the final voice and the *publish*
+action are yours.
+
+### D1 — Show HN post
+- **What**: title + 4-6 paragraph body, including the pre-written
+  founder-comment for the predictable "but Azure portal already does X"
+  objection.
+- **Status**: not drafted yet.
+
+### D2 — Reddit posts (r/azure, r/devops, r/selfhosted)
+- **What**: three different angles, one per subreddit. Lead with a
+  concrete user pain, not "look at my project".
+- **Status**: not drafted yet.
+
+### D3 — dev.to / blog post (STRONG)
+- **What**: 1500-2500 words, technical deep dive on the
+  natural-language-to-KQL layer.
+- **Status**: not drafted yet.
+
+### D4 — Outreach list (10-15 named contacts)
+- **What**: Microsoft MVPs in Azure data/devops, MS DevRel folks,
+  Azure newsletter authors, maintainers of `Awesome-Azure` lists.
+  Personalized 3-line DM ready to send post-launch.
+- **Status**: not drafted yet. Claude can draft the DM template; the
+  contact list is yours to assemble.
+
+### D6 — Press kit (OPTIONAL)
+- **What**: logo SVG + PNG, founder photo + bio, taglines, 3 product
+  screenshots.
+- **Status**: TODO. Design work; AI generation is a starting point but
+  the logo at minimum should be hand-finalized.
+
+### A4 — Open Graph image
+- **What**: 1200×630 social-preview image rendered when the README /
+  demo URL is shared. Must include the product name and a one-line
+  pitch in legible-at-thumbnail-size type.
+- **Status**: TODO.
+
+### A3 — Hero GIF / video for README
+- **What**: ≤ 15s screencast of the 2-minute setup → dashboard flow.
+  README has a placeholder block (HTML comment) right under the tagline
+  that should be replaced with `![hero](docs/assets/hero.gif)` once the
+  asset lands. Same screencast doubles as the LinkedIn / Twitter /
+  Show HN preview.
+- **Status**: TODO. Needs Lionel to record from a real session.
+
+### Inline screenshots in the README
+- **What**: the "What's inside" bullet list in `README.md` has an HTML
+  comment marking where one image per group would let the section
+  breathe. Suggested shots: (1) Marketing tab with the narration panel
+  + first-run banner + delta chips visible; (2) Readiness tab showing
+  the 0–100 score + a couple of expanded prompt cards; (3) Technical
+  tab with slow-endpoints table.
+- **Status**: TODO. Pair with the press-kit work.
+
+### Demo URL substitution
+- **What**: README "Live demo" line currently says "_coming with the
+  public launch — see docs/maintainer-todo.md_". Once A1 (demo URL
+  stand-up) ships, replace that line with the real URL. Update the
+  GitHub repo's "Website" field at the same time
+  (Settings § GitHub repo polish).
+- **Status**: TODO.
+
+---
+
+## 5. Reviewer-eyes pass (no creds, but needs you)
+
+### CONTRIBUTING / CoC / SECURITY first-pass read
+- **Why**: I (Claude) wrote those during C2 with the email
+  `garniel6@gmail.com`. Worth one human pass to confirm the tone
+  matches your voice and the email is the canonical one to keep.
+- **Status**: TODO (≤ 5 min).
+
+### `docs/launch-strategy.md` traction-gate review
+- **Why**: Phase 3 (multi-tenant SaaS) and Phase 4 (multi-cloud) are
+  gated on signals defined there. As launch unfolds you'll want to
+  re-read this and decide if any gate criterion shifted.
+- **Status**: ongoing.
+
+---
+
+## How agents update this file
+
+- A new manual dependency surfaces in any track? Append it under the
+  matching section, with all four fields (what / why / when / how) and
+  a `**Status**: TODO` line.
+- An item is no longer needed (e.g. we decided not to ship Cloudflare)?
+  Strike it through with a one-line note explaining the decision —
+  don't delete it, the trail is useful.
+- An item gets done? The maintainer ticks it (changes `Status: TODO` to
+  `Status: DONE — <date> — <commit/SHA or "manual">`); agents shouldn't
+  flip it to DONE unless they actually executed the work.
+
+
+=====================================================================
+# Source file: `docs/backlog/launch-readiness.md`
+=====================================================================
+
+# Launch Readiness Checklist
+
+> **Context.** Implementation companion to
+> [`docs/launch-strategy.md`](../launch-strategy.md). This file is the
+> concrete, actionable backlog for the 2-week pre-launch sprint.
+>
+> **Status.** Pending kickoff. Each item has an effort estimate and a
+> blocker/blocked-by relationship. Total: ~80 hours of focused work.
+
+## How to read this
+
+- Items marked **[BLOCKER]** must ship before launch.
+- Items marked **[STRONG]** materially improve launch outcomes; ship if time
+  allows.
+- Items marked **[OPTIONAL]** are 1-day improvements with diminishing returns.
+- Effort is in person-hours assuming a single developer with Claude assistance.
+
+## Track A — Public surface (the things strangers see first)
+
+### A1. Demo URL — `demo.easy-analytics.dev` or equivalent [BLOCKER, 6h]
+- Stand up a public hosted instance using mock mode (no Azure auth needed).
+- Pin a deterministic mock dataset that tells a complete product story
+  (visitors trending up, one anomaly, one slow endpoint, readiness score 68).
+- Subdomain on a domain we control. **Not** a Render-generated URL (looks
+  amateur).
+- Cloudflare in front for caching + DDoS during launch spike.
+- Health check + uptime monitoring (free tier of UptimeRobot or
+  BetterStack).
+
+### A2. Root README rewrite [BLOCKER, 6h] — DONE (asset placeholders await A3 / A1)
+The current README is informative but reads like docs, not like a pitch.
+Rewrite around this structure:
+1. **One-line tagline** that includes "Azure" + "AI" + a number.
+   Example: "Turn Azure App Insights into shareable Marketing & Technical
+   dashboards in under 2 minutes — AI-powered, MIT-licensed."
+2. **Hero GIF** (see A3).
+3. **Why it exists** (3 lines max — the Azure portal pain).
+4. **Try it now** — single `docker run …` line + demo URL.
+5. **What's inside** — bulleted feature list with one screenshot per group.
+6. **Comparison table** (vs Azure portal, vs Datadog, vs Power BI).
+7. **Privacy & security** (the trust paragraph: no raw data leaves tenant,
+   here's the auditable code path).
+8. **Roadmap** — link to `docs/backlog/`.
+9. **Contributing** + license + ⭐ ask.
+
+The first screen of the README determines 70% of stargazers vs. bouncers.
+
+- **Shipped:** README rewritten end to end. Tagline as suggested
+  ("Turn Azure App Insights into shareable Marketing & Technical
+  dashboards in under 2 minutes — AI-mapped schema, deterministic KQL,
+  nothing raw ever leaves your tenant. MIT."). All 9 sections in
+  order; the "What's inside" list highlights the just-shipped B1-B4
+  surfaces (alias/regex schema mapping, narration panel, first-run
+  banner, period-over-period chips) so a HN visitor can see the
+  product is real, not slideware. Comparison table includes Azure
+  Portal / Datadog / Power BI with a one-line honesty disclaimer
+  underneath ("the columns we're least kind to are also the most
+  mature and have features we don't"). Privacy & security paragraph
+  links the SECURITY.md auditable controls and the seven encoded
+  checks. Roadmap links the per-track backlog and the
+  launch-strategy traction-gate doc. The old "API endpoints" + "Env
+  variables" wall-of-text trimmed to a short Configuration reference
+  pointing at `src/server.js` for the full surface.
+- **Asset placeholders:** the hero GIF block is an HTML comment
+  pointing at `docs/assets/hero.gif` — needs A3. The "What's inside"
+  bullet list has a sibling HTML comment marking where one screenshot
+  per group would let it breathe. The "Live demo · _coming with the
+  public launch_" line waits on A1 for the real URL. All three are
+  now tracked in `docs/maintainer-todo.md` as discrete TODOs so the
+  maintainer can swap them in without spelunking.
+- **Validation:** README renders cleanly (Markdown only, no broken
+  links to the existing tracked files). Tests still 74/74 — README
+  changes are pure-doc and don't touch any code path.
+
+### A3. Hero GIF / Loom recording [BLOCKER, 4h]
+- 30-45 second screen recording: connect → dashboard renders → switch tabs →
+  see readiness score → copy a prompt.
+- Use the demo dataset from A1 so it always looks the same.
+- Annotate with overlay text ("2 minutes from zero to dashboard", "AI maps
+  your custom dimensions automatically", "no raw data leaves your tenant").
+- Compress with Gifski or upload as MP4 to GitHub Issues for inline embed.
+
+### A4. OG image / social unfurl [BLOCKER, 3h]
+- 1200×630 image with logo + tagline + dashboard preview.
+- Set OG meta on root URL, demo URL, and GitHub repo (description + topics).
+- Test with the OG debuggers (Twitter card validator, LinkedIn post
+  inspector, Slack).
+- Every share link must visually look like a real product, not a GitHub
+  fallback card.
+
+### A5. One-page landing on the demo URL [STRONG, 5h] — DONE (hero shot + Plausible await maintainer)
+- Above the fold: tagline + screenshot + two CTAs ("Try the demo",
+  "Star on GitHub").
+- Below: comparison table, security paragraph, FAQ (3 questions: "does it
+  store my data?", "how do you connect to Azure?", "is the AI required?").
+- Footer: GitHub link, license, contact email.
+- No tracking beyond Plausible/Umami self-hosted (privacy-aligned with
+  product positioning).
+- **Shipped:** `public/index.html` `#landingPage` rewritten with the
+  spec's structure end to end. Tagline now matches the README
+  ("Azure App Insights → Marketing & Technical dashboards in 2
+  minutes. AI-mapped schema. 22 KQL templates. Nothing raw ever
+  leaves your tenant. MIT."). CTAs reordered so the demo button is
+  primary, Connect-Azure is ghost, and a third button links the repo
+  with a ★ icon. Below-the-fold sections, in order: feature cards
+  (lightly updated copy to mention period-over-period chips and the
+  paste-into-Cursor framing), comparison table (Easy Analytics vs
+  Azure Portal / Datadog / Power BI; 6 rows; honesty disclaimer
+  underneath), security paragraph (links the seven encoded controls
+  + the SECURITY.md reporting path), 3-question FAQ (data storage /
+  Azure connection / AI required), docs link, and a footer with
+  GitHub / MIT License / Security / Contact. All sections styled in
+  `public/styles.css` using the existing accent palette so the page
+  works in both light and dark mode without a second pass.
+- **No new tracking:** the landing footer copy promises "no tracking
+  cookies; the only analytics is whatever Plausible / Umami snippet
+  the operator pastes in." An HTML-comment slot at the bottom of
+  `#landingPage` marks the exact insertion point so the snippet
+  doesn't leak into the dashboard. Tracked in
+  `docs/maintainer-todo.md` under §3 Plausible / Umami.
+- **Tests:** new supertest case in `tests/api.test.js` asserts the
+  landing copy is wired (tagline, CTAs, comparison table headers,
+  FAQ questions, footer email). 74 → 75 tests; security audit clean.
+- **Asset placeholders (maintainer-side):** the hero screenshot above
+  the fold is an HTML-comment block expecting `<img class="landing
+  -hero-shot">`; the Plausible/Umami slot is a similar comment near
+  the bottom. Both land in `docs/maintainer-todo.md`.
+
+### A6. `docs/setup-entra-id.md` slim version [BLOCKER, 4h] — DONE
+- Today: 13 manual portal steps. Hard wall for non-IT users.
+- Goal: 3-5 steps OR one Bicep one-click.
+- Ship a `deploy/azure-app-registration.bicep` that creates the app
+  registration, sets redirect URI, generates secret, optionally assigns
+  Reader + Log Analytics Reader roles.
+- README install path becomes:
+  ```bash
+  az deployment sub create -f deploy/azure-app-registration.bicep \
+    -p redirectUri=...
+  docker run -p 3000:3000 -e AZURE_CLIENT_ID=... easy-analytics
+  ```
+- Keep the long manual guide as a fallback section.
+- **Shipped:** went with a single bash script (`deploy/azure-app-registration.sh`)
+  rather than Bicep — the Microsoft.Graph Bicep extension can't surface a
+  client-secret value, so a pure-IaC path would still need an out-of-band
+  step. The script is idempotent (re-runs reuse the app and append a fresh
+  secret), GNU/BSD-portable, and prints the exact env vars to paste. README
+  install path now reads `az login` → run script → `docker compose up -d`.
+  `docs/setup-entra-id.md` keeps the manual portal flow as a fallback for
+  tenants where CLI app-registration is restricted.
+
+## Track B — Product polish (what they see after they install)
+
+### B1. Layer 1 of `ai-environment-analysis.md` (alias heuristics) [BLOCKER, 12h] — DONE
+- Implement the alias table + regex patterns for userId / sessionId /
+  pagePath / referrer in `src/core/mapping.js`.
+- Add `matchType` field (`builtin` | `alias` | `pattern`) to mapping output.
+- Cross-table consistency bonus.
+- 4-6 unit tests covering the new resolution chain.
+- **Why it's a blocker:** the current mapping is exact-match-only. Half of
+  HN visitors trying their own tenant will see "no userId mapping" because
+  they used `uid` or `visitorId`. That's a launch-killing first impression.
+- **Shipped:** `ALIASES` table + regex per canonical field, cross-table
+  consistency boost (`confidence: high` on 2+ tables), `matchType` /
+  `matchedKey` / `tablesSeen` exposed on each canonical mapping, custom
+  keys sanitized before injection, `allowedKqlExpressions(mapping)`
+  extends the renderer whitelist with alias-derived exprs. +11 tests.
+
+### B2. Layer 2 mock LLM narration on demo [STRONG, 8h] — DONE
+- On the demo URL only (mock mode), surface a "What we found" panel that
+  reads like the LLM output described in `ai-environment-analysis.md`.
+- Canned response, no actual LLM call. Cost: 0 €.
+- Tagline appears in screenshots and the hero GIF: "AI explains what your
+  telemetry looks like."
+- Real LLM integration ships post-launch (`ai-setup-wizard.md` proper).
+- **Shipped:** `src/core/narration.js` — deterministic generator that
+  composes a 3-4 sentence "Environment analysis" paragraph from the
+  dashboard payload (visitors, sessions, top campaign source, peak
+  hour, error-rate band, userId mapping type). Wired into
+  `buildOverviewDashboard` so the payload now carries `narration: {
+  headline, paragraph, badge, tagline, mode }`. Frontend renders it in
+  a new panel above the KPIs on the Marketing tab
+  (`public/index.html` → `#narrationPanel`,
+  `public/app.js` → `renderNarration`,
+  `public/styles.css` → `.narration-*`).
+- **Honesty tweak vs original spec:** rather than a fully canned string,
+  the same generator runs in both modes — mock mode shows it without
+  badge, real mode shows it with a "Preview — real LLM coming soon"
+  badge. The numbers come from the dashboard the user already sees,
+  so nothing is invented; the "AI explains" tagline is honest because
+  the panel does interpret the data, just deterministically. When
+  Azure OpenAI integration ships post-launch, the same payload shape
+  is what the frontend consumes — only the `paragraph` gets richer.
+- **Tests:** 10 unit tests in `tests/narration.test.js` (mode toggle,
+  badge presence, KPI presence in paragraph, peak-hour formatting,
+  error-rate threshold branch, mapping-type branches, empty-data
+  fallback, no template-token leakage, length bounds). Plus the api
+  integration test asserts `dashboard.narration.mode === "mock"` end
+  to end. 56 → 66 tests.
+- **Maintainer-side:** screenshots for the launch should include the
+  Marketing tab with this panel visible (above the fold). Tracked in
+  `docs/maintainer-todo.md` under the press-kit / hero-GIF items.
+
+### B3. First-run banner on dashboard [STRONG, 6h] — DONE
+- Compose a deterministic banner from existing readiness + mapping data:
+  "Your environment scores 68/100. Two quick wins available: [Add user
+  identity (+15)] [Capture browser timings (+8)]".
+- Click on a quick win → scroll to the matching prompt card.
+- No LLM needed for v1; the AI version is post-launch.
+- **Shipped:** server-side, `computeReadinessScore` now returns a
+  `quickWins` array (top 3 unavailable signals by points;
+  `src/core/readinessScore.js`). Frontend renders an
+  `<aside id="firstRunBanner">` at the top of `#dashboardPanel` —
+  visible across all three tabs because it sits above the tab-toolbar.
+  Layout: a left-side score chip (`68/100` in accent color), a title
+  ("Your environment scores 68/100. 2 quick wins available:"), and
+  pill-shaped buttons for each quick win (`User Identity (+15)`).
+  Clicking a chip switches to the Readiness tab via the existing
+  `activateTab("readiness")` helper, scrolls smooth-into-view to
+  `#signal-row-${signal}` (each score-row wrapper now carries that
+  stable id), and fires a 1.6s background flash to draw the eye.
+- **Dismiss + persistence:** `×` button writes
+  `eaa.firstRunBanner.dismissed.v1=1` to `localStorage`. The banner
+  also auto-hides when there are no quick wins (perfect score) or
+  when readinessScore is null/empty. No DB needed (consistent with
+  the in-memory metadataStore).
+- **Tests:** +3 unit tests in `tests/readinessScore.test.js`
+  (quickWins shape, perfect-score returns empty, null-report returns
+  empty). 66 → 69 tests, audit clean. UI verification (banner visible
+  + chip click + dismiss persistence) is the maintainer's eyeball
+  pass — `docs/maintainer-todo.md` already has the "open dev server
+  and check the dashboard" item.
+
+### B4. Period-over-period comparison (top 3 KPI tiles only) [STRONG, 10h] — DONE
+- Limited scope: only the 3 most prominent KPI tiles get a delta vs.
+  previous period.
+- KQL templates accept a `compareTo: previous` parameter.
+- UI: small green/red delta chip + "vs last week" caption.
+- Full comparison + deployment markers ship post-launch.
+- **Shipped server side:** new `previousTimeRange(timeRange)` helper in
+  `core/timeRange.js` maps the launch ranges to their predecessors
+  (`today → yesterday`, `7d → prev7d`, `30d → prev30d`) and `null` for
+  anything else (custom range hides the chips). New
+  `kql/previous-kpis.kql` template runs a single `summarize` over the
+  prior window returning all three KPIs (`uniqueVisitors`, `sessions`,
+  `pageViews = count()`) — keeps query count to +1 instead of +3.
+  `core/dashboard.js` runs that query when a predecessor exists, then
+  `deltaEntry()` builds `{ current, previous, deltaPct, direction }`
+  per KPI with a `0.5%` neutral band and an explicit `null` deltaPct
+  when previous is zero (so a first-time tenant doesn't see misleading
+  +∞%). Final payload: `dashboard.kpis.comparison = {
+  previousRangeKey, label, uniqueVisitors, sessions, pageViews }` or
+  `null`. Cache key uses the prev range key, so previous results live
+  in their own cache slot.
+- **Shipped UI:** the 3 KPI tiles on the Marketing tab gain a
+  `.kpi-meta-row` with a colored `.kpi-delta` pill (`+13.6%` green up,
+  `-x%` red down, `~0%` neutral grey) and a `.kpi-compare` caption
+  ("vs last week" / "vs yesterday" / "vs last month"). Hidden when
+  comparison is null. No new dependency.
+- **Mock data:** `src/azure/mockData.js` gains `RANGE_SCALE` entries
+  for `yesterday: 0.06`, `prev7d: 0.22`, `prev30d: 0.88` (slightly
+  lower than current so the demo screenshots show the screenshot-
+  friendly green positive deltas) plus a `previousKpis` query handler.
+- **Tests:** new `tests/timeRange.test.js` (5 cases — predecessor key,
+  window length, today→yesterday, custom/null/unknown returns null,
+  comparisonLabel mapping). `tests/api.test.js` end-to-end asserts
+  `dashboard.kpis.comparison.previousRangeKey === "prev7d"` with all
+  three KPIs and a valid `direction`. 69 → 74 tests, audit clean.
+- **Out of scope (post-launch, per spec):** the deployment-markers
+  layer and full per-chart comparisons stay deferred.
+
+### B5. "Copy share image" button [OPTIONAL, 4h]
+- Server-side render a PNG of the current dashboard view using the existing
+  state. Stores nothing.
+- One button on every dashboard tab.
+- HN demographic loves "screenshot for Slack" workflows. Cheap viral lever.
+
+### B6. Demo dataset polish [BLOCKER, 3h] — DONE
+- Audit `src/azure/mockData.js`: every chart on every tab must have a
+  visually interesting story.
+- Ensure: visible weekly seasonality, one anomaly day, one slow endpoint,
+  meaningful geo distribution, varied browser mix.
+- The demo is also the launch screenshot source — boring data = boring
+  launch.
+- **Shipped:** visitor traffic spike 4 days ago (×2.4, deterministic so
+  it lands in both 7d and 30d windows, marked `anomaly: "traffic_spike"`),
+  `/api/checkout` is the unmistakable slow + error outlier (p99 ~6s, 8.2%
+  error rate), 12-country geo distribution with Spain/Italy added, browser
+  mix expanded to 6 entries (Mobile Safari + Samsung Internet) and OS to 5
+  (Android added), KPI sparklines have a clearer upward trend on
+  visitors/sessions and a subtle improving-perf trend on response time
+  alongside the existing trailing error spike, lunch dip on hourly trend.
+
+## Track C — Trust signals (security + project quality)
+
+### C1. Pre-launch security pass [BLOCKER, 4h] — DONE
+- Verify no token / `code_verifier` / session secret is logged anywhere
+  (grep + manual review of `src/server.js`, `src/azure/realClient.js`,
+  `src/azure/tokenStore.js`).
+- Run `npm audit` and address criticals.
+- Add a `SECURITY.md` with reporting policy.
+- CSP review: minimize `unsafe-inline`, justify CDN allowlist.
+- Make the "no raw data leaves your tenant" claim provable: link to the
+  exact lines in the code from the README/landing FAQ.
+- **Shipped:** turned the audit into a repeatable check
+  (`scripts/security-audit.mjs`, `npm run audit:security`) with 7
+  encoded controls (sensitive logging, session hardening, CSP, raw
+  telemetry persistence, committed env files, npm audit). GitHub
+  Actions workflow runs it on push/PR plus a Monday cron, so newly
+  disclosed transitive vulnerabilities turn the badge red even
+  without commits. README gains the green badge; `SECURITY.md`
+  documents the reporting policy, the audited posture, and the two
+  legitimate fs sinks (`core/audit.js` metadata events,
+  `core/metadataStore.js` setup-state JSON — no raw rows). One real
+  finding fixed in flight: bumped transitive `path-to-regexp` 8.3.0
+  → 8.4.2 and `qs` 6.14.1 → 6.15.1 via `npm audit fix` (no breaking
+  changes, tests still 43/43).
+
+### C2. GitHub repo polish [BLOCKER, 3h] — DONE (file-tracked items; Settings-side items remain manual)
+- About / topics / website URL / description filled in.
+- Issue templates (bug, feature request, question) in `.github/`.
+- `CONTRIBUTING.md` (short — link to docs).
+- `CODE_OF_CONDUCT.md` (Contributor Covenant).
+- `SECURITY.md` (pointer to email).
+- Pin the v0.1.0 release with proper notes.
+- Add badges: license, CI status (if CI is set up — see C3), Docker pull
+  count.
+- **Shipped:** `LICENSE` (MIT, copyright Lionel Garnier and contributors)
+  with `package.json` aligned (`"license": "MIT"`, author populated).
+  `CONTRIBUTING.md` is short and points at `CLAUDE.md` for invariants and
+  at the per-track backlog for what's deliberately deferred.
+  `CODE_OF_CONDUCT.md` adopts Contributor Covenant 2.1 by URL reference
+  (avoids inlining the canonical text; reporting goes to the same email
+  as `SECURITY.md`). `.github/ISSUE_TEMPLATE/` ships three structured
+  forms (bug / feature / question) plus `config.yml` that disables blank
+  issues and surfaces the security reporting path. A short
+  `.github/PULL_REQUEST_TEMPLATE.md` reminds contributors to read
+  `CLAUDE.md` and run `npm test` + `npm run audit:security`. README
+  gains license + Node-version badges next to the existing security
+  badge. `SECURITY.md` updated with the real contact email and the
+  closed-as-fixed gaps removed (`SESSION_SECRET` fail-loud + rate
+  limiting). One adjacent fix carried in flight: `src/config.js` now
+  throws when `NODE_ENV=production` and `SESSION_SECRET` is missing or
+  a known placeholder, with 5 new tests in `tests/config.test.js`.
+- **Deferred (Settings-side, not file-tracked):** About / topics /
+  website URL / description on the GitHub repo page; pinning the
+  v0.1.0 release. These need the maintainer to click through GitHub
+  Settings; nothing to commit.
+- **Deferred (depends on other tracks):** the Docker-pull-count badge
+  needs a published Docker image (Track A6 territory); the CI-status
+  badge needs the `npm test` workflow from C3.
+
+### C3. Minimal CI [STRONG, 3h] — DONE
+- GitHub Actions: run `npm install` + `npm test` on push and PR.
+- Status badge in README.
+- Without this, "MIT-licensed" feels less production. Cheap signal.
+- **Shipped:** `.github/workflows/tests.yml` runs `npm ci` + `npm test`
+  on push and PR to `main` (also `workflow_dispatch` for manual reruns)
+  on Node 22 with the npm cache. Status badge added to the README right
+  next to the existing security-audit badge. The redundant `npm test`
+  step inside `security-audit.yml` is left in place as a belt-and-braces
+  sanity check (the audit asserts the tests still pass before declaring
+  the security posture green); both workflows are independent so a
+  failing test does not red-badge the audit and vice versa, but a
+  regression that breaks `npm test` is now surfaced under the
+  unambiguous "Tests" name rather than buried under "Security audit".
+
+### C4. CHANGELOG.md [OPTIONAL, 1h] — DONE
+- Document v0.1.0 launch contents.
+- Future commits append.
+- **Shipped:** `CHANGELOG.md` follows Keep-a-Changelog 1.1.0 with two
+  sections: `[Unreleased]` for what's landed since v0.1.0 (the C1-C4
+  trust track + LICENSE/CoC/templates/CI badge), and `[0.1.0]` for the
+  initial public release grouped as Added (product), Added
+  (distribution), Security, Documentation, and Tests. Doubles as the
+  v0.1.0 release-notes draft when the maintainer pins the release in
+  GitHub Settings (see `docs/maintainer-todo.md` §2).
+
+## Track D — Distribution prep (the launch ammunition)
+
+### D1. Show HN post draft [BLOCKER, 3h]
+- Title format: "Show HN: Easy Analytics — 2-min Azure App Insights
+  dashboards (open source, AI-mapped)".
+- Body: 4-6 paragraphs:
+  1. What it is (one paragraph).
+  2. Why I built it — concrete pain point with Azure portal.
+  3. How the AI angle works (Layer 1 alias + Layer 2 narration).
+  4. What's open and what's deliberately left for later.
+  5. Tech stack one-liner.
+  6. Ask for feedback.
+- Pre-write the first founder-comment that addresses the predictable
+  "but Azure portal already does X" objection.
+
+### D2. Reddit posts (r/azure, r/devops, r/selfhosted) [BLOCKER, 2h]
+- Three different angles, one per subreddit. Same product, framed for the
+  audience:
+  - r/azure: "I built an OSS alternative to portal analytics — feedback?"
+  - r/devops: focus on the readiness score + LLM-suggested instrumentation.
+  - r/selfhosted: focus on the Docker one-liner + privacy posture.
+- Avoid "look at my project" framing. Lead with a concrete thing the user
+  cares about.
+
+### D3. dev.to / blog post [STRONG, 4h]
+- Long-form (1500-2500 words) on the technical deep dive most likely to
+  catch HN: "Building a natural-language-to-KQL layer for Azure logs
+  (without Azure OpenAI as a hard dep)".
+- Cross-post to dev.to + Hashnode + personal blog.
+
+### D4. Outreach list [BLOCKER, 2h]
+- 10-15 named contacts: Microsoft MVPs in Azure data/devops space, MS DevRel
+  folks, well-known Azure newsletter authors, maintainers of Awesome-Azure
+  lists.
+- Personalized 3-line DM template ready to send post-launch (not before).
+- LinkedIn for non-engineers, Twitter/X for engineers, email as fallback.
+
+### D5. Launch-day analytics [BLOCKER, 2h]
+- Plausible / Umami self-hosted on the demo URL.
+- Track: source (HN / Reddit / Twitter), conversion to GitHub stars, demo
+  click-through rate, time on page.
+- Real-time dashboard the founder can watch during launch day.
+
+### D6. Press kit [OPTIONAL, 2h]
+- One PDF / page with: logo (SVG + PNG), tagline, 280-char pitch, 1500-char
+  pitch, 3 product screenshots, founder photo + bio.
+- Hosted at `/press` on the demo URL.
+- Send proactively to MVPs / newsletter authors who pick up the post.
+
+## Track E — Anti-fragility for launch day
+
+### E1. Demo rate limiting [BLOCKER, 3h] — DONE (LLM cap deferred with B2)
+- Per-IP rate limit on the demo (60 req/min hard cap).
+- Friendly "high traffic, try in a few minutes" page rather than 502/504.
+- Hard daily cap on LLM cost (when B2 ships): cut over to canned responses
+  past €10/day on the demo.
+- **Shipped:** `src/core/rateLimit.js` — minimal in-memory fixed-window
+  per-IP limiter, no new dep (CLAUDE.md mandates a minimal dep set, demo
+  is single-instance). Wired in `src/server.js` as two named buckets:
+  `api` (60 req/min, all dynamic routes) and `auth` (stricter 20 req/min,
+  on `/auth/*` so OAuth burning can't also DoS the dashboard). Both
+  bypass `NODE_ENV=test`. Friendly 429 page (HTML or JSON depending on
+  `Accept`) plus `Retry-After`, `X-RateLimit-Limit`, and
+  `X-RateLimit-Remaining` headers. +8 unit tests.
+- **Deferred (with B2):** the daily LLM cost cap. Lives in the same file
+  when the mock-LLM narration ships — needs a separate counter keyed by
+  day and a kill-switch flipping the demo to canned responses past the
+  cap. No mock-LLM = nothing to cap yet.
+
+### E2. Pre-warm + cache [STRONG, 2h]
+- Pre-cache the mock dashboard for the demo dataset.
+- All static assets behind Cloudflare with long max-age.
+
+### E3. Status page [OPTIONAL, 1h]
+- BetterStack free tier or self-hosted.
+- Linked from the demo footer.
+- During an outage, "we're aware" beats silence by a wide margin.
+
+### E4. Launch day runbook [STRONG, 1h] — DONE
+- Single doc: how to roll back the demo, how to rate-limit harder, who to
+  contact at Render/Cloudflare, where the LLM kill switch is.
+- Founder reads it the morning of launch. Saves hours under stress.
+- **Shipped:** `docs/launch-day-runbook.md` — single page intentionally
+  short and copy-pasteable: T-2h pre-launch checklist (gated on the
+  same "ready to launch" definition this file has), what to watch
+  during the window (Plausible / GitHub stars / Render / demo URL),
+  triage trees for "it's slow / it's down" and "someone found a
+  security issue", how to rate-limit harder (specific edits to
+  `src/server.js:83-98`), rollback recipe (revert + push, never
+  force-push to `main`), HN/Reddit moderation playbook, and a
+  contacts section. The LLM kill-switch section is stubbed with a
+  pointer to where it'll live when B2 ships.
+
+## Effort summary
+
+| Track                                  | Blockers | Strong | Optional | Total |
+|----------------------------------------|----------|--------|----------|-------|
+| A — Public surface                     | 23h      | 5h     | 0h       | 28h   |
+| B — Product polish                     | 15h      | 24h    | 4h       | 43h   |
+| C — Trust signals                      | 7h       | 3h     | 1h       | 11h   |
+| D — Distribution prep                  | 9h       | 4h     | 2h       | 15h   |
+| E — Anti-fragility                     | 3h       | 3h     | 1h       | 7h    |
+| **Total blockers (must ship)**         | **57h**  |        |          |       |
+| **Total with strong items**            |          |        |          | **96h** |
+| **Total all-in**                       |          |        |          | **104h** |
+
+Realistic 2-week sprint with all blockers + most strong items: **80 hours**.
+
+## Sequencing — recommended order
+
+**Week 1 — product + content**
+- Day 1-2: B1 (alias heuristics) + B6 (demo dataset polish).
+- Day 3: A6 (Bicep) + C1 (security pass).
+- Day 4: A1 (demo URL stand-up) + A4 (OG image).
+- Day 5: A2 (README rewrite) + A3 (hero GIF).
+
+**Week 2 — polish + launch prep**
+- Day 6: B2 (mock LLM narration) + B3 (first-run banner).
+- Day 7: B4 (period comparison) + B6 polish round 2.
+- Day 8: A5 (landing page) + C2 (GitHub repo polish) + C3 (CI).
+- Day 9: D1-D5 (all distribution prep).
+- Day 10: Soft test in 1-2 small communities. Fix anything broken.
+
+**Day 11 — launch.**
+
+## Definition of "ready to launch"
+
+All [BLOCKER] items shipped. Three independent strangers can:
+1. Open the demo URL on a phone and understand the product within 30s.
+2. Run the install command on a fresh machine and reach the dashboard.
+3. Read the README and articulate the security posture without
+   asking questions.
+
+If any of these fails on launch eve, **delay the launch by one week**.
+A blown launch is much worse than a 1-week delay.
+
+## What's deliberately out of scope for launch
+
+These exist in the broader backlog and explicitly **do not block** launch:
+
+- Hosted multi-tenant SaaS (Phase 3).
+- Postgres / Redis persistence (Phase 3).
+- Full LLM-powered setup wizard (`ai-setup-wizard.md` Layer 3+).
+- Natural-language query explorer (`ai-natural-language-queries.md`).
+- AI instrumentation assistant (`ai-instrumentation-assistant.md`).
+- Custom event funnels and full conversion tab.
+- Multi-resource aggregation.
+- Goals + weekly digest.
+- AWS / GCP connectors (Phase 4).
+
+These are **post-traction** features. Building them pre-launch is the
+single most common way solo founders waste their launch window.
+
+
+=====================================================================
+# Source file: `CHANGELOG.md`
+=====================================================================
+
+# Changelog
+
+All notable changes to **Easy Analytics for Azure** are documented in this
+file. Format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/);
+this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+Pre-launch sprint work that has landed on `main` since v0.1.0 — see
+[`docs/backlog/launch-readiness.md`](docs/backlog/launch-readiness.md)
+for the per-track status.
+
+### Added
+- Landing page on `/` rewritten as a launch one-pager — tagline, three
+  CTAs (Try the demo / Connect your Azure / ★ Star on GitHub),
+  comparison table (Easy Analytics vs Azure Portal / Datadog / Power
+  BI), security trust paragraph, 3-question FAQ, and a privacy-clean
+  footer (no tracking by default; explicit Plausible/Umami slot for
+  the operator).
+- README rewritten as a launch-pitch (one-line tagline, why-it-exists,
+  try-it-now, what's-inside, comparison table, privacy/security
+  trust paragraph, roadmap, configuration reference, contributing,
+  ⭐ ask). Old docs-style sections (full env list, full API list)
+  trimmed to a short reference block linking to source.
+- Period-over-period comparison on the top 3 KPI tiles (Unique
+  Visitors, Sessions, Page Views) with green/red/neutral delta chip +
+  "vs last week" caption. New `kql/previous-kpis.kql` template; new
+  `previousTimeRange()` and `comparisonLabel()` helpers in
+  `core/timeRange.js`.
+- First-run banner above the tab bar that shows the readiness score
+  + top 2 quick wins as clickable chips; click switches to the
+  Readiness tab and scrolls to the matching signal row.
+  `localStorage`-persisted dismissal.
+- "Environment analysis" panel above the KPI grid — deterministic
+  AI-style narration generated from the dashboard payload (visitors,
+  sessions, top campaign, peak hour, error-rate band, userId mapping
+  type). Mock mode: no badge. Real mode: "Preview — real LLM coming
+  soon" badge (the same generator runs in both modes; no fabrication).
+- `LICENSE` (MIT) and `package.json` license metadata.
+- `CONTRIBUTING.md` short guide that points at `CLAUDE.md` for invariants.
+- `CODE_OF_CONDUCT.md` adopting Contributor Covenant 2.1 by URL reference.
+- `.github/ISSUE_TEMPLATE/{bug_report,feature_request,question}.yml`
+  structured forms plus `config.yml` disabling blank issues and
+  surfacing the security reporting path.
+- `.github/PULL_REQUEST_TEMPLATE.md` reminding contributors to read
+  `CLAUDE.md` and run `npm test` + `npm run audit:security`.
+- `.github/workflows/tests.yml` GitHub Actions pipeline running the test
+  suite on every push/PR (Tests badge in the README).
+- `docs/maintainer-todo.md` single-source list of out-of-band items the
+  maintainer must execute (secrets, GitHub Settings, third-party
+  accounts, author-voice content).
+- License + Node-version badges in the README next to the existing
+  security-audit badge.
+
+### Security
+- `SESSION_SECRET` is now required in production: `src/config.js` throws
+  at boot when `NODE_ENV=production` and the value is missing or set to
+  a known placeholder (`dev-secret-change-me`,
+  `change-me-in-production`). 5 new tests in `tests/config.test.js`.
+- `SECURITY.md` updated to remove gaps that have since been closed
+  (rate limiting → E1 done, default-secret fallback → fixed).
+
+## [0.1.0] — Initial public release
+
+First public release. Everything below is what shipped on day one.
+
+### Added — product
+- **Mock + real Azure modes**, switched via `AZURE_MODE`. Mock mode runs
+  with no credentials and serves a deterministic dataset suitable for
+  the public demo and tests; real mode hits Azure ARM + Log Analytics
+  via OAuth (PKCE). Mock and real clients expose the same surface so
+  every test runs in mock mode.
+- **Three dashboard views** — Marketing (acquisition, geo, sources,
+  funnels), Technical (errors, latency, top endpoints), Readiness
+  (telemetry coverage score + missing-signal prompts).
+- **Readiness score (0-100)** computed from 7 weighted signals
+  (`core/readinessScore.js`) with LLM-ready prompts for whichever
+  signals are missing (`core/promptGenerator.js`).
+- **Schema auto-detection** — `core/schemaProfile.js` infers the
+  tenant's `userId` / `sessionId` / `pagePath` columns from the live
+  Application Insights schema, then `core/mapping.js` maps the canonical
+  model to the tenant's columns. KQL templates in `kql/` are rendered
+  server-side via `core/kql.js` with substitution tokens
+  (`{{userIdColumn}}`, etc.) — tenant identifiers never reach a query
+  string.
+- **22 versioned KQL templates** covering page views, sessions, geo,
+  browsers, sources, funnels, error rates, latency percentiles, top
+  endpoints, peak hours, custom events, A/B test outcomes, anomaly
+  sparklines, and session-replay timelines.
+- **State machine** (`core/stateMachine.js`) for the per-tenant
+  pipeline (auth → discover → profile → render) with up to 200
+  transitions retained per tenant for the audit trail.
+- **TTL cache** keyed on `tenant + workspace + mappingVersion + range`
+  with per-range TTLs (5 min for `today`, 15 min for `7d`/`30d`).
+- **Interactive world map** (Leaflet) and **multi-step Sankey** flow
+  diagrams in the dashboard.
+- **Smart Insights**, **Peak Hours heatmap**, **A/B Test Monitor**, and
+  **Session Replay Timelines** on the Marketing tab.
+- **Period comparison** scaffold (`core/timeRange.js`) and **dashboard
+  filters** with URL-parameter auto-detection.
+- **Modern docs site** (Stripe / Vercel-inspired) under `public/docs/`,
+  linked from the navbar and the landing page.
+
+### Added — distribution
+- `Dockerfile` (Node 22 Alpine, non-root user) and `docker-compose.yml`
+  for one-command local runs.
+- `render.yaml` blueprint for one-click Render deployment from `main`.
+- `infra/` Bicep template + `scripts/register-azure-app.sh` for a
+  one-command Entra ID app registration in the maintainer's tenant.
+- `docs/setup-entra-id.md` walks through real-mode setup end-to-end.
+
+### Security
+- `scripts/security-audit.mjs` — repeatable check encoding 7 controls
+  (sensitive-data logging, session cookie hardening, CSP `script-src`
+  has no `unsafe-*`, CSP CDN allowlist, no raw telemetry persistence,
+  committed env-files placeholder-only, `npm audit` high+).
+  `npm run audit:security` runs locally; GitHub Actions runs it on push
+  and PR plus a Monday cron, so newly disclosed transitive
+  vulnerabilities turn the badge red even between commits.
+- **Per-IP rate limiting** (`src/core/rateLimit.js`): in-memory
+  fixed-window limiter with two named buckets — `api` (60 req/min on
+  all dynamic routes) and `auth` (20 req/min on `/auth/*`). Friendly
+  429 page (HTML or JSON depending on `Accept`) with `Retry-After`,
+  `X-RateLimit-Limit`, and `X-RateLimit-Remaining` headers. Bypassed
+  in `NODE_ENV=test`.
+- **OAuth (PKCE)** flow in `src/server.js` (`/auth/login` /
+  `/auth/callback`). Tokens, `code_verifier`, and session secrets are
+  never logged — enforced by the security-audit script.
+- **No raw log persistence**: only aggregates leave the server. Two
+  legitimate filesystem sinks (`core/audit.js` metadata events,
+  `core/metadataStore.js` setup state) are documented in `SECURITY.md`
+  and allowlisted in the audit script; any other `fs.write*` in `src/`
+  fails the audit.
+- **Helmet + CSP** with `script-src` restricted to `'self'` + the two
+  CDN hosts (`cdn.jsdelivr.net` for Chart.js, `unpkg.com` for Leaflet).
+  No `unsafe-inline` / `unsafe-eval`.
+- One transitive dependency advisory fixed in flight: `path-to-regexp`
+  8.3.0 → 8.4.2 and `qs` 6.14.1 → 6.15.1.
+
+### Documentation
+- `docs/launch-strategy.md` — go-to-market plan and Phase 3 / 4
+  traction gates.
+- `docs/product.md`, `docs/technical.md`, `docs/vision.md`,
+  `docs/architecture-auth.md`, `docs/architecture-multicloud.md`.
+- `docs/backlog/{launch-readiness,phase-1..4,adoption-drivers,
+  ai-{setup-wizard,environment-analysis,natural-language-queries,
+  instrumentation-assistant}}.md`.
+- `docs/setup-entra-id.md`.
+
+### Tests
+- 56 tests across 10 files using the native `node:test` runner +
+  supertest for API tests. All run in mock mode (`NODE_ENV=test`
+  forces `azureMode=mock`).
+
+[Unreleased]: https://github.com/lionelgarnier/easy-analytics-for-azure/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/lionelgarnier/easy-analytics-for-azure/releases/tag/v0.1.0
+
+
+---
+
+_Bundle generated: 2026-05-08 20:12 UTC_
+_Generator: scripts/build-strategy-bundle.sh_
