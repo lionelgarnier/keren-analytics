@@ -2068,6 +2068,86 @@ function td(text, className) {
   return el;
 }
 
+/* ========== Render: First-run banner (B3) ========== */
+const FIRST_RUN_BANNER_DISMISS_KEY = "eaa.firstRunBanner.dismissed.v1";
+
+function renderFirstRunBanner(readinessScore) {
+  const banner = document.getElementById("firstRunBanner");
+  if (!banner) return;
+
+  if (!readinessScore || readinessScore.maxScore === 0) {
+    banner.classList.add("hidden");
+    return;
+  }
+
+  const wins = Array.isArray(readinessScore.quickWins) ? readinessScore.quickWins : [];
+  const score = Number(readinessScore.score) || 0;
+  const maxScore = Number(readinessScore.maxScore) || 100;
+
+  // Hide when there's nothing to suggest (perfect score) or the user
+  // dismissed it previously. Both branches log nothing to console — the
+  // banner is purely informational.
+  if (wins.length === 0 || score >= maxScore) {
+    banner.classList.add("hidden");
+    return;
+  }
+
+  let dismissed = false;
+  try { dismissed = localStorage.getItem(FIRST_RUN_BANNER_DISMISS_KEY) === "1"; } catch (_) {}
+  if (dismissed) {
+    banner.classList.add("hidden");
+    return;
+  }
+
+  const scoreEl = document.getElementById("firstRunScoreValue");
+  const titleEl = document.getElementById("firstRunBannerTitle");
+  const winsEl = document.getElementById("firstRunBannerWins");
+  if (scoreEl) scoreEl.textContent = String(score);
+  if (titleEl) {
+    const winCount = Math.min(wins.length, 2);
+    const plural = winCount === 1 ? "" : "s";
+    titleEl.textContent = `Your environment scores ${score}/${maxScore}. ${winCount} quick win${plural} available:`;
+  }
+
+  if (winsEl) {
+    winsEl.innerHTML = "";
+    for (const win of wins.slice(0, 2)) {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "first-run-banner-chip";
+      chip.dataset.signal = win.signal;
+      chip.textContent = `${win.label} (+${win.points})`;
+      chip.addEventListener("click", () => focusSignalPrompt(win.signal));
+      winsEl.appendChild(chip);
+    }
+  }
+
+  banner.classList.remove("hidden");
+
+  const dismissBtn = document.getElementById("firstRunBannerDismiss");
+  if (dismissBtn && !dismissBtn.dataset.wired) {
+    dismissBtn.dataset.wired = "1";
+    dismissBtn.addEventListener("click", () => {
+      try { localStorage.setItem(FIRST_RUN_BANNER_DISMISS_KEY, "1"); } catch (_) {}
+      banner.classList.add("hidden");
+    });
+  }
+}
+
+function focusSignalPrompt(signal) {
+  if (typeof activateTab === "function") {
+    activateTab("readiness");
+  }
+  // Wait one frame for the tab to become active before scrolling.
+  requestAnimationFrame(() => {
+    const target = document.getElementById(`signal-row-${signal}`);
+    if (!target) return;
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    target.classList.add("score-row-flash");
+    setTimeout(() => target.classList.remove("score-row-flash"), 1600);
+  });
+}
+
 /* ========== Render: Readiness Score ========== */
 function renderReadinessScore(readinessScore, readiness) {
   if (!readinessScore) return;
@@ -2117,6 +2197,7 @@ function renderReadinessScore(readinessScore, readiness) {
   breakdown.forEach((item) => {
     const wrapper = document.createElement("div");
     wrapper.className = `score-row-wrapper ${item.available ? "available" : "missing"}`;
+    wrapper.id = `signal-row-${item.signal}`;
 
     const row = document.createElement("div");
     row.className = `score-row ${item.available ? "available" : "missing"}`;
@@ -2374,6 +2455,9 @@ function renderDashboard(data) {
 
   // Readiness score
   safeRender("Readiness", () => renderReadinessScore(readinessScore, readiness));
+
+  // First-run banner (B3): score + 1-2 quick wins above the tab bar.
+  safeRender("FirstRunBanner", () => renderFirstRunBanner(readinessScore));
 
   // Show dashboard
   dashboardPanel.classList.remove("hidden");

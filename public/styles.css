@@ -1695,6 +1695,114 @@ body {
 }
 
 /* ========== Smart Insights ========== */
+.first-run-banner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  margin-bottom: 14px;
+  background: linear-gradient(90deg, var(--accent-bg) 0%, var(--surface) 100%);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius);
+  position: relative;
+}
+
+.first-run-banner-body {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+}
+
+.first-run-banner-score {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  flex-shrink: 0;
+  padding: 8px 14px;
+  background: var(--surface);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-sm);
+}
+
+.first-run-score-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1;
+}
+
+.first-run-score-suffix {
+  font-size: 12px;
+  color: var(--text-secondary, #6b7280);
+}
+
+.first-run-banner-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.first-run-banner-title {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.first-run-banner-wins {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.first-run-banner-chip {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.first-run-banner-chip:hover {
+  background: var(--accent-bg);
+  transform: translateY(-1px);
+}
+
+.first-run-banner-dismiss {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary, #6b7280);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.first-run-banner-dismiss:hover {
+  background: var(--accent-bg);
+  color: var(--text-primary);
+}
+
+@keyframes scoreRowFlash {
+  0%   { background: var(--accent-bg); }
+  100% { background: transparent; }
+}
+
+.score-row-flash {
+  animation: scoreRowFlash 1.6s ease-out;
+}
+
 .narration-panel {
   background: var(--accent-bg);
   border: 1px solid var(--accent-border);

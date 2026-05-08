@@ -138,6 +138,21 @@
       <!-- ========== Dashboard ========== -->
       <section id="dashboardPanel" class="hidden">
 
+        <!-- First-run banner (B3): score + quick wins, dismissable -->
+        <aside id="firstRunBanner" class="first-run-banner hidden" aria-live="polite">
+          <div class="first-run-banner-body">
+            <div class="first-run-banner-score">
+              <span id="firstRunScoreValue" class="first-run-score-value">--</span>
+              <span class="first-run-score-suffix">/100</span>
+            </div>
+            <div class="first-run-banner-text">
+              <p id="firstRunBannerTitle" class="first-run-banner-title">Your environment scores --/100.</p>
+              <div id="firstRunBannerWins" class="first-run-banner-wins"></div>
+            </div>
+          </div>
+          <button id="firstRunBannerDismiss" class="first-run-banner-dismiss" type="button" aria-label="Dismiss">&times;</button>
+        </aside>
+
         <!-- Tab bar + time range -->
         <div class="tab-toolbar">
           <div class="tab-bar" role="tablist">

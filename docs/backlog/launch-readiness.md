@@ -144,12 +144,35 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
   Marketing tab with this panel visible (above the fold). Tracked in
   `docs/maintainer-todo.md` under the press-kit / hero-GIF items.
 
-### B3. First-run banner on dashboard [STRONG, 6h]
+### B3. First-run banner on dashboard [STRONG, 6h] — DONE
 - Compose a deterministic banner from existing readiness + mapping data:
   "Your environment scores 68/100. Two quick wins available: [Add user
   identity (+15)] [Capture browser timings (+8)]".
 - Click on a quick win → scroll to the matching prompt card.
 - No LLM needed for v1; the AI version is post-launch.
+- **Shipped:** server-side, `computeReadinessScore` now returns a
+  `quickWins` array (top 3 unavailable signals by points;
+  `src/core/readinessScore.js`). Frontend renders an
+  `<aside id="firstRunBanner">` at the top of `#dashboardPanel` —
+  visible across all three tabs because it sits above the tab-toolbar.
+  Layout: a left-side score chip (`68/100` in accent color), a title
+  ("Your environment scores 68/100. 2 quick wins available:"), and
+  pill-shaped buttons for each quick win (`User Identity (+15)`).
+  Clicking a chip switches to the Readiness tab via the existing
+  `activateTab("readiness")` helper, scrolls smooth-into-view to
+  `#signal-row-${signal}` (each score-row wrapper now carries that
+  stable id), and fires a 1.6s background flash to draw the eye.
+- **Dismiss + persistence:** `×` button writes
+  `eaa.firstRunBanner.dismissed.v1=1` to `localStorage`. The banner
+  also auto-hides when there are no quick wins (perfect score) or
+  when readinessScore is null/empty. No DB needed (consistent with
+  the in-memory metadataStore).
+- **Tests:** +3 unit tests in `tests/readinessScore.test.js`
+  (quickWins shape, perfect-score returns empty, null-report returns
+  empty). 66 → 69 tests, audit clean. UI verification (banner visible
+  + chip click + dismiss persistence) is the maintainer's eyeball
+  pass — `docs/maintainer-todo.md` already has the "open dev server
+  and check the dashboard" item.
 
 ### B4. Period-over-period comparison (top 3 KPI tiles only) [STRONG, 10h]
 - Limited scope: only the 3 most prominent KPI tiles get a delta vs.

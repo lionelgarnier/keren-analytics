@@ -24,7 +24,7 @@ const SIGNAL_WEIGHTS = {
  */
 export function computeReadinessScore(readinessReport) {
   if (!readinessReport) {
-    return { score: 0, maxScore: 100, breakdown: [], grade: "F" };
+    return { score: 0, maxScore: 100, percentage: 0, breakdown: [], grade: "F", quickWins: [] };
   }
 
   const signals = readinessReport.availableSignals || {};
@@ -58,12 +58,19 @@ export function computeReadinessScore(readinessReport) {
     return b.points - a.points;
   });
 
+  const quickWins = breakdown
+    .filter((row) => !row.available && row.points > 0)
+    .sort((a, b) => b.points - a.points)
+    .slice(0, 3)
+    .map((row) => ({ signal: row.signal, label: row.label, points: row.points }));
+
   return {
     score,
     maxScore,
     percentage: Math.round((score / maxScore) * 100),
     breakdown,
     grade: gradeFromScore(score, maxScore),
+    quickWins,
   };
 }
 
