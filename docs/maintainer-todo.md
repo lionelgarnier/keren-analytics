@@ -220,10 +220,67 @@ action are yours.
 - **Status**: TODO (≤ 5 min).
 
 ### `docs/launch-strategy.md` traction-gate review
-- **Why**: Phase 3 (multi-tenant SaaS) and Phase 4 (multi-cloud) are
-  gated on signals defined there. As launch unfolds you'll want to
-  re-read this and decide if any gate criterion shifted.
-- **Status**: ongoing.
+- **Why**: Phase 3 (multi-tenant SaaS) and Phase 4 (multi-cloud) were
+  originally gated on signals defined there. **Now superseded by ADR 0001**
+  (portfolio pivot) — the SaaS gate is no longer the active decision.
+  Multi-cloud becomes a primary deliverable, not a gated bet. Document
+  kept as historical reference.
+- **Status**: superseded — see `docs/adr/0001-positioning-portfolio.md`.
+
+---
+
+## 6. Pivot vitrine (ADRs 0001-0003) — items à arbitrer / exécuter
+
+### Renommer le projet
+- **Why**: ADR 0001 acte le repositionnement vitrine multi-cloud. Le suffixe
+  `-for-azure` devient trompeur dès que les adapters Scaleway/AWS/GCP existent.
+- **When**: avant la Phase A (refacto provider), pour éviter une cascade de
+  renames. Compatible avec le sprint pré-launch en cours si on veut consolider.
+- **How**: arbitrer le nouveau nom (suggestions : `easy-analytics`,
+  `omni-analytics`, `tenant-analytics`). Ensuite rename GitHub repo (redirect
+  auto), update `package.json`, `README.md`, `public/index.html`, landing,
+  tous les `docs/**/*.md` qui mentionnent "for Azure". PR dédiée, pas
+  bundlée avec un changement d'archi.
+- **Status**: TODO — bloquant pour lancer la Phase A.
+
+### Compte Scaleway + dossier Startup Program
+- **Why**: ADR 0002 fait de Scaleway l'hôte primaire de la démo. Le free tier
+  suffit pour démarrer ; les crédits Startup Program (Early Stage €9k / Growth
+  €36k) seraient utiles pour LLM lourd via Generative APIs.
+- **When**: free tier dès Phase A. Dossier Startup Program quand le repo a
+  un README propre + un nom stable (i.e. après le renaming).
+- **How**: créer compte Scaleway → créer un projet `easy-analytics-demo` →
+  IAM application + API key → stocker les creds dans GitHub Secrets pour le
+  workflow `deploy-scaleway.yml`. Dossier Startup Program via le portail
+  Scaleway, joindre le repo public.
+- **Status**: TODO.
+
+### Setup OpenTofu + GitHub Actions secrets pour Scaleway
+- **Why**: ADR 0003 utilise OpenTofu/GH Actions pour le déploiement one-click.
+- **When**: Phase A.
+- **How**: secrets GitHub à créer : `SCW_ACCESS_KEY`, `SCW_SECRET_KEY`,
+  `SCW_DEFAULT_PROJECT_ID`, `SCW_DEFAULT_REGION` (=`fr-par`),
+  `AZURE_CLIENT_ID`/`AZURE_CLIENT_SECRET` si la démo doit accepter du real
+  Azure. Pin `tofu` version dans `.tool-versions` ou `mise.toml`.
+- **Status**: TODO.
+
+### Mettre à jour `CLAUDE.md` après Phase A
+- **Why**: `CLAUDE.md` mentionne encore "Phase 3/4 gated, do not start
+  speculatively". Après ADR 0001 ce n'est plus exact.
+- **When**: après la Phase A (refacto provider), pour que les agents
+  travaillent avec la bonne map mentale dès la Phase B.
+- **How**: remplacer la section "Status" et "Known gaps" par une référence
+  aux ADR 0001-0003. Garder le reste (invariants, conventions) inchangé —
+  ils tiennent toujours.
+- **Status**: TODO.
+
+### Domaine de démo
+- **Why**: l'URL publique (`demo.<projet>.dev` ou équivalent) doit refléter
+  le nouveau nom du projet.
+- **When**: après le renaming.
+- **How**: réserver le domaine, configurer DNS chez Scaleway, certificat
+  Let's Encrypt managé.
+- **Status**: TODO.
 
 ---
 

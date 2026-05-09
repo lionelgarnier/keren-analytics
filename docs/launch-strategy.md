@@ -1,11 +1,18 @@
 # OSS-First Launch Strategy
 
+> **STATUS — 2026-05-09: Partially superseded by
+> [ADR 0001](adr/0001-positioning-portfolio.md).**
+>
+> The OSS-first hard-launch tactics in this document remain valid. The
+> **traction-gate logic in § 3** (T+90 decision to switch to hosted SaaS)
+> is **no longer the active framing** — the project pivoted to a portfolio /
+> showcase angle where multi-cloud is a primary deliverable, not a gated
+> bet. Read this document for the launch tactics; read ADR 0001 for the
+> strategic framing that overrides § 3.
+>
 > **Audience.** Founder + future agents working on this repo. Read this before
 > shipping anything that affects the public surface of the product (README,
 > demo, landing, docs).
->
-> **Status.** Draft — adopted as the working strategy, pending the founder's
-> explicit go for the launch sprint.
 
 ## 1. Thesis
 
