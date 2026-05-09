@@ -151,7 +151,7 @@ forward:
 
 ### Option A — Multi-tenant first-party app
 
-Register the SaaS-hosted Easy Analytics as a multi-tenant Entra ID app. Users
+Register the SaaS-hosted Keren Analytics as a multi-tenant Entra ID app. Users
 sign in once via "Sign in with Microsoft", consent on behalf of their tenant,
 and the app uses on-behalf-of (OBO) flow to query their workspace. **Zero
 manual setup.** This is the only experience that delivers the "90 seconds"

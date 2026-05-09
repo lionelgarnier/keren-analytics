@@ -17,7 +17,7 @@
 
 ## Track A — Public surface (the things strangers see first)
 
-### A1. Demo URL — `demo.easy-analytics.dev` or equivalent [BLOCKER, 6h]
+### A1. Demo URL — `demo.keren-analytics.dev` or equivalent [BLOCKER, 6h]
 - Stand up a public hosted instance using mock mode (no Azure auth needed).
 - Pin a deterministic mock dataset that tells a complete product story
   (visitors trending up, one anomaly, one slow endpoint, readiness score 68).
@@ -104,7 +104,7 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
   primary, Connect-Azure is ghost, and a third button links the repo
   with a ★ icon. Below-the-fold sections, in order: feature cards
   (lightly updated copy to mention period-over-period chips and the
-  paste-into-Cursor framing), comparison table (Easy Analytics vs
+  paste-into-Cursor framing), comparison table (Keren Analytics vs
   Azure Portal / Datadog / Power BI; 6 rows; honesty disclaimer
   underneath), security paragraph (links the seven encoded controls
   + the SECURITY.md reporting path), 3-question FAQ (data storage /
@@ -136,7 +136,7 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
   ```bash
   az deployment sub create -f deploy/azure-app-registration.bicep \
     -p redirectUri=...
-  docker run -p 3000:3000 -e AZURE_CLIENT_ID=... easy-analytics
+  docker run -p 3000:3000 -e AZURE_CLIENT_ID=... keren-analytics
   ```
 - Keep the long manual guide as a fallback section.
 - **Shipped:** went with a single bash script (`deploy/azure-app-registration.sh`)
@@ -378,7 +378,7 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
 ## Track D — Distribution prep (the launch ammunition)
 
 ### D1. Show HN post draft [BLOCKER, 3h]
-- Title format: "Show HN: Easy Analytics — 2-min Azure App Insights
+- Title format: "Show HN: Keren Analytics — 2-min Azure App Insights
   dashboards (open source, AI-mapped)".
 - Body: 4-6 paragraphs:
   1. What it is (one paragraph).

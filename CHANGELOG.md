@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to **Easy Analytics for Azure** are documented in this
+All notable changes to **Keren Analytics** are documented in this
 file. Format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/);
 this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
@@ -13,7 +13,7 @@ for the per-track status.
 ### Added
 - Landing page on `/` rewritten as a launch one-pager — tagline, three
   CTAs (Try the demo / Connect your Azure / ★ Star on GitHub),
-  comparison table (Easy Analytics vs Azure Portal / Datadog / Power
+  comparison table (Keren Analytics vs Azure Portal / Datadog / Power
   BI), security trust paragraph, 3-question FAQ, and a privacy-clean
   footer (no tracking by default; explicit Plausible/Umami slot for
   the operator).
@@ -152,5 +152,5 @@ First public release. Everything below is what shipped on day one.
   supertest for API tests. All run in mock mode (`NODE_ENV=test`
   forces `azureMode=mock`).
 
-[Unreleased]: https://github.com/lionelgarnier/easy-analytics-for-azure/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/lionelgarnier/easy-analytics-for-azure/releases/tag/v0.1.0
+[Unreleased]: https://github.com/lionelgarnier/keren-analytics/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/lionelgarnier/keren-analytics/releases/tag/v0.1.0

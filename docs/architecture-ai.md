@@ -239,7 +239,7 @@ sanitized but workspace-identifying metadata. Audit logs record
 ┌────────────────────────────────────┐
 │  Single host (Docker Compose / k8s)│
 │  ┌──────────────────────────────┐  │
-│  │ easy-analytics               │  │  AI_PROVIDER=ollama
+│  │ keren-analytics               │  │  AI_PROVIDER=ollama
 │  │ Node 22, Express             │  │  OLLAMA_HOST=http://ollama:11434
 │  └────────────┬─────────────────┘  │
 │               │                    │

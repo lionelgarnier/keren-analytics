@@ -21,7 +21,7 @@
 #   2. Adds the redirect URI on the Web platform.
 #   3. Adds delegated permission: Azure Service Management → user_impersonation.
 #   4. Mints a fresh client secret (appended, existing secrets preserved).
-#   5. Prints the env vars Easy Analytics needs.
+#   5. Prints the env vars Keren Analytics needs.
 #
 # What it does NOT do:
 #   - Grant admin consent (organization-level action; ask your Entra
@@ -31,7 +31,7 @@
 
 set -euo pipefail
 
-DISPLAY_NAME="easy-analytics"
+DISPLAY_NAME="keren-analytics"
 REDIRECT_URI="http://localhost:3000/auth/callback"
 SECRET_YEARS=1
 
@@ -93,7 +93,7 @@ END_DATE=$(date -u -d "+${SECRET_YEARS} years" +%Y-%m-%d 2>/dev/null \
 echo "Creating client secret (expires ${END_DATE})..."
 SECRET=$(az ad app credential reset \
   --id "$APP_ID" \
-  --display-name "easy-analytics-$(date -u +%Y%m%d)" \
+  --display-name "keren-analytics-$(date -u +%Y%m%d)" \
   --end-date "$END_DATE" \
   --append \
   --query password -o tsv)
@@ -119,6 +119,6 @@ If your organization enforces admin consent, ask an Entra admin to:
   click "Grant admin consent for <org>".
 
 Each signed-in user also needs (per subscription / workspace):
-  - Reader on the subscription (so Easy Analytics can discover App Insights)
+  - Reader on the subscription (so Keren Analytics can discover App Insights)
   - Log Analytics Reader on the workspace (so it can run KQL queries)
 EOF

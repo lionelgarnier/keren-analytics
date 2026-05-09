@@ -1,5 +1,5 @@
 {
-  "name": "easy-analytics-for-azure",
+  "name": "keren-analytics",
   "version": "0.1.0",
   "description": "Azure GA-like analytics dashboard (plug-and-play)",
   "type": "module",
@@ -16,15 +16,15 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/lionelgarnier/easy-analytics-for-azure.git"
+    "url": "git+https://github.com/lionelgarnier/keren-analytics.git"
   },
   "keywords": [],
   "author": "Lionel Garnier <garniel6@gmail.com>",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/lionelgarnier/easy-analytics-for-azure/issues"
+    "url": "https://github.com/lionelgarnier/keren-analytics/issues"
   },
-  "homepage": "https://github.com/lionelgarnier/easy-analytics-for-azure#readme",
+  "homepage": "https://github.com/lionelgarnier/keren-analytics#readme",
   "dependencies": {
     "dotenv": "^17.2.4",
     "express": "^5.2.1",

@@ -16,7 +16,7 @@ of fixing the incident.**
       returns 200 with `{"authenticated":false,...}` JSON.
 - [ ] **Tests + audit green on `main`**: GitHub Actions Tests + Security
       audit badges both green.
-      <https://github.com/lionelgarnier/easy-analytics-for-azure/actions>
+      <https://github.com/lionelgarnier/keren-analytics/actions>
 - [ ] **`SESSION_SECRET` is real on the deploy target** (Render env var
       tab, not the placeholder). The app refuses to boot in production
       otherwise — `src/config.js` throws.

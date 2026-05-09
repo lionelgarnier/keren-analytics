@@ -1,8 +1,8 @@
-# Vision Produit - Easy Analytics
+# Vision Produit - Keren Analytics
 
 ## TL;DR
 
-Easy Analytics transforme la telemetrie cloud existante en dashboards actionnables
+Keren Analytics transforme la telemetrie cloud existante en dashboards actionnables
 en moins de 2 minutes, sans agent, sans instrumentation supplementaire, et sans
 stocker aucune donnee brute. Le produit devient le point d'entree unique pour les
 equipes marketing (analyse produit et comportement utilisateur) et techniques
@@ -37,7 +37,7 @@ comprendre les metriques cles de son application sans lire de documentation.
 | **Pas de PII** | Les resultats sont toujours des comptages, jamais des listes d'utilisateurs |
 | **Ephemere par design** | Les resultats caches expirent (5-15 min TTL) |
 
-**Message confiance** : "Vos donnees restent dans votre tenant Azure. Easy Analytics
+**Message confiance** : "Vos donnees restent dans votre tenant Azure. Keren Analytics
 ne stocke que la structure et les comptages, jamais les donnees brutes."
 
 ### 1.3 Multi-cloud ("Cloud-Agnostic by Design")
@@ -48,7 +48,7 @@ fondation de la strategie multi-cloud :
 
 ```
                     +-------------------+
-                    |   Easy Analytics  |
+                    |   Keren Analytics  |
                     |   (Core Engine)   |
                     +--------+----------+
                              |
@@ -148,7 +148,7 @@ Apres l'analyse de readiness, le systeme identifie les signaux manquants et gene
 Quand les `pageViews` sont manquantes et que le schema detecte une stack React :
 
 ```
-Prompt genere par Easy Analytics :
+Prompt genere par Keren Analytics :
 ---
 Je dois ajouter le tracking Application Insights dans mon application React.
 
@@ -171,7 +171,7 @@ Genere le code complet avec les fichiers a modifier.
 ### 3.3 Avantages de cette approche
 
 - **Pas besoin de lire la codebase** : le prompt suffit pour le LLM
-- **Personnalise** : le prompt inclut le contexte specifique detecte par Easy Analytics
+- **Personnalise** : le prompt inclut le contexte specifique detecte par Keren Analytics
 - **Actionnable** : copier-coller le prompt => obtenir du code fonctionnel
 - **Boucle vertueuse** : plus de telemetrie => meilleur dashboard => plus de valeur
 - **Zero friction** : pas de documentation a lire, pas d'expertise requise
@@ -193,7 +193,7 @@ Genere le code complet avec les fichiers a modifier.
 
 La telemetrie cloud contient bien plus que des metriques de trafic ou de performance.
 Les memes donnees, vues sous un angle different, servent d'autres equipes. C'est la
-clef pour transformer Easy Analytics d'un outil d'equipe en une plateforme d'entreprise.
+clef pour transformer Keren Analytics d'un outil d'equipe en une plateforme d'entreprise.
 
 ### 4.2 Departements cibles
 
@@ -207,7 +207,7 @@ clef pour transformer Easy Analytics d'un outil d'equipe en une plateforme d'ent
 
 ### 4.3 Comment ca marche techniquement ?
 
-Les donnees sont deja la dans Application Insights / Log Analytics. Easy Analytics
+Les donnees sont deja la dans Application Insights / Log Analytics. Keren Analytics
 ajoute des "lenses" (vues) par departement :
 
 ```

@@ -1,4 +1,4 @@
-# Contributing to Easy Analytics
+# Contributing to Keren Analytics
 
 Thanks for considering a contribution. This file is intentionally short —
 the project conventions live in [`CLAUDE.md`](CLAUDE.md), the architecture

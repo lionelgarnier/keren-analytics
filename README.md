@@ -1,7 +1,7 @@
-# Easy Analytics
+# Keren Analytics
 
-[![Tests](https://github.com/lionelgarnier/easy-analytics-for-azure/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/lionelgarnier/easy-analytics-for-azure/actions/workflows/tests.yml)
-[![Security audit](https://github.com/lionelgarnier/easy-analytics-for-azure/actions/workflows/security-audit.yml/badge.svg?branch=main)](https://github.com/lionelgarnier/easy-analytics-for-azure/actions/workflows/security-audit.yml)
+[![Tests](https://github.com/lionelgarnier/keren-analytics/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/lionelgarnier/keren-analytics/actions/workflows/tests.yml)
+[![Security audit](https://github.com/lionelgarnier/keren-analytics/actions/workflows/security-audit.yml/badge.svg?branch=main)](https://github.com/lionelgarnier/keren-analytics/actions/workflows/security-audit.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node 22+](https://img.shields.io/badge/node-%3E%3D22-brightgreen.svg)](package.json)
 
@@ -26,14 +26,14 @@ The Azure portal can answer "how many requests came in last hour?", but
 turning App Insights into a *Marketing* dashboard (campaigns, geo,
 funnels) or a clean *Technical* view (top slow endpoints, error rate
 trends) means hand-writing KQL and rebuilding the same charts every
-project. Easy Analytics gives you both views, plus a readiness score
+project. Keren Analytics gives you both views, plus a readiness score
 that tells you which signals are missing before you ask.
 
 ## Try it now
 
 ```bash
-git clone https://github.com/lionelgarnier/easy-analytics-for-azure.git
-cd easy-analytics-for-azure
+git clone https://github.com/lionelgarnier/keren-analytics.git
+cd keren-analytics
 docker compose up --build
 ```
 
@@ -49,7 +49,7 @@ commands and one `.env` file.
 > register their own Azure app, do **not** create a client secret, and
 > do **not** manage permissions. They click *"Connect your Azure"* on
 > the landing page and sign in with their normal Microsoft account —
-> same flow as Slack / Loom / Notion. The token Easy Analytics receives
+> same flow as Slack / Loom / Notion. The token Keren Analytics receives
 > is *delegated*, so the app reads only what the user already had access
 > to. Tenant admins may see a one-time consent screen the first time
 > someone from their org signs in; that's a single click.
@@ -85,7 +85,7 @@ One image per group below would let the bullet list breathe.
 
 ## How it compares
 
-| | **Easy Analytics** | Azure Portal | Datadog | Power BI |
+| | **Keren Analytics** | Azure Portal | Datadog | Power BI |
 |---|---|---|---|---|
 | Time to first dashboard          | **~2 min** (Docker) | 30+ min (write KQL) | 1–2h (agent + setup) | hours (data prep) |
 | Marketing vs Technical separation| Built-in            | Manual workbook     | Add-on                | Manual report      |

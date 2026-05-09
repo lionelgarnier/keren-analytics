@@ -394,7 +394,7 @@ app.get("/auth/setup", (req, res) => {
       ? "OAuth is configured. Click 'Connect Azure' to sign in."
       : [
           "1. Go to Azure Portal → Entra ID → App registrations → New registration",
-          "2. Name: 'Easy Analytics' (or any name)",
+          "2. Name: 'Keren Analytics' (or any name)",
           "3. Supported account types: 'Accounts in any organizational directory'",
           `4. Redirect URI (Web): ${config.azureRedirectUri}`,
           "5. Click Register",

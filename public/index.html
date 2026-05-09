@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Easy Analytics</title>
+    <title>Keren Analytics</title>
     <link rel="stylesheet" href="/styles.css" />
     <script src="/theme-init.js"></script>
   </head>
@@ -12,7 +12,7 @@
     <nav class="navbar">
       <div class="navbar-inner">
         <div class="navbar-left">
-          <span class="logo">Easy Analytics</span>
+          <span class="logo">Keren Analytics</span>
           <span class="badge" id="modeBadge"></span>
         </div>
         <div class="navbar-right">
@@ -40,7 +40,7 @@
           <div class="landing-actions">
             <button id="landingPreviewBtn" class="btn btn-primary btn-lg">Try the demo</button>
             <button id="landingConnectBtn" class="btn btn-ghost btn-lg">Connect your Azure</button>
-            <a class="btn btn-ghost btn-lg landing-star-btn" href="https://github.com/lionelgarnier/easy-analytics-for-azure" target="_blank" rel="noopener">★ Star on GitHub</a>
+            <a class="btn btn-ghost btn-lg landing-star-btn" href="https://github.com/lionelgarnier/keren-analytics" target="_blank" rel="noopener">★ Star on GitHub</a>
           </div>
           <!--
           HERO SCREENSHOT placeholder (A3 / A5 — see docs/maintainer-todo.md).
@@ -74,7 +74,7 @@
               <thead>
                 <tr>
                   <th></th>
-                  <th>Easy Analytics</th>
+                  <th>Keren Analytics</th>
                   <th>Azure Portal</th>
                   <th>Datadog</th>
                   <th>Power BI</th>
@@ -144,14 +144,14 @@
           </p>
           <p>
             That promise is encoded as automated checks in
-            <a href="https://github.com/lionelgarnier/easy-analytics-for-azure/blob/main/scripts/security-audit.mjs" target="_blank" rel="noopener"><code>scripts/security-audit.mjs</code></a>.
+            <a href="https://github.com/lionelgarnier/keren-analytics/blob/main/scripts/security-audit.mjs" target="_blank" rel="noopener"><code>scripts/security-audit.mjs</code></a>.
             Seven controls run on every push &amp; PR plus a Monday cron —
             sensitive-data logging, session-cookie hardening, CSP purity,
             no-raw-telemetry-persistence, committed env-files placeholder,
             <code>npm audit</code> high+. Production refuses to boot without a
             real <code>SESSION_SECRET</code>; per-IP rate limiting protects the
             public demo. See the
-            <a href="https://github.com/lionelgarnier/easy-analytics-for-azure/blob/main/SECURITY.md" target="_blank" rel="noopener">security policy</a>
+            <a href="https://github.com/lionelgarnier/keren-analytics/blob/main/SECURITY.md" target="_blank" rel="noopener">security policy</a>
             for the auditable controls and the private reporting path.
           </p>
         </div>
@@ -176,13 +176,13 @@
               <em>your</em> permissions — Reader on the subscription, Log
               Analytics Reader on the workspace. No client secret to manage on
               your side. Full setup in
-              <a href="https://github.com/lionelgarnier/easy-analytics-for-azure/blob/main/docs/setup-entra-id.md" target="_blank" rel="noopener">docs/setup-entra-id.md</a>.
+              <a href="https://github.com/lionelgarnier/keren-analytics/blob/main/docs/setup-entra-id.md" target="_blank" rel="noopener">docs/setup-entra-id.md</a>.
             </p>
           </details>
           <details>
             <summary>Do I need to register my own Azure app?</summary>
             <p>
-              No. The host of the Easy Analytics instance you're using
+              No. The host of the Keren Analytics instance you're using
               (this demo, or whoever deployed it inside your company) did
               that <strong>once</strong>. You just click <em>Connect your
               Azure</em> and sign in with your normal Microsoft account —
@@ -211,16 +211,16 @@
 
         <footer class="landing-footer">
           <div class="landing-footer-links">
-            <a href="https://github.com/lionelgarnier/easy-analytics-for-azure" target="_blank" rel="noopener">GitHub</a>
+            <a href="https://github.com/lionelgarnier/keren-analytics" target="_blank" rel="noopener">GitHub</a>
             <span class="landing-footer-sep">·</span>
-            <a href="https://github.com/lionelgarnier/easy-analytics-for-azure/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
+            <a href="https://github.com/lionelgarnier/keren-analytics/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
             <span class="landing-footer-sep">·</span>
-            <a href="https://github.com/lionelgarnier/easy-analytics-for-azure/blob/main/SECURITY.md" target="_blank" rel="noopener">Security</a>
+            <a href="https://github.com/lionelgarnier/keren-analytics/blob/main/SECURITY.md" target="_blank" rel="noopener">Security</a>
             <span class="landing-footer-sep">·</span>
             <a href="mailto:garniel6@gmail.com">Contact</a>
           </div>
           <div class="landing-footer-meta">
-            Easy Analytics — © Lionel Garnier and contributors. No tracking
+            Keren Analytics — © Lionel Garnier and contributors. No tracking
             cookies; the only analytics on this page is whatever Plausible /
             Umami snippet the operator pastes in (none by default).
           </div>
@@ -242,7 +242,7 @@
       <!-- Onboarding banner (first dashboard load) -->
       <div id="onboardingBanner" class="onboarding-banner hidden">
         <div class="onboarding-content">
-          <strong>Welcome to Easy Analytics!</strong>
+          <strong>Welcome to Keren Analytics!</strong>
           <span>Use the tabs above to switch between Marketing and Technical views. Check the Readiness tab to improve your telemetry coverage.</span>
         </div>
         <button id="onboardingDismiss" class="btn btn-ghost btn-sm">Got it</button>
@@ -739,7 +739,7 @@
           <!-- Cross-department teaser -->
           <div class="panel panel-teaser">
             <h3>Coming Soon: Cross-Department Views</h3>
-            <p class="text-muted">Easy Analytics is expanding beyond Marketing and Engineering. Here's what's on the roadmap:</p>
+            <p class="text-muted">Keren Analytics is expanding beyond Marketing and Engineering. Here's what's on the roadmap:</p>
             <div class="dept-grid">
               <div class="dept-card">
                 <span class="dept-icon">F</span>
