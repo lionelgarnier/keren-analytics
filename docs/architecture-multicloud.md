@@ -2,23 +2,31 @@
 
 ## Status
 
-ACCEPTED — Updated 2026-05-09 to reflect ADR 0001 (portfolio/showcase
-positioning), ADR 0002 (Scaleway as demo host), ADR 0003 (Terraform one-click
-deploy). Multi-cloud is now a **first-class deliverable**, not a speculative
-Phase 4 gated on traction. Azure implementation exists. Scaleway, AWS, GCP
-adapters scheduled per ADR 0001 § Decision 3.
+ACCEPTED — Updated 2026-05-09 after [ADR 0004](adr/0004-azure-first-reversal.md).
+Azure is the **only implemented data provider in V1**. The interface and
+patterns described below are **future-proofing notes** that keep the door
+open for a V2 multi-cloud expansion (Scaleway first, then AWS/GCP), gated on
+V1 traction signals — not commitments to ship adapters in V1.
 
 ## Context
 
-Easy Analytics started with Azure (Application Insights + Log Analytics). Per
-ADR 0001, the project pivots to a portfolio/showcase angle: the same app must
-ingest telemetry from **Azure App Insights, AWS CloudWatch + X-Ray, GCP Cloud
-Logging + Trace, and Scaleway Cockpit (Loki/Prometheus)** — each behind the
-same UX, with no cloud-specific code in `src/core/`.
+Easy Analytics is built around Azure Application Insights + Log Analytics.
+Per [ADR 0001](adr/0001-positioning-portfolio.md) the project is a portfolio
+showcase, but per [ADR 0004](adr/0004-azure-first-reversal.md) the V1 pitch
+and implementation stay Azure-focused: distribution and audience all live in
+the MS ecosystem, and shipping a focused Azure tool first is the strongest
+brand move for the maintainer's "product engineer" positioning.
 
-The architecture must therefore make multi-cloud real and testable, not
-hypothetical, while staying minimal (no abstraction layer that exists only to
-be elegant — every adapter must have a working consumer).
+That said, the codebase already separates `mockClient` from `realClient`
+behind a factory, which is the seed of a clean cloud-provider abstraction.
+This document captures the **target shape** of that abstraction so that:
+
+1. The V1 refactor (`src/azure/` → `src/providers/azure/`) lands on a
+   structure that is ready for a second adapter without further churn.
+2. When V2 is triggered, the work is "implement an interface", not
+   "redesign the architecture".
+3. The architecture itself becomes an asset for the V2 portfolio article
+   (*"How I ported my Azure-native tool to Scaleway in 2 weeks"*).
 
 ## Decision
 
@@ -308,28 +316,40 @@ userAgent          client_Browser           userAgent               userAgent
 - Mapping and readiness logic must be parameterized by provider
 - The LLM layer goes through LiteLLM so adding/swapping a model is config-only
 
-## Timeline (revised — supersedes previous Q1/Q3/Q4 2026 schedule)
+## Timeline (revised after ADR 0004)
 
-Aligned with ADR 0001 § Decision 3:
+Replaces all previous schedules in this document. Aligned with the
+Azure-first plan:
 
-- **Phase A** (immediate, post-rename): Formalize interface, refactor
-  `src/azure/` → `src/providers/azure/`, ship Scaleway adapter (Cockpit) +
-  Terraform Scaleway. Demo public on Scaleway.
-- **Phase B**: Azure adapter relocated, LiteLLM wired for AI surfaces, Azure
-  Terraform module. Article: "same app, two clouds".
-- **Phase C**: AWS CloudWatch + X-Ray adapter, GCP Cloud Logging + Trace
-  adapter, Terraform modules. Article: cross-cloud LLM benchmark, cost
-  comparison.
-
-No traction gates — these are the portfolio deliverables themselves
-(see ADR 0001).
+- **V1 — Phase A** (in progress, post-rename): Refactor `src/azure/` →
+  `src/providers/azure/` so the directory name matches the abstraction.
+  Wire LiteLLM behind the existing `aiClient` interface (cf.
+  `architecture-ai.md`). Ship Azure-only deployment (Bicep or
+  `terraform/azure/`) + `deploy-azure.yml`. Demo public on Azure
+  Container Apps West Europe. **No second cloud adapter.**
+- **V1 — Phase B**: Hard launch on Azure ecosystem (Show HN, awesome-azure,
+  Reddit, MS DevRel, MVP outreach). Tactics in `launch-strategy.md`.
+- **V2 GATE — T+90**: Qualitative review of traction signals (stars,
+  inbound, real users). Pass = V2 is worth the investment. Fail = stay
+  Azure-only, find a different content angle.
+- **V2 — Scaleway adapter** (conditional): Add `src/providers/scaleway/`,
+  Cockpit (Loki/Prometheus) integration, `terraform/scaleway/` and
+  `deploy-scaleway.yml`. Portfolio article: *"Porting my Azure-native
+  analytics tool to Scaleway"*.
+- **V2+ — AWS / GCP adapters** (optional): Triggered by demand or by
+  appetite for a cross-cloud LLM benchmark article. Not a planned
+  deliverable.
 
 ## Related decisions
 
-- [ADR 0001](adr/0001-positioning-portfolio.md) — Portfolio/showcase pivot,
-  multi-cloud as primary deliverable
-- [ADR 0002](adr/0002-hosting-scaleway.md) — Scaleway as the demo host
+- [ADR 0001](adr/0001-positioning-portfolio.md) — Portfolio/showcase pivot
+  (project rename to `keren-analytics`, SaaS-track abandoned)
+- [ADR 0002](adr/0002-hosting-scaleway.md) — Scaleway hosting (superseded
+  by ADR 0004; relevant again only if V2 is triggered)
 - [ADR 0003](adr/0003-terraform-one-click-deploy.md) — Terraform per-cloud
-  one-click deploy
+  one-click deploy (deferred to V2; V1 ships Azure-only)
+- [ADR 0004](adr/0004-azure-first-reversal.md) — **Active V1 plan.**
+  Azure-first hosting (Container Apps West Europe + MS Founders Hub
+  credits), multi-cloud as conditional V2 content
 - [`architecture-ai.md`](architecture-ai.md) — AI provider abstraction
-  (`none` / `ollama` / `azure-openai`), now implemented via LiteLLM
+  (`none` / `ollama` / `azure-openai`), implementation via LiteLLM

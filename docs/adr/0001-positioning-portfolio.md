@@ -1,5 +1,16 @@
 # ADR 0001 — Repositionnement vitrine OSS multi-cloud
 
+> **STATUS UPDATE — 2026-05-09 : partiellement superseded par
+> [ADR 0004](0004-azure-first-reversal.md).**
+>
+> Le pivot vers une logique vitrine/portfolio (vs. SaaS-track) acté ici est
+> **maintenu**. Le renommage en `keren-analytics` est **maintenu**.
+>
+> En revanche le § Decision 3 (réorganisation roadmap autour du multi-cloud
+> comme livrable principal) est **remplacé** : on revient à une logique
+> **Azure-first**, le multi-cloud devient un contenu V2 conditionnel à la
+> traction. Voir ADR 0004 pour le raisonnement complet.
+
 ## Status
 
 ACCEPTED — 2026-05-09. Remplace l'angle "OSS-first SaaS-track" décrit dans

@@ -229,15 +229,15 @@ action are yours.
 
 ---
 
-## 6. Pivot vitrine (ADRs 0001-0003) — items à arbitrer / exécuter
+## 6. Pivot vitrine + retournement Azure-first (ADRs 0001-0004) — items à arbitrer / exécuter
 
 ### Renommer le projet en `keren-analytics`
-- **Why**: ADR 0001 acte le repositionnement vitrine multi-cloud. Le suffixe
-  `-for-azure` devient trompeur dès que les adapters Scaleway/AWS/GCP
-  existent. Nom retenu : `keren-analytics` (signature mainteneur via le
-  domaine `keren.run`, neutre côté cloud).
-- **When**: avant la Phase A (refacto provider), pour éviter une cascade de
-  renames.
+- **Why**: ADR 0001 acte le repositionnement vitrine. Le suffixe `-for-azure`
+  est redondant avec la tagline (qui reste *"plug-and-play analytics for
+  Azure App Insights"* — cf. ADR 0004) et alourdit le nom de repo. `keren-analytics`
+  signe le mainteneur via le domaine `keren.run` tout en restant neutre.
+- **When**: avant la Phase A (refacto provider + déploiement Azure), pour
+  éviter une cascade de renames.
 - **How**: rename GitHub repo (`lionelgarnier/easy-analytics-for-azure` →
   `lionelgarnier/keren-analytics`, redirect GH auto), puis PR dédiée pour
   mettre à jour `package.json`, `README.md`, `public/index.html`, landing,
@@ -245,53 +245,92 @@ action are yours.
   changement d'archi.
 - **Status**: TODO — bloquant pour lancer la Phase A.
 
-### DNS et domaine `keren.run`
-- **Why**: ADR 0002 retient `analytics.keren.run` comme URL canonique de la
-  démo, avec redirection `keren.run` → `analytics.keren.run` en V1.
-- **When**: après le déploiement Scaleway opérationnel (sinon il n'y a rien
-  à pointer).
+### Postuler à Microsoft for Startups Founders Hub
+- **Why**: ADR 0004 fait d'Azure Container Apps l'hôte de la démo. Founders
+  Hub donne 5k-150k$ de crédits Azure sur 4 ans + badge "Microsoft for
+  Startups" + accès light à des ressources MS. Coût démo proche de zéro,
+  signal de crédibilité gratuit.
+- **When**: dès maintenant. La candidature ne nécessite ni produit fini ni
+  tour de table, juste un projet B2B identifiable. Plus tôt = plus tôt les
+  crédits.
+- **How**: <https://www.microsoft.com/en-us/startups>, formulaire ~30 min.
+  Pitch type : *"Easy Analytics is an MIT-licensed plug-and-play dashboard
+  for Azure Application Insights. Aimed at Azure dev teams frustrated by the
+  portal UX. KQL-only, no raw data leaves the tenant. Hosting public demo
+  on Azure Container Apps."* Après acceptation : récupérer la subscription
+  ID + sponsor reference, ajouter le badge sur le README et la landing.
+- **Status**: TODO — à faire avant de provisionner l'hébergement Azure.
+
+### Provisionner l'hébergement Azure de la démo
+- **Why**: ADR 0004 § Decision 2 — Azure Container Apps West Europe.
+- **When**: Phase A, après acceptation Founders Hub (ou au pire en pay-as-you-go
+  scale-to-zero, qui reste très peu cher pour une démo).
 - **How**:
-  1. Récupérer l'endpoint du Scaleway Serverless Container après premier
-     `tofu apply`.
-  2. Chez le registrar de `keren.run`, créer un `CNAME analytics` →
-     endpoint Scaleway.
-  3. Configurer la redirection apex (`keren.run` → `analytics.keren.run`)
-     soit chez le registrar (s'il propose redirect HTTP), soit via un petit
-     worker Cloudflare / une règle Scaleway.
-  4. Vérifier que le cert Let's Encrypt managé Scaleway couvre bien
-     `analytics.keren.run`.
+  1. Créer une subscription Azure (utiliser la subscription Founders Hub
+     une fois activée).
+  2. Resource group `keren-analytics-prod` en West Europe.
+  3. Provisionner via **Bicep** (recommandé, plus court et idiomatique
+     Azure que Terraform pour une cible mono-cloud) ou `terraform/azure/`
+     si on garde l'optionalité multi-cloud — à trancher au moment de
+     l'implémentation. Composants : Container Apps environment + Container
+     App + Azure Container Registry (ou GHCR) + Key Vault + Custom Domain
+     pour `analytics.keren.run`.
+  4. App registration Entra ID multi-tenant (cf. `setup-entra-id.md`)
+     conservée — c'est l'auth des **utilisateurs**, indépendante de l'hôte.
 - **Status**: TODO.
 
-### Compte Scaleway + dossier Startup Program
-- **Why**: ADR 0002 fait de Scaleway l'hôte primaire de la démo. Le free tier
-  suffit pour démarrer ; les crédits Startup Program (Early Stage €9k / Growth
-  €36k) seraient utiles pour LLM lourd via Generative APIs.
-- **When**: free tier dès Phase A. Dossier Startup Program quand le repo a
-  un README propre + un nom stable (i.e. après le renaming).
-- **How**: créer compte Scaleway → créer un projet `easy-analytics-demo` →
-  IAM application + API key → stocker les creds dans GitHub Secrets pour le
-  workflow `deploy-scaleway.yml`. Dossier Startup Program via le portail
-  Scaleway, joindre le repo public.
+### Configurer GitHub Actions pour déployer sur Azure
+- **Why**: ADR 0004 § Decision 4 — workflow `deploy-azure.yml` via OIDC
+  federated credentials (pas de secret long-lived côté GH).
+- **When**: Phase A, après l'infra Azure provisionnée.
+- **How**: créer une **federated credential** sur l'app registration Azure
+  (subject `repo:lionelgarnier/keren-analytics:ref:refs/heads/main`),
+  secrets GitHub à créer : `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`,
+  `AZURE_SUBSCRIPTION_ID`. Workflow build & push vers ACR/GHCR puis
+  `az containerapp update`.
 - **Status**: TODO.
 
-### Setup OpenTofu + GitHub Actions secrets pour Scaleway
-- **Why**: ADR 0003 utilise OpenTofu/GH Actions pour le déploiement one-click.
-- **When**: Phase A.
-- **How**: secrets GitHub à créer : `SCW_ACCESS_KEY`, `SCW_SECRET_KEY`,
-  `SCW_DEFAULT_PROJECT_ID`, `SCW_DEFAULT_REGION` (=`fr-par`),
-  `AZURE_CLIENT_ID`/`AZURE_CLIENT_SECRET` si la démo doit accepter du real
-  Azure. Pin `tofu` version dans `.tool-versions` ou `mise.toml`.
+### DNS `analytics.keren.run` pointé sur Azure
+- **Why**: ADR 0002 § 7 (DNS maintenu par ADR 0004 § Decision 5) — l'URL
+  canonique `https://analytics.keren.run` reste en place, seul l'endpoint
+  cible change.
+- **When**: après le premier déploiement Azure réussi (sinon rien à pointer).
+- **How**:
+  1. Récupérer le FQDN Azure Container Apps après déploiement (forme
+     `<app>.<env>.westeurope.azurecontainerapps.io`).
+  2. Chez le registrar de `keren.run`, créer un `CNAME analytics` → FQDN
+     Azure. Vérifier le record `asuid.analytics` requis par Azure pour
+     l'attache du custom domain.
+  3. Activer le **managed certificate** Azure Container Apps pour
+     `analytics.keren.run` (Let's Encrypt managé).
+  4. Configurer la redirection apex `keren.run` → `analytics.keren.run`
+     (chez le registrar si possible, sinon via un Cloudflare Worker
+     gratuit ou un Azure Front Door Standard).
 - **Status**: TODO.
 
 ### Mettre à jour `CLAUDE.md` après Phase A
 - **Why**: `CLAUDE.md` mentionne encore "Phase 3/4 gated, do not start
-  speculatively". Après ADR 0001 ce n'est plus exact.
-- **When**: après la Phase A (refacto provider), pour que les agents
-  travaillent avec la bonne map mentale dès la Phase B.
+  speculatively" et la stratégie originale OSS-first SaaS-track. Après
+  ADRs 0001+0004, le bon récit est "Azure-first, vitrine portfolio,
+  multi-cloud V2 conditionnel".
+- **When**: après la Phase A (refacto provider + déploiement Azure réussi).
 - **How**: remplacer la section "Status" et "Known gaps" par une référence
-  aux ADR 0001-0003. Garder le reste (invariants, conventions) inchangé —
-  ils tiennent toujours.
+  aux ADRs 0001 et 0004. Garder le reste (invariants, conventions, mock
+  parity, KQL templating, etc.) inchangé — ils tiennent toujours.
 - **Status**: TODO.
+
+### ~~Compte Scaleway + dossier Startup Program~~ — reporté V2
+- ~~Why / How~~: superseded par ADR 0004 — l'hôte V1 est Azure, pas Scaleway.
+  Le compte Scaleway et le dossier Startup Program redeviennent pertinents
+  uniquement si la V2 multi-cloud est déclenchée (article portage
+  Scaleway). Conservé ici pour mémoire, à réactiver le cas échéant.
+- **Status**: deferred to V2 (post-traction).
+
+### ~~Setup OpenTofu Scaleway + GH secrets Scaleway~~ — reporté V2
+- ~~Why / How~~: superseded par ADR 0004 — V1 utilise Azure (Bicep ou
+  `terraform/azure/`). Les secrets Scaleway ne sont pas créés tant que la
+  V2 multi-cloud n'est pas activée.
+- **Status**: deferred to V2 (post-traction).
 
 
 ---

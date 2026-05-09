@@ -1,14 +1,21 @@
 # OSS-First Launch Strategy
 
-> **STATUS — 2026-05-09: Partially superseded by
-> [ADR 0001](adr/0001-positioning-portfolio.md).**
+> **STATUS — 2026-05-09: Tactics ACTIVE, traction-gate logic superseded.**
+> Updated after [ADR 0004](adr/0004-azure-first-reversal.md).
 >
-> The OSS-first hard-launch tactics in this document remain valid. The
-> **traction-gate logic in § 3** (T+90 decision to switch to hosted SaaS)
-> is **no longer the active framing** — the project pivoted to a portfolio /
-> showcase angle where multi-cloud is a primary deliverable, not a gated
-> bet. Read this document for the launch tactics; read ADR 0001 for the
-> strategic framing that overrides § 3.
+> - **Sections 1, 2, 4-12 (OSS hard launch, Azure ecosystem pickup,
+>   Show HN, awesome-azure, Reddit, dev.to, runbook) are the active V1
+>   plan.** Project is Azure-first, hosted on Azure Container Apps (with
+>   Microsoft for Startups credits), pitched as "plug-and-play 2-min
+>   analytics for Azure App Insights". Distribution leverages the MS
+>   ecosystem.
+> - **Section 3 traction gates (T+90 decide to switch to hosted SaaS) are
+>   neutralized.** The project pivoted to a portfolio/showcase angle (cf.
+>   ADR 0001) — no SaaS-track. The same numerical signals are now used as
+>   a qualitative heuristic to decide whether to trigger V2 multi-cloud
+>   (Scaleway port + article), per ADR 0004.
+> - **Project rename to `keren-analytics` and demo URL `analytics.keren.run`
+>   apply to all launch artifacts** (README, landing, OG image, posts).
 >
 > **Audience.** Founder + future agents working on this repo. Read this before
 > shipping anything that affects the public surface of the product (README,

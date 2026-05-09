@@ -1,5 +1,19 @@
 # ADR 0002 — Hôte de la démo publique : Scaleway
 
+> **STATUS UPDATE — 2026-05-09 : superseded par
+> [ADR 0004](0004-azure-first-reversal.md).**
+>
+> La décision retenue est désormais **Azure Container Apps (West Europe)**
+> avec crédits Microsoft for Startups Founders Hub, pas Scaleway. Raisons :
+> cohérence audience (visiteur = dev Azure), distribution écosystème MS
+> gratuite, coût démo nul via Founders Hub, option acquihire/MS DevRel
+> conservée.
+>
+> Scaleway reste documenté comme **alternative pour self-hosters
+> EU-souverains** et comme **cible de portage V2** (article portfolio
+> conditionnel à la traction V1). Cette ADR est gardée comme trace de
+> raisonnement et reste pertinente si la V2 multi-cloud est déclenchée.
+
 ## Status
 
 ACCEPTED — 2026-05-09. Dépend de l'ADR 0001 (vitrine OSS multi-cloud).

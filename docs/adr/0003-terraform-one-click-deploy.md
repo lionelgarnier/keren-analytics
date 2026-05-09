@@ -1,5 +1,19 @@
 # ADR 0003 — Déploiement "one-click" via Terraform/OpenTofu, par cloud
 
+> **STATUS UPDATE — 2026-05-09 : reportée par
+> [ADR 0004](0004-azure-first-reversal.md).**
+>
+> Le scope multi-cloud (4 dossiers Terraform : Scaleway/Azure/AWS/GCP) est
+> **reporté à V2+**. En V1, on déploie uniquement sur Azure Container Apps,
+> avec **Bicep ou `terraform/azure/`** (à trancher au moment de
+> l'implémentation Phase A — Bicep est plus idiomatique Azure et plus
+> simple, Terraform plus portable si la V2 multi-cloud arrive).
+>
+> La logique générale de cette ADR (un dossier IaC isolé par cloud, scope
+> minimal compute + registry + secrets, workflows GH Actions séparés) reste
+> valable et sera ressortie quand un second adapter cloud arrivera. Gardée
+> comme trace.
+
 ## Status
 
 ACCEPTED — 2026-05-09. Dépend des ADR 0001 (vitrine multi-cloud) et 0002
