@@ -129,6 +129,9 @@ If a task explicitly asks to harden one of these, do it. Otherwise leave alone.
 - `docs/technical.md` — architecture overview
 - `docs/architecture-auth.md` — auth flow, token handling
 - `docs/architecture-multicloud.md` — provider interface for Phase 3/4
+- `docs/architecture-ai.md` — AI provider abstraction (none / ollama /
+  azure-openai), privacy boundary, per-task model routing. Read before
+  touching any of the `ai-*.md` specs or wiring an LLM call.
 - `docs/backlog/phase-{1..4}.md` — what's done, what's planned, what's out of scope
 - `docs/backlog/adoption-drivers.md` — product features ranked by adoption ROI
 - `docs/backlog/ai-{setup-wizard,environment-analysis,natural-language-queries,instrumentation-assistant}.md` — AI surfaces

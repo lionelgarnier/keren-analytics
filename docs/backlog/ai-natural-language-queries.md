@@ -250,9 +250,15 @@ cannot skip the preview step.
 
 ## Relationship to Existing Backlog
 
-- **AI Environment Analysis**: shares the Azure OpenAI configuration. Both
-  features benefit from the same `AZURE_OPENAI_ENDPOINT` setup. The environment
-  analysis runs once at setup; the query explorer runs on-demand.
+- **AI Provider abstraction**: this feature is the most quality-sensitive
+  consumer of the client defined in
+  [`../architecture-ai.md`](../architecture-ai.md). The `nlToKql` task
+  routes to a coder model (`qwen2.5-coder` for `ollama`, `gpt-4o` for
+  `azure-openai`). For the local provider, see the mitigations in the
+  architecture doc — KQL is the hardest task for small models.
+- **AI Environment Analysis**: shares the same `aiClient` and provider
+  configuration. The environment analysis runs once at setup; the query
+  explorer runs on-demand.
 - **Phase 3 — LLM Enhancements**: the query explorer is a superset of the
   "anomaly explanation" item already listed. A natural language query like
   "Why did the error rate spike yesterday?" would be answered by the same

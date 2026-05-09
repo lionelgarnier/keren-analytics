@@ -241,8 +241,11 @@ This requires:
   today produces static prompts per missing canonical signal. The assistant
   generalizes this from "signal gaps" to "business event gaps" with code
   snippets and verification queries.
-- Reuses the LLM client and shared schema-validation infrastructure
-  introduced by [`ai-environment-analysis.md`](ai-environment-analysis.md).
+- Calls the shared `aiClient` defined in
+  [`../architecture-ai.md`](../architecture-ai.md) with
+  `task: "instrumentation"` (routed to a coder model). The schema-validation
+  infrastructure introduced by
+  [`ai-environment-analysis.md`](ai-environment-analysis.md) is reused.
 - Feeds the conversion funnel feature in
   [`adoption-drivers.md`](adoption-drivers.md) Tier 1 — without this
   assistant, most tenants will not have the events the funnel needs.

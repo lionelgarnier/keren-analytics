@@ -193,7 +193,10 @@ command. Should ship regardless of Option A.
   the LLM.
 - **Not exposing telemetry to the LLM.** Only resource metadata and
   aggregated counts are sent — same security posture as
-  `ai-environment-analysis.md`.
+  `ai-environment-analysis.md`. Resource triage and narration go through the
+  `aiClient` interface defined in
+  [`../architecture-ai.md`](../architecture-ai.md), so a self-hoster can run
+  the whole wizard with `AI_PROVIDER=ollama` and zero outbound AI traffic.
 
 ## Success metrics
 
