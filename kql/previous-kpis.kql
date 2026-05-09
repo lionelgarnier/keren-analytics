@@ -1,0 +1,10 @@
+let start={{timeStart}};
+let end={{timeEnd}};
+{{tableName}}
+| where timestamp between (start..end)
+| extend canonicalUserId = {{userIdExpr}}
+| extend canonicalSessionId = {{sessionIdExpr}}
+| summarize
+    uniqueVisitors = dcount(iif(isnotempty(canonicalUserId), canonicalUserId, canonicalSessionId)),
+    sessions = dcount(canonicalSessionId),
+    pageViews = count()

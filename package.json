@@ -10,15 +10,17 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node src/server.js",
-    "test": "node --env-file=.env.test --test"
+    "test": "node --env-file=.env.test --test",
+    "audit:security": "node scripts/security-audit.mjs",
+    "docs:bundle": "bash scripts/build-strategy-bundle.sh"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/lionelgarnier/easy-analytics-for-azure.git"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "Lionel Garnier <garniel6@gmail.com>",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/lionelgarnier/easy-analytics-for-azure/issues"
   },

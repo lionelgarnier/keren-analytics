@@ -15,6 +15,7 @@ export async function runOverviewPipeline({
   customStart,
   customEnd,
   onProgress,
+  azureMode,
 }) {
   const progress = typeof onProgress === "function" ? onProgress : () => {};
   const timeRange = resolveTimeRange(rangeKey, customStart, customEnd);
@@ -169,6 +170,7 @@ export async function runOverviewPipeline({
     azureClient,
     readinessReport,
     onProgress: (label, pct) => progress(label, 0.25 + pct * 0.7),
+    azureMode,
   });
 
   logStateTransition(tenantId, { state: PipelineStates.CACHING_RESULTS });

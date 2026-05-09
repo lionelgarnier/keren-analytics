@@ -1,0 +1,24 @@
+name: Question
+description: Ask for help, clarification, or guidance. No bug or feature request needed.
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Questions are welcome. Before submitting, a quick look at:
+        - [`README.md`](../../blob/main/README.md)
+        - [`docs/setup-entra-id.md`](../../blob/main/docs/setup-entra-id.md)
+          (real Azure mode setup)
+        - [`SECURITY.md`](../../blob/main/SECURITY.md)
+        often answers the most common ones.
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: What you've tried / context
+      description: Optional, but helps us answer at the right level.

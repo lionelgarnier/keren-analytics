@@ -1,7 +1,24 @@
-const sessionSecret = process.env.SESSION_SECRET || "dev-secret-change-me";
+const PLACEHOLDER_SECRETS = new Set([
+  "dev-secret-change-me",
+  "change-me-in-production",
+]);
+
+const rawSessionSecret = process.env.SESSION_SECRET;
+const nodeEnv = process.env.NODE_ENV;
+const isPlaceholder = !rawSessionSecret || PLACEHOLDER_SECRETS.has(rawSessionSecret);
+
+if (isPlaceholder && nodeEnv === "production") {
+  throw new Error(
+    "SESSION_SECRET is required in production (got " +
+      (rawSessionSecret ? "a placeholder value" : "no value") +
+      "). Generate one with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
+  );
+}
+
+const sessionSecret = rawSessionSecret || "dev-secret-change-me";
 const port = Number(process.env.PORT || 3000);
 
-if (sessionSecret === "dev-secret-change-me" && process.env.NODE_ENV !== "test") {
+if (isPlaceholder && nodeEnv !== "test" && nodeEnv !== "production") {
   console.warn(
     "WARNING: Using default session secret. Set SESSION_SECRET environment variable for production use."
   );

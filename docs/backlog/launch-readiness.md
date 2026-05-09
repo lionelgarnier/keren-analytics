@@ -27,7 +27,7 @@
 - Health check + uptime monitoring (free tier of UptimeRobot or
   BetterStack).
 
-### A2. Root README rewrite [BLOCKER, 6h]
+### A2. Root README rewrite [BLOCKER, 6h] — DONE (asset placeholders await A3 / A1)
 The current README is informative but reads like docs, not like a pitch.
 Rewrite around this structure:
 1. **One-line tagline** that includes "Azure" + "AI" + a number.
@@ -45,6 +45,33 @@ Rewrite around this structure:
 
 The first screen of the README determines 70% of stargazers vs. bouncers.
 
+- **Shipped:** README rewritten end to end. Tagline as suggested
+  ("Turn Azure App Insights into shareable Marketing & Technical
+  dashboards in under 2 minutes — AI-mapped schema, deterministic KQL,
+  nothing raw ever leaves your tenant. MIT."). All 9 sections in
+  order; the "What's inside" list highlights the just-shipped B1-B4
+  surfaces (alias/regex schema mapping, narration panel, first-run
+  banner, period-over-period chips) so a HN visitor can see the
+  product is real, not slideware. Comparison table includes Azure
+  Portal / Datadog / Power BI with a one-line honesty disclaimer
+  underneath ("the columns we're least kind to are also the most
+  mature and have features we don't"). Privacy & security paragraph
+  links the SECURITY.md auditable controls and the seven encoded
+  checks. Roadmap links the per-track backlog and the
+  launch-strategy traction-gate doc. The old "API endpoints" + "Env
+  variables" wall-of-text trimmed to a short Configuration reference
+  pointing at `src/server.js` for the full surface.
+- **Asset placeholders:** the hero GIF block is an HTML comment
+  pointing at `docs/assets/hero.gif` — needs A3. The "What's inside"
+  bullet list has a sibling HTML comment marking where one screenshot
+  per group would let it breathe. The "Live demo · _coming with the
+  public launch_" line waits on A1 for the real URL. All three are
+  now tracked in `docs/maintainer-todo.md` as discrete TODOs so the
+  maintainer can swap them in without spelunking.
+- **Validation:** README renders cleanly (Markdown only, no broken
+  links to the existing tracked files). Tests still 74/74 — README
+  changes are pure-doc and don't touch any code path.
+
 ### A3. Hero GIF / Loom recording [BLOCKER, 4h]
 - 30-45 second screen recording: connect → dashboard renders → switch tabs →
   see readiness score → copy a prompt.
@@ -61,7 +88,7 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
 - Every share link must visually look like a real product, not a GitHub
   fallback card.
 
-### A5. One-page landing on the demo URL [STRONG, 5h]
+### A5. One-page landing on the demo URL [STRONG, 5h] — DONE (hero shot + Plausible await maintainer)
 - Above the fold: tagline + screenshot + two CTAs ("Try the demo",
   "Star on GitHub").
 - Below: comparison table, security paragraph, FAQ (3 questions: "does it
@@ -69,8 +96,37 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
 - Footer: GitHub link, license, contact email.
 - No tracking beyond Plausible/Umami self-hosted (privacy-aligned with
   product positioning).
+- **Shipped:** `public/index.html` `#landingPage` rewritten with the
+  spec's structure end to end. Tagline now matches the README
+  ("Azure App Insights → Marketing & Technical dashboards in 2
+  minutes. AI-mapped schema. 22 KQL templates. Nothing raw ever
+  leaves your tenant. MIT."). CTAs reordered so the demo button is
+  primary, Connect-Azure is ghost, and a third button links the repo
+  with a ★ icon. Below-the-fold sections, in order: feature cards
+  (lightly updated copy to mention period-over-period chips and the
+  paste-into-Cursor framing), comparison table (Easy Analytics vs
+  Azure Portal / Datadog / Power BI; 6 rows; honesty disclaimer
+  underneath), security paragraph (links the seven encoded controls
+  + the SECURITY.md reporting path), 3-question FAQ (data storage /
+  Azure connection / AI required), docs link, and a footer with
+  GitHub / MIT License / Security / Contact. All sections styled in
+  `public/styles.css` using the existing accent palette so the page
+  works in both light and dark mode without a second pass.
+- **No new tracking:** the landing footer copy promises "no tracking
+  cookies; the only analytics is whatever Plausible / Umami snippet
+  the operator pastes in." An HTML-comment slot at the bottom of
+  `#landingPage` marks the exact insertion point so the snippet
+  doesn't leak into the dashboard. Tracked in
+  `docs/maintainer-todo.md` under §3 Plausible / Umami.
+- **Tests:** new supertest case in `tests/api.test.js` asserts the
+  landing copy is wired (tagline, CTAs, comparison table headers,
+  FAQ questions, footer email). 74 → 75 tests; security audit clean.
+- **Asset placeholders (maintainer-side):** the hero screenshot above
+  the fold is an HTML-comment block expecting `<img class="landing
+  -hero-shot">`; the Plausible/Umami slot is a similar comment near
+  the bottom. Both land in `docs/maintainer-todo.md`.
 
-### A6. `docs/setup-entra-id.md` slim version [BLOCKER, 4h]
+### A6. `docs/setup-entra-id.md` slim version [BLOCKER, 4h] — DONE
 - Today: 13 manual portal steps. Hard wall for non-IT users.
 - Goal: 3-5 steps OR one Bicep one-click.
 - Ship a `deploy/azure-app-registration.bicep` that creates the app
@@ -83,10 +139,18 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
   docker run -p 3000:3000 -e AZURE_CLIENT_ID=... easy-analytics
   ```
 - Keep the long manual guide as a fallback section.
+- **Shipped:** went with a single bash script (`deploy/azure-app-registration.sh`)
+  rather than Bicep — the Microsoft.Graph Bicep extension can't surface a
+  client-secret value, so a pure-IaC path would still need an out-of-band
+  step. The script is idempotent (re-runs reuse the app and append a fresh
+  secret), GNU/BSD-portable, and prints the exact env vars to paste. README
+  install path now reads `az login` → run script → `docker compose up -d`.
+  `docs/setup-entra-id.md` keeps the manual portal flow as a fallback for
+  tenants where CLI app-registration is restricted.
 
 ## Track B — Product polish (what they see after they install)
 
-### B1. Layer 1 of `ai-environment-analysis.md` (alias heuristics) [BLOCKER, 12h]
+### B1. Layer 1 of `ai-environment-analysis.md` (alias heuristics) [BLOCKER, 12h] — DONE
 - Implement the alias table + regex patterns for userId / sessionId /
   pagePath / referrer in `src/core/mapping.js`.
 - Add `matchType` field (`builtin` | `alias` | `pattern`) to mapping output.
@@ -95,28 +159,114 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
 - **Why it's a blocker:** the current mapping is exact-match-only. Half of
   HN visitors trying their own tenant will see "no userId mapping" because
   they used `uid` or `visitorId`. That's a launch-killing first impression.
+- **Shipped:** `ALIASES` table + regex per canonical field, cross-table
+  consistency boost (`confidence: high` on 2+ tables), `matchType` /
+  `matchedKey` / `tablesSeen` exposed on each canonical mapping, custom
+  keys sanitized before injection, `allowedKqlExpressions(mapping)`
+  extends the renderer whitelist with alias-derived exprs. +11 tests.
 
-### B2. Layer 2 mock LLM narration on demo [STRONG, 8h]
+### B2. Layer 2 mock LLM narration on demo [STRONG, 8h] — DONE
 - On the demo URL only (mock mode), surface a "What we found" panel that
   reads like the LLM output described in `ai-environment-analysis.md`.
 - Canned response, no actual LLM call. Cost: 0 €.
 - Tagline appears in screenshots and the hero GIF: "AI explains what your
   telemetry looks like."
 - Real LLM integration ships post-launch (`ai-setup-wizard.md` proper).
+- **Shipped:** `src/core/narration.js` — deterministic generator that
+  composes a 3-4 sentence "Environment analysis" paragraph from the
+  dashboard payload (visitors, sessions, top campaign source, peak
+  hour, error-rate band, userId mapping type). Wired into
+  `buildOverviewDashboard` so the payload now carries `narration: {
+  headline, paragraph, badge, tagline, mode }`. Frontend renders it in
+  a new panel above the KPIs on the Marketing tab
+  (`public/index.html` → `#narrationPanel`,
+  `public/app.js` → `renderNarration`,
+  `public/styles.css` → `.narration-*`).
+- **Honesty tweak vs original spec:** rather than a fully canned string,
+  the same generator runs in both modes — mock mode shows it without
+  badge, real mode shows it with a "Preview — real LLM coming soon"
+  badge. The numbers come from the dashboard the user already sees,
+  so nothing is invented; the "AI explains" tagline is honest because
+  the panel does interpret the data, just deterministically. When
+  Azure OpenAI integration ships post-launch, the same payload shape
+  is what the frontend consumes — only the `paragraph` gets richer.
+- **Tests:** 10 unit tests in `tests/narration.test.js` (mode toggle,
+  badge presence, KPI presence in paragraph, peak-hour formatting,
+  error-rate threshold branch, mapping-type branches, empty-data
+  fallback, no template-token leakage, length bounds). Plus the api
+  integration test asserts `dashboard.narration.mode === "mock"` end
+  to end. 56 → 66 tests.
+- **Maintainer-side:** screenshots for the launch should include the
+  Marketing tab with this panel visible (above the fold). Tracked in
+  `docs/maintainer-todo.md` under the press-kit / hero-GIF items.
 
-### B3. First-run banner on dashboard [STRONG, 6h]
+### B3. First-run banner on dashboard [STRONG, 6h] — DONE
 - Compose a deterministic banner from existing readiness + mapping data:
   "Your environment scores 68/100. Two quick wins available: [Add user
   identity (+15)] [Capture browser timings (+8)]".
 - Click on a quick win → scroll to the matching prompt card.
 - No LLM needed for v1; the AI version is post-launch.
+- **Shipped:** server-side, `computeReadinessScore` now returns a
+  `quickWins` array (top 3 unavailable signals by points;
+  `src/core/readinessScore.js`). Frontend renders an
+  `<aside id="firstRunBanner">` at the top of `#dashboardPanel` —
+  visible across all three tabs because it sits above the tab-toolbar.
+  Layout: a left-side score chip (`68/100` in accent color), a title
+  ("Your environment scores 68/100. 2 quick wins available:"), and
+  pill-shaped buttons for each quick win (`User Identity (+15)`).
+  Clicking a chip switches to the Readiness tab via the existing
+  `activateTab("readiness")` helper, scrolls smooth-into-view to
+  `#signal-row-${signal}` (each score-row wrapper now carries that
+  stable id), and fires a 1.6s background flash to draw the eye.
+- **Dismiss + persistence:** `×` button writes
+  `eaa.firstRunBanner.dismissed.v1=1` to `localStorage`. The banner
+  also auto-hides when there are no quick wins (perfect score) or
+  when readinessScore is null/empty. No DB needed (consistent with
+  the in-memory metadataStore).
+- **Tests:** +3 unit tests in `tests/readinessScore.test.js`
+  (quickWins shape, perfect-score returns empty, null-report returns
+  empty). 66 → 69 tests, audit clean. UI verification (banner visible
+  + chip click + dismiss persistence) is the maintainer's eyeball
+  pass — `docs/maintainer-todo.md` already has the "open dev server
+  and check the dashboard" item.
 
-### B4. Period-over-period comparison (top 3 KPI tiles only) [STRONG, 10h]
+### B4. Period-over-period comparison (top 3 KPI tiles only) [STRONG, 10h] — DONE
 - Limited scope: only the 3 most prominent KPI tiles get a delta vs.
   previous period.
 - KQL templates accept a `compareTo: previous` parameter.
 - UI: small green/red delta chip + "vs last week" caption.
 - Full comparison + deployment markers ship post-launch.
+- **Shipped server side:** new `previousTimeRange(timeRange)` helper in
+  `core/timeRange.js` maps the launch ranges to their predecessors
+  (`today → yesterday`, `7d → prev7d`, `30d → prev30d`) and `null` for
+  anything else (custom range hides the chips). New
+  `kql/previous-kpis.kql` template runs a single `summarize` over the
+  prior window returning all three KPIs (`uniqueVisitors`, `sessions`,
+  `pageViews = count()`) — keeps query count to +1 instead of +3.
+  `core/dashboard.js` runs that query when a predecessor exists, then
+  `deltaEntry()` builds `{ current, previous, deltaPct, direction }`
+  per KPI with a `0.5%` neutral band and an explicit `null` deltaPct
+  when previous is zero (so a first-time tenant doesn't see misleading
+  +∞%). Final payload: `dashboard.kpis.comparison = {
+  previousRangeKey, label, uniqueVisitors, sessions, pageViews }` or
+  `null`. Cache key uses the prev range key, so previous results live
+  in their own cache slot.
+- **Shipped UI:** the 3 KPI tiles on the Marketing tab gain a
+  `.kpi-meta-row` with a colored `.kpi-delta` pill (`+13.6%` green up,
+  `-x%` red down, `~0%` neutral grey) and a `.kpi-compare` caption
+  ("vs last week" / "vs yesterday" / "vs last month"). Hidden when
+  comparison is null. No new dependency.
+- **Mock data:** `src/azure/mockData.js` gains `RANGE_SCALE` entries
+  for `yesterday: 0.06`, `prev7d: 0.22`, `prev30d: 0.88` (slightly
+  lower than current so the demo screenshots show the screenshot-
+  friendly green positive deltas) plus a `previousKpis` query handler.
+- **Tests:** new `tests/timeRange.test.js` (5 cases — predecessor key,
+  window length, today→yesterday, custom/null/unknown returns null,
+  comparisonLabel mapping). `tests/api.test.js` end-to-end asserts
+  `dashboard.kpis.comparison.previousRangeKey === "prev7d"` with all
+  three KPIs and a valid `direction`. 69 → 74 tests, audit clean.
+- **Out of scope (post-launch, per spec):** the deployment-markers
+  layer and full per-chart comparisons stay deferred.
 
 ### B5. "Copy share image" button [OPTIONAL, 4h]
 - Server-side render a PNG of the current dashboard view using the existing
@@ -124,17 +274,25 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
 - One button on every dashboard tab.
 - HN demographic loves "screenshot for Slack" workflows. Cheap viral lever.
 
-### B6. Demo dataset polish [BLOCKER, 3h]
+### B6. Demo dataset polish [BLOCKER, 3h] — DONE
 - Audit `src/azure/mockData.js`: every chart on every tab must have a
   visually interesting story.
 - Ensure: visible weekly seasonality, one anomaly day, one slow endpoint,
   meaningful geo distribution, varied browser mix.
 - The demo is also the launch screenshot source — boring data = boring
   launch.
+- **Shipped:** visitor traffic spike 4 days ago (×2.4, deterministic so
+  it lands in both 7d and 30d windows, marked `anomaly: "traffic_spike"`),
+  `/api/checkout` is the unmistakable slow + error outlier (p99 ~6s, 8.2%
+  error rate), 12-country geo distribution with Spain/Italy added, browser
+  mix expanded to 6 entries (Mobile Safari + Samsung Internet) and OS to 5
+  (Android added), KPI sparklines have a clearer upward trend on
+  visitors/sessions and a subtle improving-perf trend on response time
+  alongside the existing trailing error spike, lunch dip on hourly trend.
 
 ## Track C — Trust signals (security + project quality)
 
-### C1. Pre-launch security pass [BLOCKER, 4h]
+### C1. Pre-launch security pass [BLOCKER, 4h] — DONE
 - Verify no token / `code_verifier` / session secret is logged anywhere
   (grep + manual review of `src/server.js`, `src/azure/realClient.js`,
   `src/azure/tokenStore.js`).
@@ -143,8 +301,21 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
 - CSP review: minimize `unsafe-inline`, justify CDN allowlist.
 - Make the "no raw data leaves your tenant" claim provable: link to the
   exact lines in the code from the README/landing FAQ.
+- **Shipped:** turned the audit into a repeatable check
+  (`scripts/security-audit.mjs`, `npm run audit:security`) with 7
+  encoded controls (sensitive logging, session hardening, CSP, raw
+  telemetry persistence, committed env files, npm audit). GitHub
+  Actions workflow runs it on push/PR plus a Monday cron, so newly
+  disclosed transitive vulnerabilities turn the badge red even
+  without commits. README gains the green badge; `SECURITY.md`
+  documents the reporting policy, the audited posture, and the two
+  legitimate fs sinks (`core/audit.js` metadata events,
+  `core/metadataStore.js` setup-state JSON — no raw rows). One real
+  finding fixed in flight: bumped transitive `path-to-regexp` 8.3.0
+  → 8.4.2 and `qs` 6.14.1 → 6.15.1 via `npm audit fix` (no breaking
+  changes, tests still 43/43).
 
-### C2. GitHub repo polish [BLOCKER, 3h]
+### C2. GitHub repo polish [BLOCKER, 3h] — DONE (file-tracked items; Settings-side items remain manual)
 - About / topics / website URL / description filled in.
 - Issue templates (bug, feature request, question) in `.github/`.
 - `CONTRIBUTING.md` (short — link to docs).
@@ -153,15 +324,56 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
 - Pin the v0.1.0 release with proper notes.
 - Add badges: license, CI status (if CI is set up — see C3), Docker pull
   count.
+- **Shipped:** `LICENSE` (MIT, copyright Lionel Garnier and contributors)
+  with `package.json` aligned (`"license": "MIT"`, author populated).
+  `CONTRIBUTING.md` is short and points at `CLAUDE.md` for invariants and
+  at the per-track backlog for what's deliberately deferred.
+  `CODE_OF_CONDUCT.md` adopts Contributor Covenant 2.1 by URL reference
+  (avoids inlining the canonical text; reporting goes to the same email
+  as `SECURITY.md`). `.github/ISSUE_TEMPLATE/` ships three structured
+  forms (bug / feature / question) plus `config.yml` that disables blank
+  issues and surfaces the security reporting path. A short
+  `.github/PULL_REQUEST_TEMPLATE.md` reminds contributors to read
+  `CLAUDE.md` and run `npm test` + `npm run audit:security`. README
+  gains license + Node-version badges next to the existing security
+  badge. `SECURITY.md` updated with the real contact email and the
+  closed-as-fixed gaps removed (`SESSION_SECRET` fail-loud + rate
+  limiting). One adjacent fix carried in flight: `src/config.js` now
+  throws when `NODE_ENV=production` and `SESSION_SECRET` is missing or
+  a known placeholder, with 5 new tests in `tests/config.test.js`.
+- **Deferred (Settings-side, not file-tracked):** About / topics /
+  website URL / description on the GitHub repo page; pinning the
+  v0.1.0 release. These need the maintainer to click through GitHub
+  Settings; nothing to commit.
+- **Deferred (depends on other tracks):** the Docker-pull-count badge
+  needs a published Docker image (Track A6 territory); the CI-status
+  badge needs the `npm test` workflow from C3.
 
-### C3. Minimal CI [STRONG, 3h]
+### C3. Minimal CI [STRONG, 3h] — DONE
 - GitHub Actions: run `npm install` + `npm test` on push and PR.
 - Status badge in README.
 - Without this, "MIT-licensed" feels less production. Cheap signal.
+- **Shipped:** `.github/workflows/tests.yml` runs `npm ci` + `npm test`
+  on push and PR to `main` (also `workflow_dispatch` for manual reruns)
+  on Node 22 with the npm cache. Status badge added to the README right
+  next to the existing security-audit badge. The redundant `npm test`
+  step inside `security-audit.yml` is left in place as a belt-and-braces
+  sanity check (the audit asserts the tests still pass before declaring
+  the security posture green); both workflows are independent so a
+  failing test does not red-badge the audit and vice versa, but a
+  regression that breaks `npm test` is now surfaced under the
+  unambiguous "Tests" name rather than buried under "Security audit".
 
-### C4. CHANGELOG.md [OPTIONAL, 1h]
+### C4. CHANGELOG.md [OPTIONAL, 1h] — DONE
 - Document v0.1.0 launch contents.
 - Future commits append.
+- **Shipped:** `CHANGELOG.md` follows Keep-a-Changelog 1.1.0 with two
+  sections: `[Unreleased]` for what's landed since v0.1.0 (the C1-C4
+  trust track + LICENSE/CoC/templates/CI badge), and `[0.1.0]` for the
+  initial public release grouped as Added (product), Added
+  (distribution), Security, Documentation, and Tests. Doubles as the
+  v0.1.0 release-notes draft when the maintainer pins the release in
+  GitHub Settings (see `docs/maintainer-todo.md` §2).
 
 ## Track D — Distribution prep (the launch ammunition)
 
@@ -214,11 +426,23 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
 
 ## Track E — Anti-fragility for launch day
 
-### E1. Demo rate limiting [BLOCKER, 3h]
+### E1. Demo rate limiting [BLOCKER, 3h] — DONE (LLM cap deferred with B2)
 - Per-IP rate limit on the demo (60 req/min hard cap).
 - Friendly "high traffic, try in a few minutes" page rather than 502/504.
 - Hard daily cap on LLM cost (when B2 ships): cut over to canned responses
   past €10/day on the demo.
+- **Shipped:** `src/core/rateLimit.js` — minimal in-memory fixed-window
+  per-IP limiter, no new dep (CLAUDE.md mandates a minimal dep set, demo
+  is single-instance). Wired in `src/server.js` as two named buckets:
+  `api` (60 req/min, all dynamic routes) and `auth` (stricter 20 req/min,
+  on `/auth/*` so OAuth burning can't also DoS the dashboard). Both
+  bypass `NODE_ENV=test`. Friendly 429 page (HTML or JSON depending on
+  `Accept`) plus `Retry-After`, `X-RateLimit-Limit`, and
+  `X-RateLimit-Remaining` headers. +8 unit tests.
+- **Deferred (with B2):** the daily LLM cost cap. Lives in the same file
+  when the mock-LLM narration ships — needs a separate counter keyed by
+  day and a kill-switch flipping the demo to canned responses past the
+  cap. No mock-LLM = nothing to cap yet.
 
 ### E2. Pre-warm + cache [STRONG, 2h]
 - Pre-cache the mock dashboard for the demo dataset.
@@ -229,10 +453,20 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
 - Linked from the demo footer.
 - During an outage, "we're aware" beats silence by a wide margin.
 
-### E4. Launch day runbook [STRONG, 1h]
+### E4. Launch day runbook [STRONG, 1h] — DONE
 - Single doc: how to roll back the demo, how to rate-limit harder, who to
   contact at Render/Cloudflare, where the LLM kill switch is.
 - Founder reads it the morning of launch. Saves hours under stress.
+- **Shipped:** `docs/launch-day-runbook.md` — single page intentionally
+  short and copy-pasteable: T-2h pre-launch checklist (gated on the
+  same "ready to launch" definition this file has), what to watch
+  during the window (Plausible / GitHub stars / Render / demo URL),
+  triage trees for "it's slow / it's down" and "someone found a
+  security issue", how to rate-limit harder (specific edits to
+  `src/server.js:83-98`), rollback recipe (revert + push, never
+  force-push to `main`), HN/Reddit moderation playbook, and a
+  contacts section. The LLM kill-switch section is stubbed with a
+  pointer to where it'll live when B2 ships.
 
 ## Effort summary
 

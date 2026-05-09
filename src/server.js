@@ -14,6 +14,7 @@ import { computeReadinessScore } from "./core/readinessScore.js";
 import { generatePrompts } from "./core/promptGenerator.js";
 import { getTenant, updateTenant } from "./core/metadataStore.js";
 import { runWithToken } from "./azure/tokenStore.js";
+import { createRateLimiter } from "./core/rateLimit.js";
 
 const app = express();
 const azureClient = getAzureClient();
@@ -67,6 +68,37 @@ app.use(
   })
 );
 app.use(express.static(path.resolve(__dirname, "..", "public")));
+
+/* ========== Rate limiting ==========
+ *
+ * Static assets are served above and short-circuit before the limiters,
+ * so only dynamic / API routes count against the per-IP buckets. Auth
+ * endpoints get a stricter limit on top of the general cap so an attacker
+ * burning the OAuth flow can't also DoS the dashboard. Disabled in test
+ * mode — see tests/rateLimit.test.js for direct unit coverage.
+ */
+const skipInTests = (mw) => (req, res, next) =>
+  process.env.NODE_ENV === "test" ? next() : mw(req, res, next);
+
+const apiLimiter = skipInTests(
+  createRateLimiter({
+    name: "api",
+    windowMs: 60_000,
+    max: 60,
+    message: "API rate limit reached (60 requests per minute per IP).",
+  })
+);
+const authLimiter = skipInTests(
+  createRateLimiter({
+    name: "auth",
+    windowMs: 60_000,
+    max: 20,
+    message: "Too many authentication attempts (20 per minute per IP).",
+  })
+);
+
+app.use("/auth", authLimiter);
+app.use(apiLimiter);
 
 /* ========== Helpers ========== */
 
@@ -472,6 +504,7 @@ app.get("/readiness", ensureAuth, async (req, res) => {
     rangeKey,
     azureClient,
     cacheTtlMs: config.cacheTtlMs[rangeKey] || config.cacheTtlMs["7d"],
+    azureMode: config.azureMode,
   });
   if (result.error) {
     return res.status(errorStatusCode(result)).json(result);
@@ -514,6 +547,7 @@ app.get("/dashboard/overview", ensureAuth, async (req, res) => {
       const result = await runOverviewPipeline({
         tenantId, rangeKey, azureClient,
         cacheTtlMs: config.cacheTtlMs[rangeKey] || config.cacheTtlMs["7d"],
+        azureMode: config.azureMode,
         onProgress(label, pct) { send({ type: "progress", label, pct: Math.round(pct * 100) }); },
       });
       console.log("[stream] pipeline done, requiresSelection:", !!result.requiresSelection, "error:", !!result.error);
@@ -540,6 +574,7 @@ app.get("/dashboard/overview", ensureAuth, async (req, res) => {
       rangeKey,
       azureClient,
       cacheTtlMs: config.cacheTtlMs[rangeKey] || config.cacheTtlMs["7d"],
+      azureMode: config.azureMode,
     });
 
     if (result.requiresSelection) {
@@ -631,6 +666,7 @@ app.get("/preview/dashboard", async (req, res) => {
       const result = await runOverviewPipeline({
         tenantId: "preview-tenant", rangeKey, azureClient: previewClient,
         cacheTtlMs: config.cacheTtlMs[rangeKey] || config.cacheTtlMs["7d"],
+        azureMode: "mock",
         onProgress(label, pct) { send({ type: "progress", label, pct: Math.round(pct * 100) }); },
       });
       if (result.error) {
@@ -652,6 +688,7 @@ app.get("/preview/dashboard", async (req, res) => {
       rangeKey,
       azureClient: previewClient,
       cacheTtlMs: config.cacheTtlMs[rangeKey] || config.cacheTtlMs["7d"],
+      azureMode: "mock",
     });
     if (result.error) {
       return res.status(500).json(result);
