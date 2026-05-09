@@ -257,10 +257,20 @@ baseline improvement regardless of LLM availability.
 
 ### Configuration
 
+The LLM call goes through the provider abstraction defined in
+[`../architecture-ai.md`](../architecture-ai.md). Layer 2 calls
+`aiClient.generate({ task: "mappingAnalysis", ... })` and works with any
+provider (`ollama`, `azure-openai`, future `openai-compatible`). The
+configuration shown below is the Azure OpenAI variant; see the architecture
+doc for the full provider matrix including the 100%-local Ollama option.
+
 ```env
-# Optional — omit to use Layer 1 (alias heuristics) only
+# Selects the AI backend; default "none" disables Layer 2 entirely.
+AI_PROVIDER=azure-openai
+
+# Required when AI_PROVIDER=azure-openai
 AZURE_OPENAI_ENDPOINT=https://your-instance.openai.azure.com
-AZURE_OPENAI_DEPLOYMENT=gpt-4o
+AZURE_OPENAI_DEPLOYMENT_DEFAULT=gpt-4o-mini
 AZURE_OPENAI_API_KEY=...
 ```
 

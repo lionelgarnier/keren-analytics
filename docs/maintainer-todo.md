@@ -84,6 +84,22 @@ These need a human to click through `Settings` on
 
 ---
 
+### Default `AI_PROVIDER` for the public demo
+- **Why**: `docs/architecture-ai.md` introduces a provider abstraction
+  (`none` / `ollama` / `azure-openai`). The public demo has to pick one.
+  Each option has cost / quality / privacy trade-offs that are a maintainer
+  call, not an agent call. See § 7 of `launch-strategy.md` for the budget
+  cap and the architecture doc § "Deployment patterns" for the matrix.
+- **When**: before the demo URL goes live (overlaps with the demo deploy
+  target item above).
+- **How**: pick one and set the env var on Render / the deploy target.
+  Recommended for first launch: `none` (zero infra cost, canned narration
+  on the demo, fits the budget). Switch to `ollama` post-launch if the
+  AI angle needs to feel "alive" and a small CPU instance covers it.
+  Avoid `azure-openai` on the public demo unless a Microsoft sponsorship
+  covers the bill — pay-per-visitor is incompatible with a HN spike.
+- **Status**: TODO. Blocks demo deploy.
+
 ## 3. Third-party accounts (launch-day infrastructure)
 
 ### Plausible / Umami (D5 launch-day analytics)
