@@ -1,11 +1,11 @@
-# Setting Up Entra ID (Azure AD) for Easy Analytics
+# Setting Up Entra ID (Azure AD) for Keren Analytics
 
 > **Who is this guide for?**
-> The **operator** — the person hosting Easy Analytics on a server (you,
+> The **operator** — the person hosting Keren Analytics on a server (you,
 > running it on Render / a VM / Docker on a NAS / your laptop). You do
 > this **once for the whole instance**, not once per user.
 >
-> If you are an **end user** opening Easy Analytics in your browser
+> If you are an **end user** opening Keren Analytics in your browser
 > (the public demo URL or a colleague's hosted instance), you do **not**
 > need any of this. Just click *"Connect your Azure"* and sign in with
 > your normal Microsoft account. The first sign-in from your tenant may
@@ -15,7 +15,7 @@
 > whole org — same UX as Slack, Loom, Notion.
 
 This guide walks you, the operator, through registering an app in
-Microsoft Entra ID so that Easy Analytics can authenticate users via
+Microsoft Entra ID so that Keren Analytics can authenticate users via
 SSO and query their Azure telemetry on their behalf.
 
 ## What end users see (no setup required)
@@ -26,7 +26,7 @@ Visitor opens https://<your-host>/
   → redirected to login.microsoftonline.com
   → signs in (whatever auth their org uses — password, MFA, Windows Hello)
   → consent screen the first time (one click)
-  → returned to Easy Analytics
+  → returned to Keren Analytics
   → discovers their Application Insights resources, sees their dashboard
 ```
 
@@ -48,7 +48,7 @@ az login
 ./deploy/azure-app-registration.sh \
   --redirect-uri http://localhost:3000/auth/callback
 
-# 3. Copy the printed env vars into .env, then start Easy Analytics.
+# 3. Copy the printed env vars into .env, then start Keren Analytics.
 docker compose up -d
 ```
 
@@ -74,7 +74,7 @@ instance.** Your end users never see this page.
 
 - An Azure account with access to Entra ID (Azure Active Directory)
 - Admin consent rights (or an admin who can grant consent)
-- The Easy Analytics server running locally or deployed
+- The Keren Analytics server running locally or deployed
 
 ## Step 1: Register the Application
 
@@ -83,7 +83,7 @@ instance.** Your end users never see this page.
 3. Click **App registrations** in the left menu
 4. Click **+ New registration**
 5. Fill in:
-   - **Name:** `Easy Analytics` (or any name you prefer)
+   - **Name:** `Keren Analytics` (or any name you prefer)
    - **Supported account types:** Select **Accounts in any organizational directory** (multi-tenant)
    - **Redirect URI:**
      - Platform: **Web**
@@ -101,7 +101,7 @@ After registration, you'll be on the app's overview page.
 
 1. In the left menu, click **Certificates & secrets**
 2. Click **+ New client secret**
-3. Description: `Easy Analytics` (or any label)
+3. Description: `Keren Analytics` (or any label)
 4. Expiry: Choose based on your needs (recommended: 12 months)
 5. Click **Add**
 6. **Immediately copy the Value** (it won't be shown again) -- this is `AZURE_CLIENT_SECRET`
@@ -117,7 +117,7 @@ After registration, you'll be on the app's overview page.
 7. Click **Add permissions**
 8. (Optional but recommended) Click **Grant admin consent for [your organization]**
 
-## Step 5: Configure Easy Analytics
+## Step 5: Configure Keren Analytics
 
 Add the following to your `.env` file (or environment variables):
 
@@ -188,7 +188,7 @@ Open http://localhost:3000 and click **Sign in with Microsoft**.
 - Check the workspace's Access control (IAM)
 
 ### Token expires during use
-- Easy Analytics auto-refreshes tokens when they're about to expire
+- Keren Analytics auto-refreshes tokens when they're about to expire
 - If refresh fails, you'll be prompted to sign in again
 - Ensure your app registration includes **offline_access** in the scope (this is set by default)
 

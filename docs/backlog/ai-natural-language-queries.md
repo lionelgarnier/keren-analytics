@@ -12,7 +12,7 @@ generic natural-language-to-KQL tools.
 ## Why This App Has an Unfair Advantage
 
 Generic NL-to-KQL (like Azure Monitor's preview) operates blind — it knows KQL
-syntax but nothing about the specific workspace. Easy Analytics already collects
+syntax but nothing about the specific workspace. Keren Analytics already collects
 rich context at setup time:
 
 | Context available                  | How it helps the LLM                              |

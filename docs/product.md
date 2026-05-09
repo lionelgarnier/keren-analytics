@@ -2,7 +2,7 @@
 
 ## Summary
 
-Easy Analytics is a plug-and-play analytics platform that transforms existing cloud
+Keren Analytics is a plug-and-play analytics platform that transforms existing cloud
 telemetry into actionable dashboards in under 2 minutes. Starting with Azure
 Application Insights and Log Analytics, it provides a GA-like experience with zero
 agent deployment, zero raw data storage, and intelligent recommendations to

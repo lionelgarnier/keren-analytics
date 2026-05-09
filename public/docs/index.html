@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Easy Analytics — Documentation</title>
+  <title>Keren Analytics — Documentation</title>
   <link rel="stylesheet" href="/docs/docs.css" />
   <script src="/theme-init.js"></script>
 </head>
@@ -11,7 +11,7 @@
   <!-- ========== Top bar ========== -->
   <header class="doc-topbar">
     <div class="doc-topbar-inner">
-      <a href="/" class="doc-logo">Easy Analytics</a>
+      <a href="/" class="doc-logo">Keren Analytics</a>
       <nav class="doc-topnav">
         <a href="#getting-started" class="doc-topnav-link">Guides</a>
         <a href="#api-reference" class="doc-topnav-link">API</a>
@@ -87,7 +87,7 @@
         <!-- ==================== GETTING STARTED ==================== -->
         <section id="getting-started">
           <div class="doc-hero">
-            <h1>Easy Analytics Documentation</h1>
+            <h1>Keren Analytics Documentation</h1>
             <p class="doc-hero-sub">Get actionable insights from your application's existing telemetry. No new SDK to deploy, no data duplication, dashboard ready in 2 minutes.</p>
             <div class="doc-hero-cards">
               <a href="#connect" class="doc-hero-card">
@@ -108,7 +108,7 @@
 
         <section id="connect">
           <h2>Connect Your Application</h2>
-          <p>Easy Analytics works with your existing Azure Application Insights telemetry. There's nothing to install in your app to get started.</p>
+          <p>Keren Analytics works with your existing Azure Application Insights telemetry. There's nothing to install in your app to get started.</p>
 
           <h3>What you need</h3>
           <ul>
@@ -122,7 +122,7 @@
               <span class="doc-step-num">1</span>
               <div>
                 <strong>Sign in</strong>
-                <p>Click <em>Connect Azure</em> and sign in with your Microsoft work account. Easy Analytics uses your existing permissions — no admin setup needed.</p>
+                <p>Click <em>Connect Azure</em> and sign in with your Microsoft work account. Keren Analytics uses your existing permissions — no admin setup needed.</p>
               </div>
             </div>
             <div class="doc-step">
@@ -142,7 +142,7 @@
           </div>
 
           <div class="doc-callout doc-callout-info">
-            <strong>No access yet?</strong> Ask your Azure admin to grant you <em>Reader</em> on the subscription and <em>Log Analytics Reader</em> on the workspace. These are read-only roles — Easy Analytics never writes to your Azure tenant.
+            <strong>No access yet?</strong> Ask your Azure admin to grant you <em>Reader</em> on the subscription and <em>Log Analytics Reader</em> on the workspace. These are read-only roles — Keren Analytics never writes to your Azure tenant.
           </div>
         </section>
 
@@ -212,7 +212,7 @@
           </div>
 
           <h3>Session Timelines</h3>
-          <p>See exactly what a user experienced — page by page, click by click, including errors. No screen recording needed. Easy Analytics reconstructs the journey from your telemetry events.</p>
+          <p>See exactly what a user experienced — page by page, click by click, including errors. No screen recording needed. Keren Analytics reconstructs the journey from your telemetry events.</p>
           <p>Each timeline shows: pages visited with time on page, clicks, conversions, errors, and exit points. Useful for debugging user-reported issues or understanding conversion paths.</p>
         </section>
 
@@ -243,7 +243,7 @@
         <!-- ==================== IMPROVE YOUR ANALYTICS ==================== -->
         <section id="improve-telemetry">
           <h2>Improve Your Telemetry</h2>
-          <p>Easy Analytics detects what's missing and generates implementation prompts tailored to your detected tech stack. Here's the process:</p>
+          <p>Keren Analytics detects what's missing and generates implementation prompts tailored to your detected tech stack. Here's the process:</p>
 
           <div class="doc-steps">
             <div class="doc-step">
@@ -292,7 +292,7 @@
 
         <section id="track-campaigns">
           <h2>Track Campaigns (UTM Parameters)</h2>
-          <p>Easy Analytics <strong>automatically detects</strong> UTM parameters in your URLs. No setup needed — just add standard UTM parameters to your marketing links and the dashboard picks them up.</p>
+          <p>Keren Analytics <strong>automatically detects</strong> UTM parameters in your URLs. No setup needed — just add standard UTM parameters to your marketing links and the dashboard picks them up.</p>
 
           <h3>How to add UTM parameters</h3>
           <p>Append these query parameters to any link pointing to your application:</p>
@@ -323,7 +323,7 @@
 
         <section id="setup-ab-tests">
           <h2>Set Up A/B Tests</h2>
-          <p>Easy Analytics can detect A/B test variants from URL parameters. Add a parameter like <code>ab_test</code> to your experiment URLs and the <strong>URL Parameters</strong> panel will track variant distribution.</p>
+          <p>Keren Analytics can detect A/B test variants from URL parameters. Add a parameter like <code>ab_test</code> to your experiment URLs and the <strong>URL Parameters</strong> panel will track variant distribution.</p>
 
           <h3>How it works today</h3>
           <div class="doc-steps">
@@ -342,7 +342,7 @@ https://yourapp.com/pricing?ab_test=new_pricing_v2</code></pre><button class="do
             <div class="doc-step">
               <span class="doc-step-num">2</span>
               <div>
-                <strong>Easy Analytics detects the parameter</strong>
+                <strong>Keren Analytics detects the parameter</strong>
                 <p>The <code>ab_test</code> parameter appears in the <em>URL Parameters</em> panel with variant frequency. Click it to see top values and filter by variant.</p>
               </div>
             </div>
@@ -377,7 +377,7 @@ appInsights.trackEvent({
 
         <section id="custom-params">
           <h2>Custom URL Parameters</h2>
-          <p>Beyond UTM parameters, Easy Analytics auto-detects <strong>any</strong> query parameter in your URLs. Common use cases:</p>
+          <p>Beyond UTM parameters, Keren Analytics auto-detects <strong>any</strong> query parameter in your URLs. Common use cases:</p>
           <div class="doc-table-wrapper">
             <table class="doc-table">
               <thead><tr><th>Parameter</th><th>Use case</th><th>Example</th></tr></thead>
@@ -462,7 +462,7 @@ console.log(data.readinessScore);
 
         <section id="api-webhooks">
           <h3>Integrate in Your Tools</h3>
-          <p>Use the API to embed Easy Analytics data in your existing workflows:</p>
+          <p>Use the API to embed Keren Analytics data in your existing workflows:</p>
 
           <h4>Slack weekly digest</h4>
           <div class="doc-code"><pre><code>// Fetch KPIs and post to Slack
@@ -493,16 +493,16 @@ if (data.dashboard.kpis.errorRate > 0.05) {
           <h2>Security &amp; Privacy</h2>
           <div class="doc-faq">
             <div class="doc-faq-item">
-              <strong>Does Easy Analytics store my data?</strong>
-              <p>No. Easy Analytics only stores metadata (which resource you selected, your mapping configuration). All analytics data stays in your Azure Log Analytics workspace. We query it in real-time and cache aggregated results for 5-15 minutes.</p>
+              <strong>Does Keren Analytics store my data?</strong>
+              <p>No. Keren Analytics only stores metadata (which resource you selected, your mapping configuration). All analytics data stays in your Azure Log Analytics workspace. We query it in real-time and cache aggregated results for 5-15 minutes.</p>
             </div>
             <div class="doc-faq-item">
-              <strong>Can Easy Analytics see my users' personal data?</strong>
+              <strong>Can Keren Analytics see my users' personal data?</strong>
               <p>No. All queries return aggregated counts — never individual user records. PII is never extracted or stored.</p>
             </div>
             <div class="doc-faq-item">
-              <strong>What permissions does Easy Analytics need?</strong>
-              <p>Read-only access: <em>Reader</em> on the subscription (to find resources) and <em>Log Analytics Reader</em> on the workspace (to run queries). Easy Analytics cannot write, modify, or delete anything in your Azure tenant.</p>
+              <strong>What permissions does Keren Analytics need?</strong>
+              <p>Read-only access: <em>Reader</em> on the subscription (to find resources) and <em>Log Analytics Reader</em> on the workspace (to run queries). Keren Analytics cannot write, modify, or delete anything in your Azure tenant.</p>
             </div>
             <div class="doc-faq-item">
               <strong>Is the connection secure?</strong>
@@ -524,11 +524,11 @@ if (data.dashboard.kpis.errorRate > 0.05) {
             </div>
             <div class="doc-faq-item">
               <strong>My App Insights resource doesn't appear</strong>
-              <p>Easy Analytics requires <strong>workspace-based</strong> App Insights resources. Classic (non-workspace) resources are not supported. You can migrate in the Azure Portal (App Insights &rarr; Properties &rarr; Migrate to Workspace-based).</p>
+              <p>Keren Analytics requires <strong>workspace-based</strong> App Insights resources. Classic (non-workspace) resources are not supported. You can migrate in the Azure Portal (App Insights &rarr; Properties &rarr; Migrate to Workspace-based).</p>
             </div>
             <div class="doc-faq-item">
               <strong>Session expired / "Sign in again"</strong>
-              <p>Azure tokens expire after ~1 hour. Easy Analytics auto-refreshes them, but if refresh fails, you'll be asked to sign in again. This is normal.</p>
+              <p>Azure tokens expire after ~1 hour. Keren Analytics auto-refreshes them, but if refresh fails, you'll be asked to sign in again. This is normal.</p>
             </div>
             <div class="doc-faq-item">
               <strong>Some charts are missing (Geo, Browser Timings...)</strong>

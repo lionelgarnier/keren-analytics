@@ -50,7 +50,7 @@ links to the agent-side work that depends on it.
 ## 2. GitHub repo Settings (not file-tracked)
 
 These need a human to click through `Settings` on
-`github.com/lionelgarnier/easy-analytics-for-azure`:
+`github.com/lionelgarnier/keren-analytics`:
 
 ### About / topics / website / description
 - **Why**: HN/Reddit visitors pattern-match on these in the first 5s.
@@ -243,7 +243,8 @@ action are yours.
   mettre à jour `package.json`, `README.md`, `public/index.html`, landing,
   toutes les références dans `docs/**/*.md`. Ne pas bundler avec un
   changement d'archi.
-- **Status**: TODO — bloquant pour lancer la Phase A.
+- **Status**: DONE — repo renamed + references updated in branch
+  `claude/cloud-agnostic-architecture-fVCQx` (this commit).
 
 ### Postuler à Microsoft for Startups Founders Hub
 - **Why**: ADR 0004 fait d'Azure Container Apps l'hôte de la démo. Founders
@@ -254,7 +255,7 @@ action are yours.
   tour de table, juste un projet B2B identifiable. Plus tôt = plus tôt les
   crédits.
 - **How**: <https://www.microsoft.com/en-us/startups>, formulaire ~30 min.
-  Pitch type : *"Easy Analytics is an MIT-licensed plug-and-play dashboard
+  Pitch type : *"Keren Analytics is an MIT-licensed plug-and-play dashboard
   for Azure Application Insights. Aimed at Azure dev teams frustrated by the
   portal UX. KQL-only, no raw data leaves the tenant. Hosting public demo
   on Azure Container Apps."* Après acceptation : récupérer la subscription

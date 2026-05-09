@@ -10,7 +10,7 @@ V1 traction signals — not commitments to ship adapters in V1.
 
 ## Context
 
-Easy Analytics is built around Azure Application Insights + Log Analytics.
+Keren Analytics is built around Azure Application Insights + Log Analytics.
 Per [ADR 0001](adr/0001-positioning-portfolio.md) the project is a portfolio
 showcase, but per [ADR 0004](adr/0004-azure-first-reversal.md) the V1 pitch
 and implementation stay Azure-focused: distribution and audience all live in
@@ -260,7 +260,7 @@ AWS_REGION=eu-west-3
 
 # Switch to GCP Vertex AI
 LLM_MODEL=vertex_ai/gemini-2.5-pro
-VERTEX_PROJECT=easy-analytics
+VERTEX_PROJECT=keren-analytics
 VERTEX_LOCATION=europe-west1
 
 # Self-host (privacy-first, default for `ai-provider=ollama`)

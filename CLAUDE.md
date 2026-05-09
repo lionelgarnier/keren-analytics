@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Guide rapide pour les agents Claude Code travaillant sur **Easy Analytics for Azure**.
+Guide rapide pour les agents Claude Code travaillant sur **Keren Analytics**.
 Ce fichier est lu automatiquement à chaque session — gardez-le concis et à jour.
 
 ## What this project is

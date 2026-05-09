@@ -83,7 +83,7 @@ We commit to **one** binary decision after 90 days. No drift.
 
 - ≥ 500 GitHub stars
 - ≥ 100 detected self-host installs (proxied by Docker pulls + signed-up
-  beta tenants on `demo.easy-analytics.dev` + GitHub forks with commits)
+  beta tenants on `demo.keren-analytics.dev` + GitHub forks with commits)
 - ≥ 5 inbound enterprise inquiries (any company asking for a contract, SLA,
   or self-host support package)
 - ≥ 3 design partners committed to a paid pilot
@@ -154,7 +154,7 @@ One Tuesday. We do not re-launch.
 
 | Time (PT)  | Action |
 |------------|--------|
-| 06:00      | Show HN post (title format: "Show HN: Easy Analytics — 2-min Azure App Insights dashboards, MIT-licensed"). |
+| 06:00      | Show HN post (title format: "Show HN: Keren Analytics — 2-min Azure App Insights dashboards, MIT-licensed"). |
 | 06:30      | Reply to the first comment yourself with the technical context (depth signal for HN ranking). |
 | 09:00      | r/azure post (different angle: "I built an OSS alternative to the Azure portal analytics — feedback welcome"). |
 | 11:00      | r/devops post if first ones gain traction. |

@@ -347,7 +347,7 @@ export function createRealClient() {
               // Classic (non-workspace-based) App Insights — skip with note
               errors.push({
                 resource: item.name,
-                reason: "Classic App Insights (not workspace-based). Migrate to workspace-based for Easy Analytics support.",
+                reason: "Classic App Insights (not workspace-based). Migrate to workspace-based for Keren Analytics support.",
               });
               continue;
             }

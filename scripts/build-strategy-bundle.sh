@@ -32,7 +32,7 @@ files=(
 )
 
 cat > "$out" << 'HEADER'
-# Easy Analytics — Strategy & Product Bundle
+# Keren Analytics — Strategy & Product Bundle
 
 > **Generated artifact** — do not edit by hand. Regenerate with
 > `npm run docs:bundle` or `./scripts/build-strategy-bundle.sh`.

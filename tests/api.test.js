@@ -16,7 +16,7 @@ test("landing page (A5): tagline, comparison table, FAQ, footer present", async 
   assert.match(body, /Star on GitHub/);
   // Comparison table
   assert.match(body, /How it compares/);
-  assert.match(body, /Easy Analytics/);
+  assert.match(body, /Keren Analytics/);
   assert.match(body, /Datadog/);
   assert.match(body, /Power BI/);
   // FAQ

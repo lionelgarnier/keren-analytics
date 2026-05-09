@@ -39,7 +39,7 @@ function send429(req, res, retryAfterSec, message) {
   <h1>High traffic — try again in a few minutes.</h1>
   <p>${message}</p>
   <p>This is a per-IP cap, not an outage. Refreshing now won't help, but waiting roughly one minute will.</p>
-  <p>If you're running Easy Analytics yourself, this limit is configurable — see <code>src/core/rateLimit.js</code>.</p>
+  <p>If you're running Keren Analytics yourself, this limit is configurable — see <code>src/core/rateLimit.js</code>.</p>
 </body></html>`);
     return;
   }

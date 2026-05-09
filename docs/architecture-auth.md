@@ -36,7 +36,7 @@ This was a deliberate choice for the Azure-first MVP:
 - **One click** = authenticated + data access. Zero friction.
 - **No credentials to store** — the user's own RBAC controls what they see.
 - **No service principal needed** — works with the user's existing permissions.
-- **Security** — delegated access means Easy Analytics never has more access
+- **Security** — delegated access means Keren Analytics never has more access
   than the signed-in user.
 
 For an Azure-only product, this is the optimal design.
@@ -56,7 +56,7 @@ could share a read-only dashboard link. That PM needs to authenticate (identity)
 without having direct Azure access.
 
 ### 3. Platform/SaaS model
-If Easy Analytics becomes a SaaS product, users sign up with email and then
+If Keren Analytics becomes a SaaS product, users sign up with email and then
 connect one or more cloud accounts. Auth and data access must be decoupled.
 
 ### 4. Multiple cloud accounts
