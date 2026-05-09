@@ -51,16 +51,24 @@ clic sur n'importe lequel des 4 clouds."*
 
 ### 2. Renommer le projet
 
-`easy-analytics-for-azure` → `easy-analytics` (ou un nom équivalent à arbitrer
-par le mainteneur). Le suffixe `for-azure` devient trompeur dès que les
-adapters AWS/GCP/Scaleway existent.
+`easy-analytics-for-azure` → **`keren-analytics`**.
+
+- `keren-analytics` signe le mainteneur (domaine perso `keren.run` dédié au
+  projet) sans s'enfermer dans un cloud — cohérent avec l'angle vitrine
+  multi-cloud.
+- Le suffixe `-for-azure` est trompeur dès que les adapters Scaleway/AWS/GCP
+  existent.
+- Le préfixe `keren-` laisse de la place pour un éventuel `keren-<autre-asset>`
+  plus tard si le portfolio s'étend, même si pour l'instant `keren.run` est
+  dédié à ce projet (cf. ADR 0002).
 
 Le renommage couvre :
-- nom du repo GitHub
+- nom du repo GitHub (`lionelgarnier/easy-analytics-for-azure` →
+  `lionelgarnier/keren-analytics`)
 - `name` dans `package.json`
 - titres dans `README.md`, `public/index.html`, landing page
 - références dans tous les docs (`docs/**/*.md`)
-- domaine de démo (`demo.easy-analytics.dev` → décision à prendre)
+- domaine de démo : `analytics.keren.run` (cf. ADR 0002)
 
 Le renommage est **traité dans une PR séparée**, pas dans cette ADR. Il est
 suffisamment large pour ne pas être bundlé avec un changement d'architecture.
@@ -153,7 +161,6 @@ pricing.
 
 Cette ADR ne décide PAS :
 
-- Le nouveau nom du projet (à arbitrer par le mainteneur).
 - Le choix d'hôte de la démo publique (cf. ADR 0002).
 - L'organisation Terraform par cloud (cf. ADR 0003).
 - L'évolution exacte de la couche AI / LiteLLM (cf. patch

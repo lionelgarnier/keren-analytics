@@ -231,17 +231,36 @@ action are yours.
 
 ## 6. Pivot vitrine (ADRs 0001-0003) — items à arbitrer / exécuter
 
-### Renommer le projet
+### Renommer le projet en `keren-analytics`
 - **Why**: ADR 0001 acte le repositionnement vitrine multi-cloud. Le suffixe
-  `-for-azure` devient trompeur dès que les adapters Scaleway/AWS/GCP existent.
+  `-for-azure` devient trompeur dès que les adapters Scaleway/AWS/GCP
+  existent. Nom retenu : `keren-analytics` (signature mainteneur via le
+  domaine `keren.run`, neutre côté cloud).
 - **When**: avant la Phase A (refacto provider), pour éviter une cascade de
-  renames. Compatible avec le sprint pré-launch en cours si on veut consolider.
-- **How**: arbitrer le nouveau nom (suggestions : `easy-analytics`,
-  `omni-analytics`, `tenant-analytics`). Ensuite rename GitHub repo (redirect
-  auto), update `package.json`, `README.md`, `public/index.html`, landing,
-  tous les `docs/**/*.md` qui mentionnent "for Azure". PR dédiée, pas
-  bundlée avec un changement d'archi.
+  renames.
+- **How**: rename GitHub repo (`lionelgarnier/easy-analytics-for-azure` →
+  `lionelgarnier/keren-analytics`, redirect GH auto), puis PR dédiée pour
+  mettre à jour `package.json`, `README.md`, `public/index.html`, landing,
+  toutes les références dans `docs/**/*.md`. Ne pas bundler avec un
+  changement d'archi.
 - **Status**: TODO — bloquant pour lancer la Phase A.
+
+### DNS et domaine `keren.run`
+- **Why**: ADR 0002 retient `analytics.keren.run` comme URL canonique de la
+  démo, avec redirection `keren.run` → `analytics.keren.run` en V1.
+- **When**: après le déploiement Scaleway opérationnel (sinon il n'y a rien
+  à pointer).
+- **How**:
+  1. Récupérer l'endpoint du Scaleway Serverless Container après premier
+     `tofu apply`.
+  2. Chez le registrar de `keren.run`, créer un `CNAME analytics` →
+     endpoint Scaleway.
+  3. Configurer la redirection apex (`keren.run` → `analytics.keren.run`)
+     soit chez le registrar (s'il propose redirect HTTP), soit via un petit
+     worker Cloudflare / une règle Scaleway.
+  4. Vérifier que le cert Let's Encrypt managé Scaleway couvre bien
+     `analytics.keren.run`.
+- **Status**: TODO.
 
 ### Compte Scaleway + dossier Startup Program
 - **Why**: ADR 0002 fait de Scaleway l'hôte primaire de la démo. Le free tier
@@ -274,13 +293,6 @@ action are yours.
   ils tiennent toujours.
 - **Status**: TODO.
 
-### Domaine de démo
-- **Why**: l'URL publique (`demo.<projet>.dev` ou équivalent) doit refléter
-  le nouveau nom du projet.
-- **When**: après le renaming.
-- **How**: réserver le domaine, configurer DNS chez Scaleway, certificat
-  Let's Encrypt managé.
-- **Status**: TODO.
 
 ---
 
