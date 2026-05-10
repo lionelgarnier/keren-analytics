@@ -76,7 +76,7 @@ test("buildNarration: peak hour mentions the day name and time", () => {
     mapping: sampleMappingAuth,
     range: "7d",
   });
-  assert.match(r.paragraph, /Tuesday/);
+  assert.match(r.paragraph, /Wednesday/);
   assert.match(r.paragraph, /14:00/);
 });
 

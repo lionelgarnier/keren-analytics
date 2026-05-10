@@ -1292,9 +1292,13 @@ function renderInsights(dashboard) {
   const peakData = dashboard.charts.peakHours;
   if (peakData && peakData.length > 0) {
     const peak = peakData.reduce((a, b) => a.count > b.count ? a : b);
+    const peakDayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const dayLabel = peakDayNames[peak.dayIndex];
+    const window = `${peak.hour}:00-${peak.hour + 1}:00`;
+    const when = dayLabel ? `${dayLabel} ${window}` : window;
     insights.push({
       icon: "\u23F0",
-      text: `Peak traffic: <strong>${peak.day} ${peak.hour}:00-${peak.hour + 1}:00</strong> with ${fmt(peak.count)} visitors/period`,
+      text: `Peak traffic: <strong>${when}</strong> with ${fmt(peak.count)} visitors/period`,
     });
   }
 

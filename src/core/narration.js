@@ -14,7 +14,7 @@
 const TAGLINE = "AI explains what your telemetry looks like.";
 const PREVIEW_BADGE = "Preview — real LLM coming soon";
 
-const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 const RANGE_LABELS = {
   today: "today",
