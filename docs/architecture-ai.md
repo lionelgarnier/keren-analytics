@@ -43,8 +43,8 @@ coder models meet that bar.
 ## Decision
 
 Introduce an **AI provider abstraction** modeled on
-[`src/azure/client.js`](../src/azure/client.js) and the cloud provider pattern
-in [`architecture-multicloud.md`](architecture-multicloud.md). All four AI
+[`src/providers/factory.js`](../src/providers/factory.js) and the cloud provider
+pattern in [`architecture-multicloud.md`](architecture-multicloud.md). All four AI
 features call a single `aiClient` interface; the implementation is selected by
 env var.
 
@@ -382,7 +382,7 @@ amortized.
 
 ## References
 
-- [`src/azure/client.js`](../src/azure/client.js) — pattern this follows
+- [`src/providers/factory.js`](../src/providers/factory.js) — pattern this follows
 - [`docs/architecture-multicloud.md`](architecture-multicloud.md) — sibling
   abstraction, same factory shape
 - [`docs/architecture-auth.md`](architecture-auth.md) — for the

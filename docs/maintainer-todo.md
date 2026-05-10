@@ -39,10 +39,37 @@ links to the agent-side work that depends on it.
 ### Demo deploy target
 - **Why**: the Show HN / Reddit launch needs a clickable URL.
 - **When**: launch eve.
-- **How**: `render.yaml` blueprint exists. Connect the GitHub repo to
-  Render, set `SESSION_SECRET` (and Azure vars if real mode), pick a
-  region. Subdomain on a domain Lionel controls — **not** a
-  Render-generated URL (per `launch-readiness.md` A1).
+- **How**: post-ADR 0004 the demo target is **Azure Container Apps West
+  Europe** (`keren-analytics-prod`), provisioned by `infra/main.bicep`
+  via `.github/workflows/deploy-azure.yml`. The `render.yaml` blueprint
+  remains in-repo as a self-host hint but is no longer the demo target.
+  URL: `https://analytics.keren.run` (DNS step below).
+- **Status**: TODO.
+
+### First Azure deploy + Key Vault secret seeding
+- **Why**: the Bicep template provisions an empty Key Vault. The Container
+  App boots with `secretRef`s pointing to `session-secret` and
+  `azure-client-secret` — those secrets must exist before the app starts
+  successfully.
+- **When**: right after the first run of `deploy-azure.yml`.
+- **How**: see `infra/README.md` § "First deploy" — generate a 32-byte
+  random `session-secret` and paste the end-user Entra app
+  `azure-client-secret` via `az keyvault secret set`. Key Vault name is
+  in the workflow / Bicep outputs. Never commit values.
+- **Status**: TODO.
+
+### CNAME `analytics.keren.run` → Container App FQDN
+- **Why**: the managed certificate for the custom domain only provisions
+  once the CNAME already resolves. The Bicep template intentionally
+  defaults `customDomainName` to empty so the first deploy doesn't fail
+  on the missing record.
+- **When**: after the first successful Azure deploy, before launch.
+- **How**:
+  1. Read `containerAppFqdn` from the workflow output.
+  2. At Namecheap, set `CNAME analytics → <containerAppFqdn>` with TTL
+     ≤ 5 min. Wait for propagation.
+  3. Trigger `deploy-azure.yml` manually with
+     `customDomainName=analytics.keren.run`.
 - **Status**: TODO.
 
 ---

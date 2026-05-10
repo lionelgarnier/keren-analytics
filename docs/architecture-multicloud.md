@@ -31,9 +31,9 @@ This document captures the **target shape** of that abstraction so that:
 ## Decision
 
 Introduce a **Cloud Provider Interface** that abstracts all cloud-specific
-operations behind a unified contract. The current `getAzureClient()` factory
-pattern in `src/azure/client.js` already follows this approach and serves as the
-foundation.
+operations behind a unified contract. The `getProviderClient()` factory in
+`src/providers/factory.js` (with `getAzureClient` kept as a back-compat alias)
+already follows this approach and serves as the foundation.
 
 ## Architecture
 

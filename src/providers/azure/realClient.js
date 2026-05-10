@@ -1,14 +1,14 @@
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { config } from "../config.js";
+import { config } from "../../config.js";
 import { getCurrentToken } from "./tokenStore.js";
 
 const armEndpoint = "https://management.azure.com";
 
 // Resolve .env path once (project root)
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const envFilePath = resolve(__dirname, "../../.env");
+const envFilePath = resolve(__dirname, "../../../.env");
 
 /* ========== HTTP helpers ========== */
 

@@ -6,14 +6,14 @@ import session from "express-session";
 import path from "path";
 import { fileURLToPath } from "url";
 import { config } from "./config.js";
-import { getAzureClient } from "./azure/client.js";
-import { createMockClient } from "./azure/mockClient.js";
+import { getAzureClient } from "./providers/factory.js";
+import { createMockClient } from "./providers/azure/mockClient.js";
 import { runOverviewPipeline } from "./core/orchestrator.js";
 import { buildRecommendations } from "./core/recommendations.js";
 import { computeReadinessScore } from "./core/readinessScore.js";
 import { generatePrompts } from "./core/promptGenerator.js";
 import { getTenant, updateTenant } from "./core/metadataStore.js";
-import { runWithToken } from "./azure/tokenStore.js";
+import { runWithToken } from "./providers/azure/tokenStore.js";
 import { createRateLimiter } from "./core/rateLimit.js";
 
 const app = express();
