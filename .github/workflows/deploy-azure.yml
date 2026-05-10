@@ -1,0 +1,95 @@
+name: Deploy to Azure
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      customDomainName:
+        description: "Bind a custom domain (leave empty until the CNAME resolves)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  id-token: write   # required for OIDC federated credentials
+
+env:
+  AZURE_RG: keren-analytics-prod
+  AZURE_LOCATION: westeurope
+  ACR_NAME: kerenanalyticsacr
+  IMAGE_NAME: keren-analytics
+  DEPLOYMENT_NAME: keren-analytics-${{ github.run_id }}
+
+jobs:
+  test:
+    name: Tests must pass
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+      - run: npm test
+
+  deploy:
+    name: Build, push & deploy
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute image tag
+        id: tag
+        run: echo "value=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: ACR login
+        run: az acr login --name "$ACR_NAME"
+
+      - name: Build & push image
+        run: |
+          set -euo pipefail
+          IMAGE="${ACR_NAME}.azurecr.io/${IMAGE_NAME}:${{ steps.tag.outputs.value }}"
+          docker build -t "$IMAGE" -t "${ACR_NAME}.azurecr.io/${IMAGE_NAME}:latest" .
+          docker push "$IMAGE"
+          docker push "${ACR_NAME}.azurecr.io/${IMAGE_NAME}:latest"
+
+      - name: Deploy Bicep template
+        id: bicep
+        run: |
+          set -euo pipefail
+          CUSTOM_DOMAIN="${{ github.event.inputs.customDomainName }}"
+          az deployment group create \
+            --resource-group "$AZURE_RG" \
+            --name "$DEPLOYMENT_NAME" \
+            --template-file infra/main.bicep \
+            --parameters infra/main.parameters.json \
+            --parameters imageTag=${{ steps.tag.outputs.value }} \
+            --parameters customDomainName="${CUSTOM_DOMAIN:-}" \
+            --output json > deployment.json
+
+          FQDN=$(jq -r '.properties.outputs.containerAppFqdn.value' deployment.json)
+          URL=$(jq -r '.properties.outputs.containerAppUrl.value' deployment.json)
+          echo "fqdn=$FQDN" >> "$GITHUB_OUTPUT"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Deployment summary
+        run: |
+          {
+            echo "### Azure Container Apps deploy"
+            echo
+            echo "- Image: \`${ACR_NAME}.azurecr.io/${IMAGE_NAME}:${{ steps.tag.outputs.value }}\`"
+            echo "- FQDN: \`${{ steps.bicep.outputs.fqdn }}\`"
+            echo "- URL: ${{ steps.bicep.outputs.url }}"
+          } >> "$GITHUB_STEP_SUMMARY"
