@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 
 describe("AzureApiError categorization", async () => {
   // Import AzureApiError
-  const { AzureApiError } = await import("../src/azure/realClient.js");
+  const { AzureApiError } = await import("../src/providers/azure/realClient.js");
 
   it("AzureApiError has correct properties", () => {
     const err = new AzureApiError("test error", {
@@ -80,7 +80,7 @@ describe("Response normalization", async () => {
 
 describe("Error scenarios", () => {
   it("identifies expired token from 401 status", async () => {
-    const { AzureApiError } = await import("../src/azure/realClient.js");
+    const { AzureApiError } = await import("../src/providers/azure/realClient.js");
     // Simulating what categorizeAzureError would produce
     const err = new AzureApiError("Your Azure session has expired.", {
       status: 401,
@@ -92,7 +92,7 @@ describe("Error scenarios", () => {
   });
 
   it("identifies RBAC error from 403 status", async () => {
-    const { AzureApiError } = await import("../src/azure/realClient.js");
+    const { AzureApiError } = await import("../src/providers/azure/realClient.js");
     const err = new AzureApiError("Permission denied", {
       status: 403,
       code: "RBAC_DENIED",
@@ -103,7 +103,7 @@ describe("Error scenarios", () => {
   });
 
   it("identifies throttling from 429 status", async () => {
-    const { AzureApiError } = await import("../src/azure/realClient.js");
+    const { AzureApiError } = await import("../src/providers/azure/realClient.js");
     const err = new AzureApiError("Rate limited", {
       status: 429,
       code: "THROTTLED",
@@ -114,7 +114,7 @@ describe("Error scenarios", () => {
   });
 
   it("identifies workspace not found from 404", async () => {
-    const { AzureApiError } = await import("../src/azure/realClient.js");
+    const { AzureApiError } = await import("../src/providers/azure/realClient.js");
     const err = new AzureApiError("Resource not found", {
       status: 404,
       code: "NOT_FOUND",
@@ -124,7 +124,7 @@ describe("Error scenarios", () => {
   });
 
   it("identifies timeout errors", async () => {
-    const { AzureApiError } = await import("../src/azure/realClient.js");
+    const { AzureApiError } = await import("../src/providers/azure/realClient.js");
     const err = new AzureApiError("Request timed out", {
       status: 408,
       code: "TIMEOUT",

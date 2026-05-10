@@ -13,7 +13,8 @@ Key components:
 - Readiness score: `src/core/readinessScore.js` (gamified 0-100 score)
 - Prompt generator: `src/core/promptGenerator.js` (LLM-ready prompts)
 - Recommendations: `src/core/recommendations.js`
-- Azure clients: `src/azure/mockClient.js` and `src/azure/realClient.js`
+- Azure clients: `src/providers/azure/mockClient.js` and `src/providers/azure/realClient.js`
+- Provider factory + interface: `src/providers/factory.js`, `src/providers/interface.js`
 - KQL templates: `kql/*.kql`
 - Metadata store: file-backed JSON (MVP) in `src/core/metadataStore.js`
 - Cache: in-memory store (MVP) in `src/core/cache.js`

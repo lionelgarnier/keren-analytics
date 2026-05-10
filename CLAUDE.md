@@ -44,12 +44,14 @@ npm test && curl -s http://localhost:3000/auth/session
 src/
   server.js              # Express app, all routes, OAuth (PKCE), session
   config.js              # env-driven config (azureMode, OAuth, cache TTLs)
-  azure/
-    client.js            # factory: returns mock or real client
-    mockClient.js        # deterministic mock data for dev/tests
-    mockData.js
-    realClient.js        # Azure ARM + Log Analytics calls, error categorization
-    tokenStore.js        # per-tenant access/refresh token storage
+  providers/
+    factory.js           # provider factory (CLOUD_PROVIDER + AZURE_MODE → client)
+    interface.js         # provider contract (JSDoc + runtime assert)
+    azure/
+      mockClient.js      # deterministic mock data for dev/tests
+      mockData.js
+      realClient.js      # Azure ARM + Log Analytics calls, error categorization
+      tokenStore.js      # per-tenant access/refresh token storage
   core/
     orchestrator.js      # main pipeline (auth -> discover -> profile -> render)
     stateMachine.js      # named pipeline states + transitions
@@ -65,7 +67,8 @@ src/
     dashboard.js         # builds dashboard payload from KQL results
     timeRange.js
     audit.js
-kql/                     # 22 versioned .kql templates
+kql/                     # 22 versioned .kql templates (Azure-specific; relocation
+                         # to queries/azure/ deferred to V2 with second adapter)
 public/                  # static SPA (index.html, app.js, styles.css)
 tests/                   # 9 test files, native node:test runner
 docs/                    # product, technical, multicloud, backlog/
