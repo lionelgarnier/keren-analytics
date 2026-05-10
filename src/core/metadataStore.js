@@ -30,9 +30,12 @@ function loadStore() {
 /**
  * Atomically save the store by writing to a temporary file first,
  * then renaming to avoid partial-write corruption on concurrent access.
+ * Tmp filename includes the pid so concurrent writers (e.g. parallel
+ * `node --test` workers) don't race on the same tmp path and trip
+ * ENOENT when one process renames the tmp out from under another.
  */
 function saveStore(store) {
-  const tmpPath = `${storePath}.tmp`;
+  const tmpPath = `${storePath}.${process.pid}.tmp`;
   fs.writeFileSync(tmpPath, JSON.stringify(store, null, 2));
   fs.renameSync(tmpPath, storePath);
 }
