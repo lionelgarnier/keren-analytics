@@ -52,14 +52,49 @@ az login
 docker compose up -d
 ```
 
-The script is idempotent: re-runs reuse the existing app registration and
-append a fresh secret. Pass `--display-name` or `--secret-years` to customize.
+The script is idempotent on the app registration itself: re-runs reuse the
+existing app and dedupe redirect URIs. **However it does mint a fresh client
+secret each run** (`--append`), so don't re-run it just to "make sure" — the
+old secret stays valid (your running app keeps working) but the registration
+accumulates dead secrets and audits get noisy. Re-run only when:
+
+- creating the app for the first time;
+- adding a new redirect URI for a new environment (e.g. after the production
+  Container Apps FQDN is known: pass `--redirect-uri https://<prod>/auth/callback`);
+- explicitly rotating the secret.
+
+Pass `--display-name` or `--secret-years` to customize.
 
 What it does and does NOT do is documented at the top of
 [`deploy/azure-app-registration.sh`](../deploy/azure-app-registration.sh).
 Notably it does NOT grant admin consent and does NOT assign the per-user RBAC
 roles; those still live on the IAM blade ([Step 6](#step-6-assign-azure-rbac-roles)
 below).
+
+### Production deploy on Azure Container Apps
+
+The first production deploy via [`deploy/azure-deploy.sh`](../deploy/azure-deploy.sh)
+prints the public Container App FQDN at the end. Add that FQDN's
+`/auth/callback` to the app registration so Microsoft accepts it as a
+redirect target:
+
+```bash
+./deploy/azure-app-registration.sh \
+  --redirect-uri "https://<your-fqdn>.francecentral.azurecontainerapps.io/auth/callback"
+```
+
+Re-run safely (it dedupes), so the localhost redirect stays in place for
+local development. When the custom domain `analytics.keren.run` ships, run
+the script once more with that URI.
+
+If the very first `azure-deploy.sh` errored with *"Subscription is not
+registered for the Microsoft.App resource provider"*, register it once with:
+
+```bash
+az provider register -n Microsoft.App --wait
+```
+
+Then re-run the deploy script.
 
 ## Manual setup (operator fallback)
 

@@ -11,8 +11,10 @@ COPY src/ ./src/
 COPY public/ ./public/
 COPY kql/ ./kql/
 
-# Non-root user for security
-RUN addgroup -S app && adduser -S app -G app
+# Non-root user for security; pre-create the runtime-writable data dir
+RUN addgroup -S app && adduser -S app -G app && \
+    mkdir -p /app/data && \
+    chown -R app:app /app/data
 USER app
 
 # Default environment

@@ -2,12 +2,9 @@
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
-    "appName": { "value": "keren-analytics" },
-    "location": { "value": "westeurope" },
-    "imageTag": { "value": "latest" },
-    "customDomainName": { "value": "" },
+    "namePrefix": { "value": "keren-analytics" },
+    "azureTenantId": { "value": "organizations" },
     "minReplicas": { "value": 0 },
-    "maxReplicas": { "value": 3 },
-    "azureTenantIdParam": { "value": "organizations" }
+    "maxReplicas": { "value": 3 }
   }
 }

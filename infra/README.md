@@ -1,65 +1,93 @@
 # `infra/` — Azure deployment (Phase A)
 
-Bicep template that provisions the demo on **Azure Container Apps West Europe**
+Bicep template that provisions the demo on **Azure Container Apps France Central**
 per [ADR 0004](../docs/adr/0004-azure-first-reversal.md).
 
 ## What it provisions
 
-In the resource group `keren-analytics-prod` (West Europe by default):
+In the resource group `keren-analytics-prod` (France Central):
 
-- User-assigned managed identity (`keren-analytics-mi`)
-- Log Analytics workspace (`keren-analytics-logs`) — required by Container Apps
+- User-assigned managed identity (`id-keren-analytics`) with `AcrPull` on the registry
+- Log Analytics workspace (`la-keren-analytics`) — required by Container Apps
 - Azure Container Registry, Basic SKU, **admin user disabled** — pulls happen
-  via `AcrPull` on the managed identity (no admin password)
-- Key Vault (RBAC-authorized) — managed identity gets `Key Vault Secrets User`
-- Container Apps environment + Container App `keren-analytics-app`
+  via the managed identity (no admin password)
+- Container Apps environment (`cae-keren-analytics`)
+- Container App (`ca-keren-analytics`)
   - port 3000, scale 0 → 3 replicas, liveness probe on `/auth/session`
-  - secrets `SESSION_SECRET` and `AZURE_CLIENT_SECRET` resolved from
-    Key Vault at runtime via the managed identity
+  - secrets `SESSION_SECRET` and `AZURE_CLIENT_SECRET` are inline Container App
+    secrets passed via `@secure()` Bicep params (encrypted at rest by Azure).
+    Key Vault is intentionally **not** in V1 — adding a KV secret reference at
+    Container App provisioning time creates a chicken-and-egg with the secret
+    not yet existing. Layer KV on later if rotation/audit becomes a hard
+    requirement.
+
+ACR + Container App + env names use a `uniqueString(resourceGroup().id)` suffix
+where Azure-global uniqueness matters (ACR), so the deployment is reproducible
+in a fresh subscription without collisions.
 
 ## First deploy (one-time, by the maintainer)
 
-The GitHub Actions workflow at `.github/workflows/deploy-azure.yml` runs
-this template on every push to `main`. The first manual run still has to
-seed the Key Vault secrets and (later) bind the custom domain.
+The convenience wrapper at [`deploy/azure-deploy.sh`](../deploy/azure-deploy.sh)
+takes care of:
+
+1. registering required Azure resource providers (`Microsoft.App`,
+   `Microsoft.OperationalInsights`, `Microsoft.ContainerRegistry`,
+   `Microsoft.ManagedIdentity`);
+2. generating / reusing a stable `SESSION_SECRET` cached at
+   `deploy/.session-secret` (gitignored — delete to rotate);
+3. detecting the Container App's existing image so re-runs don't regress to
+   the placeholder hello-world;
+4. running `az deployment group create` against this template;
+5. building + pushing the Docker image and `az containerapp update --image`.
 
 ```bash
-RG=keren-analytics-prod
+./deploy/azure-deploy.sh \
+  --client-id "<AZURE_CLIENT_ID from azure-app-registration.sh>" \
+  --client-secret "<AZURE_CLIENT_SECRET>"
+```
+
+A bare `az deployment group create` works too, for infra-only changes:
+
+```bash
 az deployment group create \
-  --resource-group "$RG" \
+  --resource-group keren-analytics-prod \
   --template-file infra/main.bicep \
   --parameters infra/main.parameters.json \
-  --parameters imageTag=$(git rev-parse --short HEAD)
+  --parameters \
+    azureClientId=<...> \
+    azureClientSecret=<...> \
+    sessionSecret=<...>
 ```
 
-Once the deployment succeeds, capture the outputs and seed the secrets
-**out of band** (they are never committed):
+## Per-push image deploys (CI)
 
-```bash
-KV=$(az deployment group show -g "$RG" -n main --query 'properties.outputs.keyVaultName.value' -o tsv)
-
-# 32-byte random session secret
-az keyvault secret set --vault-name "$KV" --name session-secret \
-  --value "$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
-
-# End-user Entra app client secret (same value as the GitHub Actions secret today)
-az keyvault secret set --vault-name "$KV" --name azure-client-secret --value "<paste>"
-```
+`.github/workflows/deploy-azure.yml` does the lighter image-only path on
+every push to `main`: build → push to ACR → `az containerapp update --image`.
+It does **not** re-run the Bicep template — that path is reserved for infra
+changes and runs only via `azure-deploy.sh` or manual `az deployment group
+create`. Bootstrapped once via [`deploy/azure-ci-setup.sh`](../deploy/azure-ci-setup.sh)
+(creates a CI-only Entra app + OIDC federated credential + minimal RBAC:
+`AcrPush` on the registry, `Contributor` on the Container App).
 
 ## Custom domain (`analytics.keren.run`)
 
-Container Apps managed certificates require the CNAME to resolve **before**
-the binding succeeds, so the first deploy intentionally leaves
-`customDomainName` empty:
+Custom-domain binding is a manual one-shot, not part of the template (Container
+Apps managed certificates require the CNAME to resolve before the binding
+succeeds, and Bicep does not handle the wait gracefully):
 
-1. First deploy completes → grab `containerAppFqdn` from outputs.
-2. Add a CNAME `analytics → <containerAppFqdn>` at the registrar
-   (Namecheap), wait for propagation.
-3. Re-deploy with `--parameters customDomainName=analytics.keren.run`.
-   The managed cert provisions automatically once the domain is verified.
+1. After the first deploy, get the FQDN:
+   `az containerapp show -n ca-keren-analytics -g keren-analytics-prod --query properties.configuration.ingress.fqdn -o tsv`
+2. Add `CNAME analytics → <FQDN>` and `TXT asuid.analytics → <validation-hash>`
+   at the registrar (the validation hash is printed by
+   `az containerapp hostname add ... --hostname analytics.keren.run`).
+3. Wait for propagation (`dig @8.8.8.8 asuid.analytics.keren.run TXT`).
+4. `az containerapp hostname add` then `az containerapp hostname bind` (managed
+   cert is provisioned automatically by Let's Encrypt via Azure).
+5. Update the Entra app registration with the production redirect URI:
+   `./deploy/azure-app-registration.sh --redirect-uri "https://analytics.keren.run/auth/callback"`
+6. Update the Container App env: `az containerapp update --set-env-vars AZURE_REDIRECT_URI=https://analytics.keren.run/auth/callback`.
 
 ## Re-runs
 
-The deployment is idempotent (`Incremental` mode is the default for
-`az deployment group create`). The workflow re-runs it on every `main`
-push; only the `imageTag` parameter changes between runs.
+The deployment is idempotent (Bicep `Incremental` mode is the default). The
+deploy script and the workflow are both safe to re-run.

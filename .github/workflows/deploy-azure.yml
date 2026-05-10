@@ -1,25 +1,41 @@
 name: Deploy to Azure
 
+# Builds the Docker image, pushes it to the project's Azure Container Registry,
+# and rolls a new Container App revision. Image-only path — the Bicep template
+# at infra/main.bicep is NOT re-run here (avoids needing to ship SESSION_SECRET
+# as a GitHub Secret). For infra changes, use `./deploy/azure-deploy.sh` or a
+# manual `az deployment group create` against infra/main.bicep.
+#
+# Auth is OIDC-only (no long-lived secret). Bootstrap one-time with
+# `./deploy/azure-ci-setup.sh`, then add the printed AZURE_* values as
+# repository secrets.
+
 on:
   push:
     branches: [main]
+    paths:
+      - "src/**"
+      - "public/**"
+      - "kql/**"
+      - "package.json"
+      - "package-lock.json"
+      - "Dockerfile"
+      - ".github/workflows/deploy-azure.yml"
   workflow_dispatch:
-    inputs:
-      customDomainName:
-        description: "Bind a custom domain (leave empty until the CNAME resolves)"
-        required: false
-        default: ""
 
 permissions:
+  id-token: write
   contents: read
-  id-token: write   # required for OIDC federated credentials
+
+concurrency:
+  group: deploy-azure
+  cancel-in-progress: false
 
 env:
   AZURE_RG: keren-analytics-prod
-  AZURE_LOCATION: westeurope
-  ACR_NAME: kerenanalyticsacr
+  CONTAINER_APP: ca-keren-analytics
+  ACR_NAME: kerenanalyticsdfrvtmlbgqqbk
   IMAGE_NAME: keren-analytics
-  DEPLOYMENT_NAME: keren-analytics-${{ github.run_id }}
 
 jobs:
   test:
@@ -27,12 +43,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
-
       - run: npm ci
       - run: npm test
 
@@ -57,39 +71,52 @@ jobs:
       - name: ACR login
         run: az acr login --name "$ACR_NAME"
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build & push image
-        run: |
-          set -euo pipefail
-          IMAGE="${ACR_NAME}.azurecr.io/${IMAGE_NAME}:${{ steps.tag.outputs.value }}"
-          docker build -t "$IMAGE" -t "${ACR_NAME}.azurecr.io/${IMAGE_NAME}:latest" .
-          docker push "$IMAGE"
-          docker push "${ACR_NAME}.azurecr.io/${IMAGE_NAME}:latest"
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.value }}
+            ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      - name: Deploy Bicep template
-        id: bicep
+      - name: Update Container App
         run: |
-          set -euo pipefail
-          CUSTOM_DOMAIN="${{ github.event.inputs.customDomainName }}"
-          az deployment group create \
+          az containerapp update \
+            --name "$CONTAINER_APP" \
             --resource-group "$AZURE_RG" \
-            --name "$DEPLOYMENT_NAME" \
-            --template-file infra/main.bicep \
-            --parameters infra/main.parameters.json \
-            --parameters imageTag=${{ steps.tag.outputs.value }} \
-            --parameters customDomainName="${CUSTOM_DOMAIN:-}" \
-            --output json > deployment.json
+            --image "${ACR_NAME}.azurecr.io/${IMAGE_NAME}:${{ steps.tag.outputs.value }}"
 
-          FQDN=$(jq -r '.properties.outputs.containerAppFqdn.value' deployment.json)
-          URL=$(jq -r '.properties.outputs.containerAppUrl.value' deployment.json)
-          echo "fqdn=$FQDN" >> "$GITHUB_OUTPUT"
-          echo "url=$URL" >> "$GITHUB_OUTPUT"
+      - name: Wait for new revision to be ready
+        run: |
+          for i in $(seq 1 24); do
+            ready=$(az containerapp show -n "$CONTAINER_APP" -g "$AZURE_RG" --query "properties.latestReadyRevisionName" -o tsv)
+            latest=$(az containerapp show -n "$CONTAINER_APP" -g "$AZURE_RG" --query "properties.latestRevisionName" -o tsv)
+            echo "Latest: $latest | Ready: $ready"
+            if [[ "$ready" == "$latest" ]]; then
+              echo "Revision is ready."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Revision did not become ready within 4 minutes." >&2
+          az containerapp logs show -n "$CONTAINER_APP" -g "$AZURE_RG" --tail 50 --format text || true
+          exit 1
 
       - name: Deployment summary
+        if: success()
         run: |
+          FQDN=$(az containerapp show -n "$CONTAINER_APP" -g "$AZURE_RG" --query "properties.configuration.ingress.fqdn" -o tsv)
           {
             echo "### Azure Container Apps deploy"
             echo
             echo "- Image: \`${ACR_NAME}.azurecr.io/${IMAGE_NAME}:${{ steps.tag.outputs.value }}\`"
-            echo "- FQDN: \`${{ steps.bicep.outputs.fqdn }}\`"
-            echo "- URL: ${{ steps.bicep.outputs.url }}"
+            echo "- FQDN: \`${FQDN}\`"
+            echo "- Custom domain: https://analytics.keren.run"
           } >> "$GITHUB_STEP_SUMMARY"

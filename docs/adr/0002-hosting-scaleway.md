@@ -3,7 +3,7 @@
 > **STATUS UPDATE — 2026-05-09 : superseded par
 > [ADR 0004](0004-azure-first-reversal.md).**
 >
-> La décision retenue est désormais **Azure Container Apps (West Europe)**
+> La décision retenue est désormais **Azure Container Apps (France Central)**
 > avec crédits Microsoft for Startups Founders Hub, pas Scaleway. Raisons :
 > cohérence audience (visiteur = dev Azure), distribution écosystème MS
 > gratuite, coût démo nul via Founders Hub, option acquihire/MS DevRel

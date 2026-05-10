@@ -16,12 +16,14 @@ links to the agent-side work that depends on it.
 ### `SESSION_SECRET` (production)
 - **Why**: `src/config.js` now throws at boot if `NODE_ENV=production`
   and `SESSION_SECRET` is missing or set to a known placeholder.
-- **When**: before the demo URL goes live.
-- **How**: generate with
-  `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
-  and set it on the deploy target (Render env var, or `docker run -e`,
-  etc.). Never commit it.
-- **Status**: TODO.
+- **How (effectif sur Azure)** : `deploy/azure-deploy.sh` génère un secret
+  (32 bytes hex via `openssl rand`) et le persiste dans
+  `deploy/.session-secret` (gitignoré). Re-déploiements réutilisent ce
+  fichier, donc les sessions actives ne sont pas invalidées. Pour rotater :
+  supprimer `deploy/.session-secret` et relancer le script. Le secret est
+  passé au Bicep en `@secure() param` puis au Container App en `secret`
+  chiffré au repos.
+- **Status**: DONE — 2026-05-10.
 
 ### Entra ID app registration (real Azure mode)
 - **Why**: required for `AZURE_MODE=real`. Mock mode does not need it.
@@ -81,21 +83,21 @@ These need a human to click through `Settings` on
 
 ### About / topics / website / description
 - **Why**: HN/Reddit visitors pattern-match on these in the first 5s.
-- **How**: Settings → top of the repo page →
-  - Description: short pitch (≤ 140 chars).
-  - Website: the demo URL (set this once A1 ships).
-  - Topics: `azure`, `application-insights`, `analytics`, `kql`,
-    `dashboard`, `oss`, `nodejs`, `express`. Add `marketing-analytics`
-    if there's room.
-- **Status**: TODO. Blocked on demo URL for the website field.
+- **Status**: DONE — 2026-05-10. Description :
+  *"Plug-and-play Marketing & Technical dashboards for Azure App Insights —
+  AI-mapped schema, KQL-only, MIT."* (102 chars). Homepage :
+  `https://analytics.keren.run`. Topics (10) : `analytics`,
+  `application-insights`, `azure`, `dashboard`, `express`, `kql`,
+  `marketing-analytics`, `nodejs`, `oss`, `self-hosted`. Tout posé via
+  `gh repo edit` + `gh api` ; modifiable au besoin.
 
 ### Pin v0.1.0 release with notes
 - **Why**: the right-hand sidebar's "Releases: v0.1.0" is a strong
   signal of "this is real software, not a weekend hack".
-- **How**: `Releases` → `Draft a new release`. Tag `v0.1.0` on `main`.
-  Notes should mirror the future `CHANGELOG.md` v0.1.0 section
-  (Claude can draft the changelog body — see C4).
-- **Status**: TODO.
+- **Status**: DONE — 2026-05-10. Tag `v0.1.0` créé sur le HEAD `ed561a7`,
+  release publiée avec les notes du `[0.1.0]` de `CHANGELOG.md`, marquée
+  *Latest* (donc auto-épinglée dans le sidebar). URL :
+  https://github.com/lionelgarnier/keren-analytics/releases/tag/v0.1.0
 
 ### Issue + PR templates UI check
 - **Why**: the `.github/ISSUE_TEMPLATE/*.yml` and
@@ -105,9 +107,24 @@ These need a human to click through `Settings` on
 
 ### Branch protection on `main`
 - **Why**: prevents accidental force-push to the deployed branch.
-- **How**: Settings → Branches → Add rule for `main` → require PR
-  before merging, require status checks if/when CI exists (C3).
-- **Status**: TODO. Low priority pre-launch (single-maintainer repo).
+- **Blocker**: GitHub limite la branch protection avancée aux repos publics
+  (gratuit) ou GitHub Pro privés ($4/mo). Le repo est privé pour l'instant
+  → activation différée jusqu'au passage en public (cf. launch-strategy
+  § 10 *"Do not pre-announce"*, qui plaide pour rendre public le jour J).
+- **How (à exécuter le jour du launch, juste après `gh repo edit --visibility public`)** :
+  ```bash
+  cat <<'JSON' | gh api repos/lionelgarnier/keren-analytics/branches/main/protection -X PUT --input -
+  {
+    "required_status_checks": {"strict": true, "contexts": ["Tests", "Security audit"]},
+    "enforce_admins": false,
+    "required_pull_request_reviews": null,
+    "restrictions": null,
+    "allow_force_pushes": false,
+    "allow_deletions": false
+  }
+  JSON
+  ```
+- **Status**: TODO — déblocable au passage public.
 
 ---
 
@@ -290,42 +307,61 @@ action are yours.
 - **Status**: TODO — à faire avant de provisionner l'hébergement Azure.
 
 ### Provisionner l'hébergement Azure de la démo
-- **Why**: ADR 0004 § Decision 2 — Azure Container Apps West Europe.
-- **When**: Phase A, après acceptation Founders Hub (ou au pire en pay-as-you-go
-  scale-to-zero, qui reste très peu cher pour une démo).
-- **How**:
-  1. Créer une subscription Azure (utiliser la subscription Founders Hub
-     une fois activée).
-  2. Resource group `keren-analytics-prod` en West Europe.
-  3. Provisionner via **Bicep** (recommandé, plus court et idiomatique
-     Azure que Terraform pour une cible mono-cloud) ou `terraform/azure/`
-     si on garde l'optionalité multi-cloud — à trancher au moment de
-     l'implémentation. Composants : Container Apps environment + Container
-     App + Azure Container Registry (ou GHCR) + Key Vault + Custom Domain
-     pour `analytics.keren.run`.
-  4. App registration Entra ID multi-tenant (cf. `setup-entra-id.md`)
-     conservée — c'est l'auth des **utilisateurs**, indépendante de l'hôte.
-- **Status**: TODO.
+- **Why**: ADR 0004 § Decision 2 — Azure Container Apps. Région retenue :
+  **France Central** (préférence souveraineté FR, latence ~5ms depuis Paris).
+- **How (effectif)**: stack provisionné via Bicep dans
+  [`infra/main.bicep`](../infra/main.bicep), orchestré par
+  [`deploy/azure-deploy.sh`](../deploy/azure-deploy.sh). Composants :
+  Log Analytics + Container Apps environment + Container App + Azure Container
+  Registry (Basic) + User-assigned Managed Identity (AcrPull). **Pas de Key
+  Vault dans le V1** : les secrets (SESSION_SECRET, AZURE_CLIENT_SECRET) sont
+  passés directement comme Container App secrets via paramètres `@secure()`
+  Bicep. Migration KV à layer en Phase B si rotation/audit deviennent un
+  besoin réel.
+- **Prereq découvert** : la subscription doit avoir le resource provider
+  Microsoft.App enregistré. Si le premier déploiement échoue avec
+  "Subscription is not registered for the Microsoft.App resource provider",
+  exécuter une fois : `az provider register -n Microsoft.App --wait`.
+- **Status**: DONE — 2026-05-10 — premier déploiement manuel réussi sur la
+  subscription `0a3afaae-8849-4b27-8e43-dad3ba80ce58` (RG
+  `keren-analytics-prod`, France Central). FQDN provisoire :
+  `ca-keren-analytics.happyrock-d99ade88.francecentral.azurecontainerapps.io`.
+  Coût observé : ~10-15 €/mois sans crédits Founders Hub (scale-to-zero
+  Container App + ACR Basic + Log Analytics).
 
 ### Configurer GitHub Actions pour déployer sur Azure
 - **Why**: ADR 0004 § Decision 4 — workflow `deploy-azure.yml` via OIDC
   federated credentials (pas de secret long-lived côté GH).
-- **When**: Phase A, après l'infra Azure provisionnée.
-- **How**: créer une **federated credential** sur l'app registration Azure
-  (subject `repo:lionelgarnier/keren-analytics:ref:refs/heads/main`),
-  secrets GitHub à créer : `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`,
-  `AZURE_SUBSCRIPTION_ID`. Workflow build & push vers ACR/GHCR puis
-  `az containerapp update`.
-- **Status**: TODO.
+- **How (effectif)** : workflow file
+  [`.github/workflows/deploy-azure.yml`](../.github/workflows/deploy-azure.yml)
+  + script de setup
+  [`deploy/azure-ci-setup.sh`](../deploy/azure-ci-setup.sh). Le script crée
+  une app registration `keren-analytics-ci` dédiée (séparée de l'app
+  `keren-analytics` qui sert l'OAuth utilisateur, pour éviter qu'une rotation
+  CI casse l'OAuth), une federated credential OIDC pour
+  `repo:lionelgarnier/keren-analytics:ref:refs/heads/main`, et assigne 2
+  rôles RBAC minimaux : **AcrPush** sur l'ACR, **Contributor** sur le
+  Container App (pas Contributor sur le RG entier — least privilege).
+- **Steps maintainer (~5 min)** :
+  1. `./deploy/azure-ci-setup.sh` (idempotent).
+  2. Coller les 3 valeurs imprimées comme GitHub Secrets (Settings →
+     Secrets and variables → Actions), ou utiliser les `gh secret set`
+     one-liners imprimés par le script.
+  3. Push sur `main` ou `gh workflow run deploy-azure.yml` pour déclencher.
+  4. Le workflow build l'image, push à ACR, update le Container App, et
+     attend la propagation healthy avant de finir.
+- **Status**: workflow file en place 2026-05-10 ; reste les 2 actions
+  maintainer (script CI + secrets) avant le premier run automatique.
 
 ### DNS `analytics.keren.run` pointé sur Azure
 - **Why**: ADR 0002 § 7 (DNS maintenu par ADR 0004 § Decision 5) — l'URL
   canonique `https://analytics.keren.run` reste en place, seul l'endpoint
   cible change.
-- **When**: après le premier déploiement Azure réussi (sinon rien à pointer).
+- **When**: déblocable depuis le 2026-05-10 — l'infra Azure est en place, le
+  FQDN provisoire est `ca-keren-analytics.happyrock-d99ade88.francecentral.azurecontainerapps.io`.
 - **How**:
   1. Récupérer le FQDN Azure Container Apps après déploiement (forme
-     `<app>.<env>.westeurope.azurecontainerapps.io`).
+     `<app>.<env>.francecentral.azurecontainerapps.io`).
   2. Chez le registrar de `keren.run`, créer un `CNAME analytics` → FQDN
      Azure. Vérifier le record `asuid.analytics` requis par Azure pour
      l'attache du custom domain.
@@ -341,11 +377,39 @@ action are yours.
   speculatively" et la stratégie originale OSS-first SaaS-track. Après
   ADRs 0001+0004, le bon récit est "Azure-first, vitrine portfolio,
   multi-cloud V2 conditionnel".
-- **When**: après la Phase A (refacto provider + déploiement Azure réussi).
 - **How**: remplacer la section "Status" et "Known gaps" par une référence
   aux ADRs 0001 et 0004. Garder le reste (invariants, conventions, mock
   parity, KQL templating, etc.) inchangé — ils tiennent toujours.
-- **Status**: TODO.
+- **Status**: DONE — 2026-05-10 — section Status réécrite (Phase A DONE,
+  ref ADRs 0001+0004), repo map ajoute `deploy/`, "metadataStore in-memory"
+  corrigé en fs-backed, SESSION_SECRET fail-loud noté, "Render auto-deploys"
+  remplacé par `deploy/azure-deploy.sh`.
+
+### Purger le Key Vault orphelin du premier déploiement raté
+- **Why**: lors du premier essai de Bicep le 2026-05-10, le Container App
+  référençait des secrets KV qui n'existaient pas encore → échec. Bicep
+  reformulé sans KV (secrets inline), mais le KV `kv-keren-analytics-dfrvt`
+  créé pendant le run raté est resté dans le RG. Coût ~0 (pas de secrets,
+  pas d'opérations) mais c'est du bruit dans le portail.
+- **How**:
+  ```bash
+  az keyvault delete --name kv-keren-analytics-dfrvt -g keren-analytics-prod
+  az keyvault purge  --name kv-keren-analytics-dfrvt --location francecentral
+  ```
+  (Le `purge` est nécessaire car KV reste 7j en soft-delete par défaut.)
+- **Status**: TODO — 30 secondes, pas urgent.
+
+### Gotcha — ne pas re-run `azure-app-registration.sh` inutilement
+- **Why**: le script utilise `az ad app credential reset --append`, qui
+  **mint un nouveau client secret à chaque run**. Les anciens secrets
+  restent valides (le Container App tournant ne casse pas), mais ça pollue
+  l'app registration et complique les audits. À ne lancer que pour :
+  - Première création de l'app registration.
+  - Ajouter une nouvelle redirect URI (le script dedupe correctement, donc
+    re-run sûr quand un nouvel environnement apparaît, ex. URL Container
+    Apps après premier déploiement).
+  - Rotation explicite de secret.
+- **Status**: note opérationnelle — pas un TODO.
 
 ### ~~Compte Scaleway + dossier Startup Program~~ — reporté V2
 - ~~Why / How~~: superseded par ADR 0004 — l'hôte V1 est Azure, pas Scaleway.

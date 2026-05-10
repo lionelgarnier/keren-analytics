@@ -326,7 +326,7 @@ Azure-first plan:
   Wire LiteLLM behind the existing `aiClient` interface (cf.
   `architecture-ai.md`). Ship Azure-only deployment (Bicep or
   `terraform/azure/`) + `deploy-azure.yml`. Demo public on Azure
-  Container Apps West Europe. **No second cloud adapter.**
+  Container Apps France Central. **No second cloud adapter.**
 - **V1 — Phase B**: Hard launch on Azure ecosystem (Show HN, awesome-azure,
   Reddit, MS DevRel, MVP outreach). Tactics in `launch-strategy.md`.
 - **V2 GATE — T+90**: Qualitative review of traction signals (stars,
@@ -349,7 +349,7 @@ Azure-first plan:
 - [ADR 0003](adr/0003-terraform-one-click-deploy.md) — Terraform per-cloud
   one-click deploy (deferred to V2; V1 ships Azure-only)
 - [ADR 0004](adr/0004-azure-first-reversal.md) — **Active V1 plan.**
-  Azure-first hosting (Container Apps West Europe + MS Founders Hub
+  Azure-first hosting (Container Apps France Central + MS Founders Hub
   credits), multi-cloud as conditional V2 content
 - [`architecture-ai.md`](architecture-ai.md) — AI provider abstraction
   (`none` / `ollama` / `azure-openai`), implementation via LiteLLM

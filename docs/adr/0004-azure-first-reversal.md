@@ -4,6 +4,19 @@
 
 ACCEPTED — 2026-05-09. **Supersede partiellement** :
 
+> **Amendment 2026-05-10** — Phase A initial deploy effectué. Deux points de
+> détail laissés ouverts par l'ADR sont résolus :
+> - **Région retenue** : *France Central*, pas *West Europe*. Préférence
+>   souveraineté FR du mainteneur ; latence depuis Paris ~5ms vs ~15ms ;
+>   coût quasi-identique. La logique "souveraineté EU light" de la § 2 reste
+>   valable, juste avec un endpoint physiquement en France.
+> - **Bicep vs Terraform** : tranché pour **Bicep**. Plus court (~280 lignes
+>   pour le stack complet), idiomatique Azure, parsing natif des secrets
+>   `@secure()`. Terraform reste pertinent si la V2 multi-cloud arrive — pas
+>   de coût à reprendre à ce moment-là.
+>
+> Voir `infra/main.bicep` et `deploy/azure-deploy.sh`.
+
 - ADR 0001 § Decision 3 (réorganisation roadmap multi-cloud comme livrable principal) → remplacé.
 - ADR 0002 (Scaleway comme hôte de la démo) → remplacé.
 - ADR 0003 (Terraform per-cloud one-click multi-cloud) → reporté / réduit en scope.
@@ -99,8 +112,8 @@ qualitative pour décider si la V2 vaut le coup.
 ### 2. Hébergement : Azure (Container Apps), pas Scaleway
 
 **Décision** : héberger la démo publique sur **Azure Container Apps** (région
-West Europe pour la cohérence souveraineté EU light), avec crédits Microsoft
-for Startups Founders Hub.
+~~West Europe~~ → *France Central*, cf. amendment 2026-05-10), avec crédits
+Microsoft for Startups Founders Hub.
 
 Justifications :
 
@@ -134,7 +147,7 @@ L'argument souveraineté n'est pas perdu, il change de support :
 - Pour le narratif vitrine : la souveraineté devient le sujet de l'article
   V2 ("portage Scaleway"), pas le pitch V1.
 
-Azure West Europe (Pays-Bas, Irlande) reste un cloud Microsoft, pas
+Azure France Central (datacenters en France) reste un cloud Microsoft, pas
 souverain au sens strict. C'est assumé pour V1 — la promesse souveraineté
 forte passe par le self-host, pas par notre démo publique.
 
@@ -142,10 +155,11 @@ forte passe par le self-host, pas par notre démo publique.
 
 L'ADR 0003 prévoyait `terraform/{scaleway,azure,aws,gcp}/`. **Réduit à V1** :
 
-- `terraform/azure/` (ou **Bicep**, à arbitrer — Bicep est plus idiomatique
-  Azure et plus court à écrire, OpenTofu reste plus portable). Le mainteneur
-  tranche au moment de l'implémentation. Pour V1, le critère est "déploiement
-  reproductible en une commande", pas "portabilité multi-cloud".
+- **Bicep retenu** (cf. amendment 2026-05-10) — `infra/main.bicep`
+  + `deploy/azure-deploy.sh`. Plus court (~280 lignes pour Container Apps
+  + ACR + Log Analytics + MI), idiomatique Azure, secrets `@secure()`
+  natifs. Le critère "déploiement reproductible en une commande" tient :
+  `./deploy/azure-deploy.sh --client-id ... --client-secret ...`.
 - Workflow `deploy-azure.yml` GH Actions seulement.
 - Les dossiers `terraform/scaleway/`, `aws/`, `gcp/` n'existent pas en V1.
   Ils apparaîtront avec leur adapter respectif si la V2 est déclenchée.
@@ -220,9 +234,11 @@ distinction.
 |---|---|---|
 | Sprint pré-launch | Polish UI / AI surfaces / docs / landing | En cours |
 | MS Founders Hub | Soumettre la candidature, obtenir crédits + badge | À faire (≤ 1h) |
-| Rename | Repo `easy-analytics-for-azure` → `keren-analytics`, MAJ refs | À faire avant Phase A code |
-| Refacto provider | `src/azure/` → `src/providers/azure/`, formaliser interface | Phase A |
-| Hébergement Azure | Bicep ou `terraform/azure/`, workflow `deploy-azure.yml`, DNS `analytics.keren.run` | Phase A |
+| Rename | Repo `easy-analytics-for-azure` → `keren-analytics`, MAJ refs | DONE |
+| Refacto provider | `src/azure/` → `src/providers/azure/`, formaliser interface | Reporté V2 (cf. ADR 0001) |
+| Hébergement Azure | Bicep `infra/main.bicep` + script `deploy/azure-deploy.sh` | DONE 2026-05-10 (manuel) |
+| GH Actions OIDC `deploy-azure.yml` | Automatiser le déploiement | À faire |
+| DNS `analytics.keren.run` | CNAME → FQDN Azure Container Apps + managed cert | À faire |
 | Hard launch | Show HN, awesome-azure, Reddit, MS DevRel outreach | Phase B (post-Phase A stabilisée) |
 | **GATE** : signaux de traction | ≥ qq centaines stars, issues utilisateurs réelles, inbound | T+90 |
 | Adapter Scaleway + article portage | Conditionnel à la gate | V2 si gate passée |
@@ -232,12 +248,11 @@ distinction.
 
 Cette ADR ne décide PAS :
 
-- Bicep vs Terraform pour Azure (à trancher au moment de l'implémentation
-  Phase A — Bicep est plus idiomatique Azure et plus simple, Terraform plus
-  portable si V2 multi-cloud arrive).
 - Le détail de la candidature MS Founders Hub (à remplir par le mainteneur).
 - Le timing exact du rename par rapport au sprint pré-launch en cours
   (cf. `maintainer-todo.md`).
+
+(Bicep vs Terraform : tranché en faveur de Bicep — voir amendment en tête.)
 
 ## Lessons learned (pour la trace)
 
