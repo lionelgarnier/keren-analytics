@@ -62,17 +62,65 @@ links to the agent-side work that depends on it.
 
 ### CNAME `analytics.keren.run` → Container App FQDN
 - **Why**: the managed certificate for the custom domain only provisions
-  once the CNAME already resolves. The Bicep template intentionally
-  defaults `customDomainName` to empty so the first deploy doesn't fail
-  on the missing record.
+  once the CNAME already resolves.
 - **When**: after the first successful Azure deploy, before launch.
-- **How**:
-  1. Read `containerAppFqdn` from the workflow output.
-  2. At Namecheap, set `CNAME analytics → <containerAppFqdn>` with TTL
-     ≤ 5 min. Wait for propagation.
-  3. Trigger `deploy-azure.yml` manually with
-     `customDomainName=analytics.keren.run`.
-- **Status**: TODO.
+- **What actually happened** (2026-05-10/11):
+  CNAME was configured at Namecheap, the managed certificate
+  `mc-cae-keren-anal-analytics-keren--4208` was created on the
+  Container Apps environment via portal/CLI, and the binding +
+  redirect URI override were applied directly on the live Container
+  App. None of this lives in [`infra/main.bicep`](../infra/main.bicep)
+  yet — see the follow-up entry below.
+- **Status**: DONE — `https://analytics.keren.run` serves the app with
+  a valid TLS cert.
+
+### Bicep ↔ prod drift on custom domain + redirect URI
+- **Why this exists**: discovered 2026-05-11 during the Track F5 what-if
+  for the Foundry env vars push. Three configurations live on the
+  production Container App that **are not represented** in
+  [`infra/main.bicep`](../infra/main.bicep):
+  1. `properties.configuration.ingress.customDomains[0]` — binding for
+     `analytics.keren.run` to managed cert
+     `mc-cae-keren-anal-analytics-keren--4208`.
+  2. The managed cert resource itself on the Container Apps environment.
+  3. `AZURE_REDIRECT_URI=https://analytics.keren.run/auth/callback` env
+     var. The Bicep param defaults to empty; the deploy script *does*
+     `--set-env-vars AZURE_REDIRECT_URI=https://${APP_FQDN}/auth/callback`
+     at the end, but `${APP_FQDN}` is the Container App's
+     `azurecontainerapps.io` FQDN, not the custom domain — so even
+     re-running `./deploy/azure-deploy.sh` would clobber the right
+     value with the wrong one.
+- **Risk**: anyone running `./deploy/azure-deploy.sh` against prod
+  today regresses OAuth + breaks the custom domain. F5's what-if caught
+  this before we did it; we used a targeted
+  `az containerapp update --set-env-vars` instead. The image-only CI
+  workflow (`.github/workflows/deploy-azure.yml`) does **not** redeploy
+  Bicep so it stays safe.
+- **When**: before any future provisioning of a second environment
+  (staging, EU2 region, etc.) or any disaster-recovery rebuild from
+  Bicep. Not blocking the pre-launch sprint.
+- **How — two paths to choose from**:
+  1. **Lift into Bicep**. Add a `customDomainName` param (default empty),
+     a `Microsoft.App/managedEnvironments/managedCertificates` resource
+     gated on that param, the `customDomains` block on
+     `containerApp.properties.configuration.ingress`, and a
+     `customDomainRedirectUri` param that defaults to
+     `https://<customDomainName>/auth/callback` when set, else falls
+     back to the FQDN. Result: Bicep becomes the full source of truth,
+     re-deploys are safe. Effort: ~50 lines Bicep + the deploy script
+     stops needing the post-deploy `--set-env-vars` for the redirect.
+  2. **Codify post-deploy as a script**. Add `deploy/post-deploy.sh`
+     that runs the three `az containerapp` / `az ... managedCertificate`
+     commands, idempotent. Put a comment at the top of Bicep stating
+     "this template is intentionally minimal — see
+     `deploy/post-deploy.sh`". Result: Bicep stays thin but a separate
+     human-readable runbook exists. Effort: ~30 lines bash.
+- **Recommendation**: option 1. The current "Bicep then manual" split
+  is bug-prone (we already hit it once). Lifting into Bicep makes the
+  template true to the prod reality and removes the failure mode.
+  Option 2 is acceptable if you want to defer Bicep complexity.
+- **Status**: TODO — to plan before staging/EU2 env or disaster-recovery
+  exercise.
 
 ---
 
