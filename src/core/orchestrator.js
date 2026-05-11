@@ -1,6 +1,10 @@
 import { buildReadinessReport } from "./readiness.js";
 import { buildSchemaProfile } from "./schemaProfile.js";
-import { buildMapping } from "./mapping.js";
+import { buildSchemaScan } from "./schemaScan.js";
+import { persistScan } from "./scanStore.js";
+import { getOrComputeMapping } from "./aiMappingService.js";
+import { buildMapping, mergeWithValidation } from "./mapping.js";
+import { getActiveValidation } from "./validationStore.js";
 import { buildOverviewDashboard } from "./dashboard.js";
 import { resolveTimeRange, toKqlDatetime } from "./timeRange.js";
 import { loadKqlTemplate, renderTemplate } from "./kql.js";
@@ -152,9 +156,52 @@ export async function runOverviewPipeline({
   });
   updateTenant(tenantId, { schemaProfile });
 
+  logStateTransition(tenantId, { state: PipelineStates.SCHEMA_SCAN });
+  progress("Scanning schema enrichment", 0.18);
+  const scan = await runSchemaScan({
+    azureClient,
+    selectedResource,
+    schemaTimeParams,
+    schemaProfile,
+    readinessReport,
+  });
+  if (scan) {
+    try {
+      persistScan(tenantId, scan);
+    } catch (error) {
+      logStateTransition(tenantId, {
+        state: PipelineStates.SCHEMA_SCAN,
+        detail: `persist-failed: ${error.message}`,
+      });
+    }
+  }
+
+  // F3: optional AI mapping enrichment. Cached per scan_id so re-runs
+  // don't re-spend tokens. Never blocks the pipeline — degraded fallback
+  // returns the empty proposal shape so the wizard can still render.
+  logStateTransition(tenantId, { state: PipelineStates.AI_ANALYSIS });
+  progress("AI mapping analysis", 0.20);
+  let aiMapping = null;
+  try {
+    aiMapping = await getOrComputeMapping(tenantId, { readinessReport });
+    if (aiMapping?.degraded) {
+      logStateTransition(tenantId, {
+        state: PipelineStates.AI_ANALYSIS,
+        detail: `degraded: ${aiMapping.reason || "unknown"}`,
+      });
+    }
+  } catch (error) {
+    logStateTransition(tenantId, {
+      state: PipelineStates.AI_ANALYSIS,
+      detail: `ai-failed: ${error.message}`,
+    });
+  }
+
   logStateTransition(tenantId, { state: PipelineStates.MAPPING_BUILD });
   progress("Building data mapping", 0.22);
-  const mapping = buildMapping({ schemaProfile, readinessReport });
+  const deterministicMapping = buildMapping({ schemaProfile, readinessReport });
+  const validation = getActiveValidation(tenantId);
+  const mapping = mergeWithValidation(deterministicMapping, validation);
   updateTenant(tenantId, { mapping });
 
   logStateTransition(tenantId, { state: PipelineStates.DASHBOARD_BUILD });
@@ -164,6 +211,7 @@ export async function runOverviewPipeline({
     resourceId: selectedResource.resourceId,
     workspaceId: selectedResource.workspaceId,
     mapping,
+    aiMapping,
     schemaProfile,
     timeRange,
     cacheTtlMs,
@@ -185,6 +233,51 @@ export async function runOverviewPipeline({
     mapping,
     dashboard,
   };
+}
+
+/**
+ * Run the three F2 enrichment queries in parallel and assemble the
+ * scan payload. Any single query failing degrades that piece to an
+ * empty list rather than failing the whole pipeline — the dashboard
+ * doesn't depend on the scan, only the wizard / AI surface does.
+ */
+async function runSchemaScan({
+  azureClient,
+  selectedResource,
+  schemaTimeParams,
+  schemaProfile,
+  readinessReport,
+}) {
+  async function fetchRows(templateName, queryName) {
+    try {
+      const tpl = loadKqlTemplate(templateName);
+      const kql = renderTemplate(tpl, schemaTimeParams);
+      const result = await azureClient.queryWorkspace({
+        resourceId: selectedResource.resourceId,
+        workspaceId: selectedResource.workspaceId,
+        kql,
+        queryName,
+        timeRangeKey: "30d",
+      });
+      return extractRows(result);
+    } catch {
+      return [];
+    }
+  }
+
+  const [eventVolumes, customDimensionSamples, timestampSpan] = await Promise.all([
+    fetchRows("event-volumes", "eventVolumes"),
+    fetchRows("custom-dimension-samples", "customDimensionSamples"),
+    fetchRows("timestamp-span", "timestampSpan"),
+  ]);
+
+  return buildSchemaScan({
+    schemaProfile,
+    readinessReport,
+    eventVolumes,
+    customDimensionSamples,
+    timestampSpan,
+  });
 }
 
 function extractRows(result) {

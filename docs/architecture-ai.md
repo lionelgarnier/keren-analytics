@@ -2,8 +2,58 @@
 
 ## Status
 
-DRAFT — proposed. No code yet. Implementation gated on the first AI surface
-shipping (see `docs/launch-strategy.md` § 4 and § 11).
+ACCEPTED — Track F (F1-F5) shipped 2026-05-11. The provider abstraction
+is live with `none` (deterministic fallback / test default) and
+`azure-foundry` (Azure AI Foundry project Responses API, Managed Identity
+auth) — both wired end-to-end through the orchestrator, the setup
+wizard, and the dashboard. Confirms the broad strokes of this ADR; one
+correction is documented inline below (`azure-openai` superseded by
+`azure-foundry`, cf. ADR 0005 addendum 2026-05-11).
+
+The Context / Decision / Architecture / Configuration sections below
+remain the canonical reference for **adding new providers or new tasks**.
+The shipped state diverges from the original draft on three points,
+which are flagged inline; the divergence is intentional and was driven
+by what we learned during F3 implementation.
+
+**What is live today** (Track F3 + F4 + F5) :
+- `src/ai/interface.js` — provider contract (`name` / `capabilities()` / `generate()`)
+- `src/ai/factory.js` — `AI_PROVIDER=none|azure-foundry` selector (cached)
+- `src/ai/noneProvider.js` — deterministic fallback (zero outbound traffic)
+- `src/ai/azureFoundry.js` — Foundry project Responses API, Managed Identity
+  via `ChainedTokenCredential(MI → AzureCli)`, audience `https://ai.azure.com/.default`
+- `src/ai/promptBuilder.js` — JSON-schema-strict response for `mappingAnalysis`
+- `src/ai/quotaGuard.js` — daily EUR cap with deterministic fallback on overflow
+- `src/core/aiMappingService.js` — orchestrates scan → cache → provider → persist
+- `src/core/validationStore.js` — Layer 3 user overrides (Track F4)
+- `src/core/narration.js` — `Preview` badge auto-drops when a real AI mapping
+  is present (Track F5)
+
+**Still planned, post-launch** :
+- `ollama` provider (self-hosted, zero outbound)
+- `narration`, `nlToKql`, `instrumentation` task wirings (only
+  `mappingAnalysis` is wired today; the contract handles the others)
+
+### Inline divergences from the original draft
+
+1. **Configured provider is `azure-foundry`, not `azure-openai`.** The
+   Foundry project endpoint exposes the same OpenAI Responses API surface,
+   with future-proof model swap (Mistral, Cohere, Llama) under one
+   endpoint. Token audience is `https://ai.azure.com/.default` (not
+   `cognitiveservices.azure.com/.default`). Cf. ADR 0005 addendum.
+
+2. **No `AZURE_OPENAI_API_KEY` env var.** Auth is Managed Identity in
+   production (`Azure AI User` role on the Foundry Project) and
+   `AzureCliCredential` (`az login`) in dev. Zero API keys in env.
+
+3. **Quota guard is EUR-based, not request-count-based.** The original
+   draft proposed `AI_MAX_REQUESTS_PER_TENANT_HOUR`; F3 ships
+   `AI_DAILY_EUR_CAP=10` with real per-call cost estimation from token
+   usage. This survives cost variance across models far better than
+   request count.
+
+The rest of this doc — privacy contract, sanitizer rules, deployment
+patterns — is unchanged and remains binding on any new provider.
 
 ## Context
 
@@ -50,11 +100,11 @@ env var.
 
 Three implementations at launch:
 
-| Provider | Outbound traffic | Recommended for |
-|---|---|---|
-| `none` (default) | None | Anyone who hasn't decided yet. AI surfaces show deterministic fallback content. Always works. |
-| `ollama` | LAN-only | Self-hosters, regulated buyers, EU-strict tenants. **Zero third-party AI exposure.** |
-| `azure-openai` | To customer's Azure OpenAI | Azure-native customers who already have private endpoint + no-train contracts. Best quality. |
+| Provider | Outbound traffic | Status | Recommended for |
+|---|---|---|---|
+| `none` (default) | None | **Live** (F3) | Anyone who hasn't decided yet. AI surfaces show deterministic fallback. Always works. Tests force this. |
+| `azure-foundry` | To customer's Azure AI Foundry | **Live** (F3, mappingAnalysis) | Azure-native customers. Managed Identity auth, no API keys. Supersedes the original `azure-openai` plan per ADR 0005. |
+| `ollama` | LAN-only | Planned | Self-hosters, regulated buyers, EU-strict tenants. **Zero third-party AI exposure.** Post-launch. |
 
 Future:
 
@@ -205,30 +255,39 @@ is the answer for "we cannot accept any third-party LLM call".
 
 ```env
 # AI provider selector. Default: none.
-AI_PROVIDER=none|ollama|azure-openai
+AI_PROVIDER=none|azure-foundry          # `ollama` planned, not yet wired
 
-# --- AI_PROVIDER=ollama ---
-OLLAMA_HOST=http://localhost:11434
-OLLAMA_MODEL_DEFAULT=llama-3.1:8b-instruct
-OLLAMA_MODEL_CODER=qwen2.5-coder:7b
-OLLAMA_MODEL_FAST=phi-3.5:mini
+# --- AI_PROVIDER=azure-foundry (Track F3 — ADR 0005) ---
+# Full project Responses API URL (incl. /openai/v1/responses path).
+AZURE_FOUNDRY_ENDPOINT=https://<project>.services.ai.azure.com/api/projects/<project>/openai/v1/responses
+AZURE_FOUNDRY_DEPLOYMENT=gpt-5.4-mini
+# Optional: client ID of the user-assigned Managed Identity to use in
+# Container Apps (when AZURE_CLIENT_ID is reserved for the OAuth user app).
+AZURE_FOUNDRY_CLIENT_ID=<uami-client-id>
 
-# --- AI_PROVIDER=azure-openai ---
-AZURE_OPENAI_ENDPOINT=https://your-instance.openai.azure.com
-AZURE_OPENAI_API_KEY=...
-AZURE_OPENAI_DEPLOYMENT_DEFAULT=gpt-4o-mini
-AZURE_OPENAI_DEPLOYMENT_CODER=gpt-4o
+# --- AI_PROVIDER=ollama (planned, post-launch) ---
+# OLLAMA_HOST=http://localhost:11434
+# OLLAMA_MODEL_DEFAULT=llama-3.1:8b-instruct
+# OLLAMA_MODEL_CODER=qwen2.5-coder:7b
 
 # --- common ---
-# Soft guard: if a provider call exceeds this, abort and use fallback.
-AI_REQUEST_TIMEOUT_MS=15000
-# Hard cap per tenant per hour.
-AI_MAX_REQUESTS_PER_TENANT_HOUR=20
+AI_REQUEST_TIMEOUT_MS=20000
+AI_DAILY_EUR_CAP=10
+# Pricing for the cost estimator that drives the cap. Defaults assume
+# gpt-5.4-mini list price; override once invoiced for real.
+AI_PRICE_PER_M_IN_EUR=0.25
+AI_PRICE_PER_M_OUT_EUR=1.0
 ```
 
-`AZURE_OPENAI_API_KEY` is a secret and must never be logged. The full
-prompt and response also must never be logged at info level — they contain
-sanitized but workspace-identifying metadata. Audit logs record
+**Auth** : the `azure-foundry` provider uses **Managed Identity** (no API
+keys). The Foundry project endpoint expects an access token with audience
+`https://ai.azure.com/.default` (NOT `cognitiveservices.azure.com/.default`
+— using the wrong audience returns `HTTP 401: audience is incorrect`).
+The MI must hold the **`Azure AI User`** role on the Foundry Project (cf.
+`docs/maintainer-todo.md` § "Assigner le rôle Azure AI User").
+
+The full prompt and response must never be logged at info level — they
+contain sanitized but workspace-identifying metadata. Audit logs record
 `{ tenant, task, provider, model, latencyMs, tokens, ok }` only.
 
 ## Deployment patterns

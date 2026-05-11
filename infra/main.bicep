@@ -62,6 +62,19 @@ param minReplicas int = 0
 @maxValue(30)
 param maxReplicas int = 3
 
+@description('AI provider for the setup-wizard / mapping analysis. "none" disables LLM calls; "azure-foundry" wires the Foundry Responses API. ADR 0005 + Track F3.')
+@allowed([
+  'none'
+  'azure-foundry'
+])
+param aiProvider string = 'none'
+
+@description('Azure AI Foundry project Responses API endpoint (full URL including /openai/v1/responses). Only used when aiProvider = azure-foundry.')
+param azureFoundryEndpoint string = ''
+
+@description('Azure AI Foundry model deployment name (e.g. gpt-5.4-mini). Only used when aiProvider = azure-foundry.')
+param azureFoundryDeployment string = ''
+
 // --- Globally-unique names (ACR must be unique across all of Azure) ---
 var uniqueSuffix = uniqueString(resourceGroup().id)
 var acrName = toLower(replace('${namePrefix}${uniqueSuffix}', '-', ''))
@@ -175,6 +188,16 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'AZURE_REDIRECT_URI', value: azureRedirectUri }
             { name: 'SESSION_SECRET', secretRef: 'session-secret' }
             { name: 'AZURE_CLIENT_SECRET', secretRef: 'azure-client-secret' }
+            // Track F3 — AI mapping analysis. AZURE_FOUNDRY_CLIENT_ID points
+            // the @azure/identity SDK at the user-assigned MI for backend
+            // calls (separate from AZURE_CLIENT_ID, which is reserved for the
+            // OAuth user app registration). The MI must hold the
+            // `Azure AI User` role on the Foundry Project — see
+            // docs/maintainer-todo.md.
+            { name: 'AI_PROVIDER', value: aiProvider }
+            { name: 'AZURE_FOUNDRY_ENDPOINT', value: azureFoundryEndpoint }
+            { name: 'AZURE_FOUNDRY_DEPLOYMENT', value: azureFoundryDeployment }
+            { name: 'AZURE_FOUNDRY_CLIENT_ID', value: managedIdentity.properties.clientId }
           ]
           probes: [
             {

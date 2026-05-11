@@ -8,11 +8,12 @@
     "test": "tests"
   },
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "node src/server.js",
-    "test": "node --env-file=.env.test --test",
+    "start": "node --disable-warning=ExperimentalWarning src/server.js",
+    "dev": "node --disable-warning=ExperimentalWarning src/server.js",
+    "test": "node --disable-warning=ExperimentalWarning --env-file=.env.test --test",
     "audit:security": "node scripts/security-audit.mjs",
-    "docs:bundle": "bash scripts/build-strategy-bundle.sh"
+    "docs:bundle": "bash scripts/build-strategy-bundle.sh",
+    "backup:sqlite": "node --disable-warning=ExperimentalWarning scripts/backup-sqlite.mjs"
   },
   "repository": {
     "type": "git",
@@ -26,6 +27,7 @@
   },
   "homepage": "https://github.com/lionelgarnier/keren-analytics#readme",
   "dependencies": {
+    "@azure/identity": "^4.13.1",
     "dotenv": "^17.2.4",
     "express": "^5.2.1",
     "express-session": "^1.19.0",

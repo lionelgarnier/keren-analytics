@@ -577,6 +577,54 @@ function generateBaseline() {
       { tableName: "requests", key: "sessionId", keyCount: vary(800, 12, rng) },
       { tableName: "customEvents", key: "checkoutStep", keyCount: vary(120, 20, rng) },
     ],
+    // F2 — schema scan enrichment. Sample values intentionally include
+    // PII-shaped strings so the scrub layer can be exercised in tests
+    // and demos.
+    eventVolumes: [
+      { name: "feature_clicked", count: vary(1200, 10, rng) },
+      { name: "checkout_started", count: vary(320, 14, rng) },
+      { name: "newsletter_subscribed", count: vary(90, 18, rng) },
+      { name: "user_signed_up", count: vary(75, 20, rng) },
+      { name: "search_executed", count: vary(540, 12, rng) },
+    ],
+    customDimensionSamples: [
+      {
+        tableName: "pageViews", keyName: "page",
+        cardinality: 28, occurrences: vary(1200, 12, rng),
+        samples: ["/", "/pricing", "/docs", "/blog", "/signup"],
+      },
+      {
+        tableName: "pageViews", keyName: "campaign",
+        cardinality: 12, occurrences: vary(540, 14, rng),
+        samples: ["launch-2026", "newsletter-may", "google-ads", "twitter-promo"],
+      },
+      {
+        tableName: "requests", keyName: "sessionId",
+        cardinality: 1844, occurrences: vary(800, 12, rng),
+        samples: ["s_abc123", "s_def456", "s_ghi789"],
+      },
+      {
+        tableName: "requests", keyName: "userEmail",
+        cardinality: 312, occurrences: vary(312, 14, rng),
+        samples: ["user1@example.com", "ada@example.org", "bob@test.io"],
+      },
+      {
+        tableName: "customEvents", keyName: "checkoutStep",
+        cardinality: 6, occurrences: vary(320, 20, rng),
+        samples: ["cart", "shipping", "payment", "review", "confirmation"],
+      },
+      {
+        tableName: "customEvents", keyName: "supportPhone",
+        cardinality: 4, occurrences: vary(80, 22, rng),
+        samples: ["+33 1 23 45 67 89", "555-0100", "+1 (555) 555-1234"],
+      },
+    ],
+    timestampSpan: [
+      { tableName: "pageViews", earliest: "2026-04-11T00:00:00Z", latest: "2026-05-10T23:00:00Z", eventCount: vary(4200, 10, rng) },
+      { tableName: "requests", earliest: "2026-04-11T00:00:00Z", latest: "2026-05-10T23:00:00Z", eventCount: vary(3900, 10, rng) },
+      { tableName: "customEvents", earliest: "2026-04-12T00:00:00Z", latest: "2026-05-10T23:00:00Z", eventCount: vary(2100, 12, rng) },
+      { tableName: "browserTimings", earliest: "2026-04-15T00:00:00Z", latest: "2026-05-10T23:00:00Z", eventCount: vary(900, 15, rng) },
+    ],
     uniqueVisitors: [{ uniqueVisitors: vary(1523, 12, rng) }],
     sessions: [{ sessions: vary(1844, 12, rng) }],
     topPages: [

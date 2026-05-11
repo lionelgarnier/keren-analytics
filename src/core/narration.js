@@ -117,15 +117,25 @@ function buildParagraph({ dashboard, mapping, range }) {
   return sentences.join(" ");
 }
 
-export function buildNarration({ azureMode, dashboard, mapping, range }) {
+export function buildNarration({ azureMode, dashboard, mapping, range, aiMapping }) {
   const paragraph = buildParagraph({ dashboard, mapping, range });
   const isMock = azureMode === "mock";
+  // After Track F3, the wizard runs a real LLM call when `AI_PROVIDER=azure-foundry`
+  // and persists the proposals. When that succeeded for the active scan
+  // (aiMapping non-null, non-degraded, source != "deterministic"), the
+  // "preview" qualifier no longer holds — drop the badge and flip the
+  // mode to "ai".
+  const hasRealAi = !!(aiMapping && !aiMapping.degraded && aiMapping.source && aiMapping.source !== "deterministic");
+  let mode;
+  if (isMock) mode = "mock";
+  else if (hasRealAi) mode = "ai";
+  else mode = "preview";
   return {
     enabled: true,
-    mode: isMock ? "mock" : "preview",
+    mode,
     headline: "Environment analysis",
     paragraph,
-    badge: isMock ? null : PREVIEW_BADGE,
+    badge: isMock || hasRealAi ? null : PREVIEW_BADGE,
     tagline: TAGLINE,
   };
 }

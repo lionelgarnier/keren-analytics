@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Setup wizard — Keren Analytics</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/theme-init.js"></script>
+  </head>
+  <body class="setup-page">
+    <nav class="navbar">
+      <div class="navbar-inner">
+        <div class="navbar-left">
+          <span class="logo">Keren Analytics</span>
+          <span class="badge badge-setup">Setup</span>
+        </div>
+        <div class="navbar-right">
+          <button id="themeToggle" class="theme-toggle" aria-label="Toggle dark mode" title="Toggle theme">
+            <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          </button>
+          <a href="/" class="btn btn-ghost" id="skipToDashboard">Skip to dashboard</a>
+        </div>
+      </div>
+    </nav>
+
+    <main class="setup-container">
+      <ol class="setup-stepper" aria-label="Setup steps">
+        <li data-step="scanning" class="setup-step active">
+          <span class="setup-step-num">1</span>
+          <span class="setup-step-label">Scanning</span>
+        </li>
+        <li data-step="findings" class="setup-step">
+          <span class="setup-step-num">2</span>
+          <span class="setup-step-label">AI findings</span>
+        </li>
+        <li data-step="validate" class="setup-step">
+          <span class="setup-step-num">3</span>
+          <span class="setup-step-label">Validate</span>
+        </li>
+        <li data-step="complete" class="setup-step">
+          <span class="setup-step-num">4</span>
+          <span class="setup-step-label">Save</span>
+        </li>
+      </ol>
+
+      <!-- Step 1: Scanning -->
+      <section id="step-scanning" class="setup-panel">
+        <div class="setup-scanning">
+          <div class="setup-spinner" aria-hidden="true"></div>
+          <h2 class="setup-h2">Scanning your telemetry…</h2>
+          <p class="setup-narration" id="scanningNarration">Connecting to Application Insights…</p>
+          <ul class="setup-progress-log" id="scanningLog" aria-live="polite"></ul>
+          <div class="setup-error hidden" id="scanningError"></div>
+        </div>
+      </section>
+
+      <!-- Step 2: AI findings -->
+      <section id="step-findings" class="setup-panel hidden">
+        <header class="setup-panel-head">
+          <h2 class="setup-h2">What I found in your tenant</h2>
+          <p class="setup-subtitle" id="findingsSubtitle"></p>
+        </header>
+
+        <div class="setup-findings-grid">
+          <article class="setup-card">
+            <h3>Tables present</h3>
+            <ul id="tablesList" class="setup-pill-list"></ul>
+          </article>
+
+          <article class="setup-card">
+            <h3>Custom dimensions <span class="setup-card-meta" id="customDimsCount"></span></h3>
+            <ul id="customDimsList" class="setup-cd-list"></ul>
+          </article>
+
+          <article class="setup-card">
+            <h3>Event types <span class="setup-card-meta" id="eventNamesCount"></span></h3>
+            <ul id="eventNamesList" class="setup-pill-list"></ul>
+          </article>
+
+          <article class="setup-card setup-card-wide">
+            <h3>Gaps detected</h3>
+            <ul id="gapsList" class="setup-gaps-list"></ul>
+          </article>
+
+          <article class="setup-card setup-card-wide">
+            <h3>AI proposed mappings <span class="setup-source-tag" id="mappingSource"></span></h3>
+            <p class="setup-summary" id="aiSummary"></p>
+            <table class="setup-mapping-table" id="proposalsTable">
+              <thead>
+                <tr><th>Canonical field</th><th>Proposed source</th><th>Confidence</th><th>Why</th></tr>
+              </thead>
+              <tbody id="proposalsBody"></tbody>
+            </table>
+          </article>
+
+          <article class="setup-card setup-card-wide">
+            <h3>Missing signals + how to fix</h3>
+            <ul id="missingSignalsList" class="setup-missing-list"></ul>
+          </article>
+        </div>
+
+        <div class="setup-footer">
+          <button class="btn btn-ghost" id="findingsBack">Re-scan</button>
+          <button class="btn btn-primary" id="findingsContinue">Review &amp; validate →</button>
+        </div>
+      </section>
+
+      <!-- Step 3: Validate / edit -->
+      <section id="step-validate" class="setup-panel hidden">
+        <header class="setup-panel-head">
+          <h2 class="setup-h2">Validate the mapping</h2>
+          <p class="setup-subtitle">
+            Accept all of the AI proposals as-is, or override any individual mapping below.
+            Your decision is saved per tenant and the dashboard will use it from now on.
+          </p>
+        </header>
+
+        <table class="setup-mapping-table" id="validateTable">
+          <thead>
+            <tr><th>Canonical field</th><th>Active source</th><th>KQL expression</th><th></th></tr>
+          </thead>
+          <tbody id="validateBody"></tbody>
+        </table>
+
+        <div class="setup-footer">
+          <button class="btn btn-ghost" id="validateBack">← Back</button>
+          <button class="btn btn-primary" id="validateAcceptAll">Accept all proposals</button>
+          <button class="btn btn-primary hidden" id="validateSaveOverrides">Save my overrides</button>
+        </div>
+      </section>
+
+      <!-- Step 4: Saved -->
+      <section id="step-complete" class="setup-panel hidden">
+        <div class="setup-complete">
+          <div class="setup-complete-check" aria-hidden="true">✓</div>
+          <h2 class="setup-h2">Saved.</h2>
+          <p class="setup-narration" id="completeNarration">Loading your dashboard…</p>
+        </div>
+      </section>
+    </main>
+
+    <script src="/setup.js"></script>
+  </body>
+</html>

@@ -1,12 +1,55 @@
 # AI-Powered Environment Analysis
 
-> **STATUS UPDATE — 2026-05-11.** Layer 1 (alias heuristics, no LLM) is
-> **SHIPPED** (cf. B1 in `launch-readiness.md`, ALIAS table + regex per
-> canonical field in `src/core/mapping.js`). Layer 2 (LLM analysis) is
-> re-scoped to **pre-launch BLOCKER** by
-> [ADR 0005](../adr/0005-ai-first-scope.md) — concrete delivery in
-> [`launch-readiness.md`](launch-readiness.md) § Track F (chantiers F2-F3).
-> Layer 3 (user overrides) ships as part of F4 (the wizard UI).
+> **STATUS — ALL THREE LAYERS SHIPPED 2026-05-11.**
+> - **Layer 1 (alias heuristics)** — `ALIASES` table + regex per canonical
+>   field in [`src/core/mapping.js`](../../src/core/mapping.js). Original
+>   B1 task closed.
+> - **Layer 2 (LLM mapping analysis)** — Track F3:
+>   [`src/ai/azureFoundry.js`](../../src/ai/azureFoundry.js) +
+>   [`promptBuilder.js`](../../src/ai/promptBuilder.js) drive an Azure AI
+>   Foundry `gpt-5.4-mini` call against the schema scan, returning
+>   `mapping_proposals` / `missing_signals` /
+>   `dashboard_recommendations` / `summary` as a JSON-schema-strict
+>   response. Cached per scan in the `mappings` table.
+> - **Layer 3 (user overrides)** — Track F4:
+>   [`src/core/validationStore.js`](../../src/core/validationStore.js) +
+>   `mergeWithValidation()` in `mapping.js`. The setup wizard
+>   (`/setup`) lets the user accept_all / override per field / reject,
+>   and the orchestrator applies the active validation on every
+>   pipeline run.
+
+## Implementation status (2026-05-11)
+
+| Layer | Specced in this doc § | Code | Tests |
+|---|---|---|---|
+| 1 — Alias heuristics | § Layer 1 | `ALIASES`, `findCustomDimensionMatch` in [`src/core/mapping.js`](../../src/core/mapping.js) | [`tests/mapping.test.js`](../../tests/mapping.test.js) |
+| 2 — LLM proposals (high/medium/low confidence) | § Layer 2 + § Proposed Architecture (LLM) | [`src/ai/`](../../src/ai), [`src/core/aiMappingService.js`](../../src/core/aiMappingService.js) | [`tests/aiProvider.test.js`](../../tests/aiProvider.test.js), [`tests/aiMappingService.test.js`](../../tests/aiMappingService.test.js), [`tests/promptBuilder.test.js`](../../tests/promptBuilder.test.js), [`tests/quotaGuard.test.js`](../../tests/quotaGuard.test.js) |
+| 3 — User override | § Layer 3 | `mergeWithValidation` in [`mapping.js`](../../src/core/mapping.js), [`validationStore.js`](../../src/core/validationStore.js) | [`tests/validationStore.test.js`](../../tests/validationStore.test.js), [`tests/setupApi.test.js`](../../tests/setupApi.test.js) |
+| Resolution chain | § "The three layers compose…" | Pipeline order in [`src/core/orchestrator.js`](../../src/core/orchestrator.js): buildMapping (Layer 1) → mergeWithValidation (Layer 3); Layer 2 proposals are persisted but applied via the wizard, not auto-merged | [`tests/setupApi.test.js`](../../tests/setupApi.test.js) "override flows through to mapping…" |
+
+### One divergence vs. the spec below
+
+The spec describes Layer 2 as automatically applying high-confidence AI
+proposals during `MAPPING_BUILD` (cf. § "Confidence-based behavior").
+Shipped V1 **does not auto-apply** — every proposal goes through the
+wizard so the user sees and validates it before it changes their
+dashboard. Rationale:
+
+- The promise of the launch is "I see what the AI proposed and decide".
+  Silent auto-application breaks that promise.
+- LLM "high confidence" is calibrated on the model's self-assessment,
+  which can be wrong on rare custom-dimension semantics. Forcing the
+  human-in-the-loop catches that.
+- The wizard adds at most one extra click per scan. Acceptable.
+
+If we want auto-apply later, the lever is in `mergeWithAi(mapping,
+aiMapping)` (not yet written) that would slot between
+`buildMapping` and `mergeWithValidation` in the orchestrator.
+
+The detailed design below is still the right reference for the
+**confidence taxonomy, LLM input/output shapes, and fallback strategy**.
+
+---
 
 ## Summary
 

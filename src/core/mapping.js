@@ -261,6 +261,46 @@ export function buildMapping({ schemaProfile, readinessReport }) {
   return { ...baseMapping, version, computedAt: new Date().toISOString() };
 }
 
+/**
+ * Apply a user validation (Track F4) on top of a deterministic mapping.
+ * Overrides from `validation.overrides` take precedence; the version hash
+ * is recomputed so the cache key in `core/cache.js` invalidates downstream
+ * dashboards.
+ *
+ * Resolution chain (high-to-low priority):
+ *   1. user override (this function)
+ *   2. AI proposal (future — currently the AI mapping is persisted in
+ *      `mappings` but applied via the wizard, not auto-merged)
+ *   3. deterministic alias / built-in (already in `buildMapping`)
+ */
+export function mergeWithValidation(mapping, validation) {
+  if (!mapping || !validation) return mapping;
+  if (validation.decision !== "override" || !validation.overrides) return mapping;
+
+  const merged = { ...mapping };
+  const fields = ["canonicalUserId", "canonicalSessionId", "canonicalPagePath", "canonicalReferrer"];
+  let changed = false;
+  for (const field of fields) {
+    const override = validation.overrides[field];
+    if (!override || !override.expr || !override.source) continue;
+    merged[field] = {
+      source: override.source,
+      expr: override.expr,
+      matchType: "user-override",
+      validatedAt: validation.validatedAt,
+    };
+    changed = true;
+  }
+  if (!changed) return mapping;
+
+  const version = crypto
+    .createHash("sha256")
+    .update(JSON.stringify(merged))
+    .digest("hex")
+    .slice(0, 12);
+  return { ...merged, version, computedAt: new Date().toISOString() };
+}
+
 // Whitelist of expressions allowed in KQL params. When `mapping` is provided,
 // extends the static defaults with the mapping's resolved exprs so that
 // alias/pattern-derived custom-dimension expressions pass the renderer's check.

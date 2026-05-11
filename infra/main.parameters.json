@@ -5,6 +5,9 @@
     "namePrefix": { "value": "keren-analytics" },
     "azureTenantId": { "value": "organizations" },
     "minReplicas": { "value": 0 },
-    "maxReplicas": { "value": 3 }
+    "maxReplicas": { "value": 3 },
+    "aiProvider": { "value": "azure-foundry" },
+    "azureFoundryEndpoint": { "value": "https://keren-analytics-prod-foundry.services.ai.azure.com/api/projects/keren-analytics-prod/openai/v1/responses" },
+    "azureFoundryDeployment": { "value": "gpt-5.4-mini" }
   }
 }

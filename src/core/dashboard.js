@@ -245,6 +245,7 @@ export async function buildOverviewDashboard({
   readinessReport,
   onProgress,
   azureMode,
+  aiMapping,
 }) {
   const TOTAL_QUERIES = 19;
   let queryIndex = 0;
@@ -841,6 +842,7 @@ export async function buildOverviewDashboard({
     dashboard: result,
     mapping,
     range: timeRange.key,
+    aiMapping,
   });
 
   return result;
