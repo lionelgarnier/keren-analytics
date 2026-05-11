@@ -103,15 +103,39 @@
     } catch (err) {
       clearInterval(interval);
       narrationEl.textContent = "Scan failed.";
-      let msg = err.message || "Unknown error";
+      errorEl.innerHTML = "";
+      const msgEl = document.createElement("p");
+      msgEl.className = "setup-error-message";
+      const actionsEl = document.createElement("div");
+      actionsEl.className = "setup-error-actions";
+
       if (err.status === 401) {
-        msg = "You're not signed in. Redirecting…";
+        // Session expired — bounce to "/" so the OAuth flow takes over.
+        msgEl.textContent = "You're not signed in. Redirecting…";
         setTimeout(() => { window.location.href = "/"; }, 1200);
       } else if (err.status === 409 && err.payload?.error === "RESOURCE_SELECTION_REQUIRED") {
-        msg = "Multiple Application Insights resources detected. Pick one on the dashboard, then return here.";
-        setTimeout(() => { window.location.href = "/"; }, 1800);
+        // Don't auto-redirect to "/": index.html sends users with no validation
+        // straight back to /setup, which would re-trigger the scan and loop
+        // until ARM rate-limits. Surface a manual action that goes to the
+        // resource picker (/services bypasses the home → /setup redirect).
+        msgEl.textContent = "Multiple Application Insights resources detected. Pick one to continue.";
+        const pickBtn = document.createElement("a");
+        pickBtn.href = "/services";
+        pickBtn.className = "btn-primary";
+        pickBtn.textContent = "Choose a resource";
+        actionsEl.appendChild(pickBtn);
+      } else {
+        msgEl.textContent = err.message || "Unknown error";
+        const retryBtn = document.createElement("button");
+        retryBtn.type = "button";
+        retryBtn.className = "btn-primary";
+        retryBtn.textContent = "Retry";
+        retryBtn.addEventListener("click", () => runScan());
+        actionsEl.appendChild(retryBtn);
       }
-      errorEl.textContent = msg;
+
+      errorEl.appendChild(msgEl);
+      if (actionsEl.childElementCount > 0) errorEl.appendChild(actionsEl);
       errorEl.classList.remove("hidden");
     }
   }
