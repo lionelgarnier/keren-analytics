@@ -12,6 +12,19 @@
         "SESSION_SECRET": "preview-only-not-for-production",
         "KEREN_DB_PATH": "/tmp/keren-preview.db"
       }
+    },
+    {
+      "name": "dev-mock-multi",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000,
+      "env": {
+        "AZURE_MODE": "mock",
+        "AI_PROVIDER": "none",
+        "MOCK_RESOURCES": "multiple",
+        "SESSION_SECRET": "preview-only-not-for-production",
+        "KEREN_DB_PATH": "/tmp/keren-preview-multi.db"
+      }
     }
   ]
 }

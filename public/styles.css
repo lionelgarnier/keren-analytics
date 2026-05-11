@@ -3131,6 +3131,17 @@ body {
   text-align: left;
   font-size: 14px;
 }
+.setup-error-message { margin: 0; }
+.setup-error-actions {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+}
+.setup-error-actions .btn-primary {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
 
 /* Step 2 — Findings */
 .setup-findings-grid {
