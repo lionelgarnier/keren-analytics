@@ -31,6 +31,12 @@ AZURE_CLIENT_ID=""
 AZURE_CLIENT_SECRET=""
 AZURE_TENANT_ID="organizations"
 SKIP_BUILD=0
+# Track F3 — AI Foundry. Defaults come from infra/main.parameters.json;
+# CLI flags override them. Empty AI_PROVIDER (or "none") keeps the AI
+# disabled in the Container App.
+AI_PROVIDER=""
+AZURE_FOUNDRY_ENDPOINT=""
+AZURE_FOUNDRY_DEPLOYMENT=""
 
 usage() {
   cat <<EOF
@@ -46,6 +52,9 @@ Options:
   --name-prefix <prefix>       Default: keren-analytics (3-20 chars)
   --tenant <id>                Default: organizations (multi-tenant)
   --skip-build                 Skip docker build/push (re-deploy infra only)
+  --ai-provider <none|azure-foundry>     Override AI_PROVIDER env var
+  --foundry-endpoint <url>     Override AZURE_FOUNDRY_ENDPOINT env var
+  --foundry-deployment <name>  Override AZURE_FOUNDRY_DEPLOYMENT env var
   -h, --help                   Show this help
 EOF
 }
@@ -59,6 +68,9 @@ while [[ $# -gt 0 ]]; do
     --name-prefix)       NAME_PREFIX="$2"; shift 2 ;;
     --tenant)            AZURE_TENANT_ID="$2"; shift 2 ;;
     --skip-build)        SKIP_BUILD=1; shift ;;
+    --ai-provider)       AI_PROVIDER="$2"; shift 2 ;;
+    --foundry-endpoint)  AZURE_FOUNDRY_ENDPOINT="$2"; shift 2 ;;
+    --foundry-deployment) AZURE_FOUNDRY_DEPLOYMENT="$2"; shift 2 ;;
     -h|--help)           usage; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; usage; exit 2 ;;
   esac
@@ -131,10 +143,16 @@ fi
 # --- 2. Bicep deployment ---
 echo "[2/4] Deploying Bicep (this takes 3-5 min on first run)..."
 DEPLOY_NAME="keren-analytics-$(date -u +%Y%m%d-%H%M%S)"
+FOUNDRY_PARAMS=()
+if [[ -n "$AI_PROVIDER" ]];          then FOUNDRY_PARAMS+=(aiProvider="$AI_PROVIDER"); fi
+if [[ -n "$AZURE_FOUNDRY_ENDPOINT" ]]; then FOUNDRY_PARAMS+=(azureFoundryEndpoint="$AZURE_FOUNDRY_ENDPOINT"); fi
+if [[ -n "$AZURE_FOUNDRY_DEPLOYMENT" ]]; then FOUNDRY_PARAMS+=(azureFoundryDeployment="$AZURE_FOUNDRY_DEPLOYMENT"); fi
+
 az deployment group create \
   --resource-group "$RESOURCE_GROUP" \
   --name "$DEPLOY_NAME" \
   --template-file "$BICEP_FILE" \
+  --parameters "$REPO_ROOT/infra/main.parameters.json" \
   --parameters \
       namePrefix="$NAME_PREFIX" \
       azureClientId="$AZURE_CLIENT_ID" \
@@ -142,6 +160,7 @@ az deployment group create \
       azureTenantId="$AZURE_TENANT_ID" \
       sessionSecret="$SESSION_SECRET" \
       "${IMAGE_PARAMS[@]}" \
+      "${FOUNDRY_PARAMS[@]}" \
   --output none
 
 # Pull outputs.
