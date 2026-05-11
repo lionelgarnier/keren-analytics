@@ -1,5 +1,12 @@
 # AI-Powered Setup Wizard
 
+> **STATUS UPDATE — 2026-05-11.** Re-scoped from "post-launch optional" to
+> **pre-launch BLOCKER** by [ADR 0005](../adr/0005-ai-first-scope.md).
+> Concrete delivery plan lives in
+> [`launch-readiness.md`](launch-readiness.md) § Track F (chantiers F1-F5,
+> ~15 jours focus). The narrative below stays valid as design intent; F1-F4
+> in the readiness doc are the actual implementation contract.
+
 ## Summary
 
 Replace the current 13-step Entra ID setup guide and manual resource selection

@@ -9,17 +9,27 @@ Plug-and-play analytics dashboard that turns Azure Application Insights telemetr
 into Marketing / Technical / Readiness views in under 2 minutes. Zero agent
 deployment, zero raw data storage, KQL-only.
 
-Status: Phase 1 + Phase 2 DONE. **Phase A (Azure-first hosting)** also
-shipped: first manual deploy succeeded on 2026-05-10 via
-[`deploy/azure-deploy.sh`](deploy/azure-deploy.sh) on Azure Container Apps
-(France Central). FQDN: `ca-keren-analytics.<random>.francecentral.azurecontainerapps.io`
-— see ADR 0004 for the rationale and `docs/maintainer-todo.md` for what's
-still manual (DNS `analytics.keren.run`, GitHub Actions OIDC workflow).
-**Pre-launch sprint** (OSS-first go-to-market, ~80h, see
-`docs/backlog/launch-readiness.md`) is the in-flight workstream. Phase 3
-(multi-tenant SaaS, persistence) and Phase 4 (multi-cloud) are deferred —
-ADR 0001 (portfolio pivot) + ADR 0004 (Azure-first) replace the original
-SaaS-track gate logic.
+Status: **Phase 1 + Phase 2 + Phase A DONE**.
+
+- **Phase A (Azure-first hosting)** shipped 2026-05-10/11: Azure Container
+  Apps France Central, custom domain `https://analytics.keren.run` with
+  managed TLS cert, OAuth real mode validated against production App
+  Insights, CI/CD via OIDC (`.github/workflows/deploy-azure.yml`) — see
+  ADR 0004.
+
+**In flight — Track F (AI-first setup wizard, ADR 0005, ~15 jours focus)**.
+This re-scopes the pre-launch sprint: the AI setup wizard moves from
+"post-launch optional" to "pre-launch blocker" because without it the
+"AI-mapped schema / AI explains your telemetry" claims are AI-washing.
+Track F adds SQLite persistence + Azure AI Foundry inference + a
+4-step setup wizard. See `docs/backlog/launch-readiness.md` Track F and
+ADR 0005 for the rationale and chantier breakdown (F1-F5).
+
+**Post-launch / deferred**: Phase 3 multi-tenant Postgres (single-instance
+SQLite suffices for V1), Phase 4 multi-cloud, the other AI surfaces
+(natural-language queries, instrumentation assistant). ADR 0001
+(portfolio pivot) + ADR 0004 (Azure-first) + ADR 0005 (AI-first scope)
+together replace the original SaaS-track gate logic.
 
 ## Stack
 
@@ -27,7 +37,16 @@ SaaS-track gate logic.
 - Vanilla JS frontend (`public/app.js`, `public/index.html`) — no bundler
 - Leaflet (maps) + Chart.js (charts) loaded from CDN
 - KQL templates in `kql/` rendered server-side with mapping substitution
-- Tests: Node native test runner (`node --test`) + supertest for API tests
+- Persistence (V1) : **SQLite** via `better-sqlite3` or Node 22's
+  `node:sqlite` — single-file `data/keren.db`. Schema:
+  `tenants / scans / mappings / signals / validations`. See ADR 0005.
+  Multi-tenant Postgres deferred to Phase 3 (post-traction).
+- AI inference : **Azure AI Foundry** (Hub + Project + `gpt-4o-mini`
+  deployment). Provider abstraction (`AI_PROVIDER=none|ollama|azure-foundry`)
+  per `docs/architecture-ai.md`. Auth via Managed Identity (no API keys in
+  env vars). Quota guard: 10 €/day cap with deterministic fallback.
+- Tests: Node native test runner (`node --test`) + supertest for API tests.
+  AI provider is mocked in `NODE_ENV=test` (deterministic, no LLM calls).
 - Deploy: Docker (Node 22 Alpine, non-root user `app`, pre-creates `/app/data`).
   Production: Azure Container Apps via Bicep (`infra/main.bicep`)
   + `deploy/azure-deploy.sh` wrapper for first-time / infra-change deploys
@@ -140,6 +159,13 @@ If a task explicitly asks to harden one of these, do it. Otherwise leave alone.
 
 ## Docs to read before non-trivial work
 
+- **`docs/next-session.md`** — if you are picking up Track F (AI-first
+  setup wizard) in a fresh branch / session, read this FIRST. It is the
+  self-contained briefing with all decisions already made + execution
+  order, so the new session doesn't re-litigate the AI-first scope.
+- **`docs/adr/0005-ai-first-scope.md`** — the strategic decision behind
+  Track F (why AI-first is pre-launch, SQLite vs Postgres, Foundry vs
+  OpenAI direct).
 - **`docs/launch-strategy.md`** — go-to-market, traction gates, what's
   in/out of scope for the pre-launch sprint (read this first if the work
   touches the public surface)

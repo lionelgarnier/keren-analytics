@@ -1,5 +1,13 @@
 # AI-Powered Environment Analysis
 
+> **STATUS UPDATE — 2026-05-11.** Layer 1 (alias heuristics, no LLM) is
+> **SHIPPED** (cf. B1 in `launch-readiness.md`, ALIAS table + regex per
+> canonical field in `src/core/mapping.js`). Layer 2 (LLM analysis) is
+> re-scoped to **pre-launch BLOCKER** by
+> [ADR 0005](../adr/0005-ai-first-scope.md) — concrete delivery in
+> [`launch-readiness.md`](launch-readiness.md) § Track F (chantiers F2-F3).
+> Layer 3 (user overrides) ships as part of F4 (the wizard UI).
+
 ## Summary
 
 Upgrade the mapping system from exact-match-only to a three-layer resolution

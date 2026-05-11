@@ -290,21 +290,54 @@ action are yours.
 - **Status**: DONE — repo renamed + references updated in branch
   `claude/cloud-agnostic-architecture-fVCQx` (this commit).
 
-### Postuler à Microsoft for Startups Founders Hub
-- **Why**: ADR 0004 fait d'Azure Container Apps l'hôte de la démo. Founders
-  Hub donne 5k-150k$ de crédits Azure sur 4 ans + badge "Microsoft for
-  Startups" + accès light à des ressources MS. Coût démo proche de zéro,
-  signal de crédibilité gratuit.
-- **When**: dès maintenant. La candidature ne nécessite ni produit fini ni
-  tour de table, juste un projet B2B identifiable. Plus tôt = plus tôt les
-  crédits.
-- **How**: <https://www.microsoft.com/en-us/startups>, formulaire ~30 min.
-  Pitch type : *"Keren Analytics is an MIT-licensed plug-and-play dashboard
-  for Azure Application Insights. Aimed at Azure dev teams frustrated by the
-  portal UX. KQL-only, no raw data leaves the tenant. Hosting public demo
-  on Azure Container Apps."* Après acceptation : récupérer la subscription
-  ID + sponsor reference, ajouter le badge sur le README et la landing.
-- **Status**: TODO — à faire avant de provisionner l'hébergement Azure.
+### Microsoft for Startups Founders Hub — statut crédits Azure
+- **Why**: ADR 0004 fait d'Azure Container Apps l'hôte de la démo, et ADR
+  0005 ajoute l'inference Azure AI Foundry. Founders Hub couvre les deux,
+  sans coût out-of-pocket pendant la phase pre-launch.
+- **Status — 2026-05-11** :
+  - **1 000 € de crédits Azure approuvés** — utilisables immédiatement.
+  - **5 000 € supplémentaires en cours de validation** (montant total
+    potentiel : 5k-150k$ sur 4 ans selon le niveau Founders Hub atteint).
+  - Note importante pour les agents Claude : **ne pas redemander à chaque
+    session si Founders Hub est fait** — la candidature est déposée et en
+    cours. Le statut est mis à jour ici.
+- **Once 5k€ approved** : récupérer subscription ID + sponsor reference,
+  ajouter le badge "Microsoft for Startups" sur le README et la landing.
+- **Pitch utilisé** : *"Keren Analytics is an MIT-licensed plug-and-play
+  dashboard for Azure Application Insights with AI-powered setup wizard
+  (audit + mapping + recommendations). Aimed at Azure dev teams frustrated
+  by the portal UX. KQL-only, no raw data leaves the tenant. Hosting public
+  demo on Azure Container Apps + Azure AI Foundry."*
+
+### Provisionner Azure AI Foundry (Track F — ADR 0005)
+- **Why**: ADR 0005 acte AI-first setup wizard pre-launch. Track F nécessite
+  un endpoint Azure AI Foundry avec un model deployment `gpt-4o-mini` pour
+  le scan + AI mapping + recommendations.
+- **When**: avant le démarrage de F3 (AI mapping service). F1 (SQLite) et F2
+  (schema scan enrichi) peuvent commencer en parallèle sans le LLM.
+- **How — étapes maintainer** :
+  1. Vérifier que ta subscription a accès Azure OpenAI / AI Foundry (parfois
+     bloqué par défaut pour les comptes France Central — demander un quota
+     d'accès via le portail Azure si nécessaire).
+  2. Soit provisionner via portail (rapide pour V1) :
+     - Azure Portal → "Azure AI Foundry" → Create Hub →
+       region: France Central (ou West Europe si Foundry pas dispo en FR),
+       associer subscription Founders Hub.
+     - Dans le Hub, créer un Project `keren-analytics-prod`.
+     - Dans le Project, déployer le model `gpt-4o-mini` (deployment name
+       `gpt-4o-mini`, capacité 30k TPM par défaut).
+  3. Soit attendre F3 où l'agent étendra `infra/main.bicep` avec les
+     ressources Foundry (préféré pour reproductibilité). Dans ce cas,
+     juste valider que la subscription a le quota.
+  4. Récupérer l'endpoint Foundry (`https://<hub>.openai.azure.com/`) et
+     l'ajouter aux env vars Container App :
+     `AZURE_FOUNDRY_ENDPOINT`, `AZURE_FOUNDRY_DEPLOYMENT=gpt-4o-mini`.
+     Pas de clé API : utilise la Managed Identity existante avec le role
+     `Cognitive Services User` sur le Hub.
+- **Quota TPM par défaut** : 30k tokens/min pour gpt-4o-mini sur Founders Hub.
+  Suffisant pre-launch. Demander 100k+ TPM avant launch HN si on anticipe
+  un spike.
+- **Status**: TODO — à faire avant F3 (mi-Track F).
 
 ### Provisionner l'hébergement Azure de la démo
 - **Why**: ADR 0004 § Decision 2 — Azure Container Apps. Région retenue :

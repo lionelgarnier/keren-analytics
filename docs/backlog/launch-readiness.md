@@ -468,6 +468,114 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
   contacts section. The LLM kill-switch section is stubbed with a
   pointer to where it'll live when B2 ships.
 
+## Track F — AI-first setup wizard (ADR 0005, pre-launch blocker)
+
+> **Added 2026-05-11 after ADR 0005.** The "AI-mapped schema / AI explains
+> your telemetry" claims were AI-washing — no LLM was wired. This track
+> closes that gap before launch by shipping a real audit + AI mapping +
+> recommendations flow on Azure AI Foundry, persisted in SQLite. The other
+> AI surfaces (`ai-natural-language-queries.md`,
+> `ai-instrumentation-assistant.md`) stay post-launch. See
+> [`docs/adr/0005-ai-first-scope.md`](../adr/0005-ai-first-scope.md).
+
+### F1. Persistance SQLite [BLOCKER, 16-24h]
+- Install `better-sqlite3` (sync, simple) or use Node 22.5+ `node:sqlite`
+  native module. ADR 0005 § Decision 2.
+- Schema: `tenants`, `scans`, `mappings`, `signals`, `validations` — with
+  per-tenant scope and timestamps. File at `data/keren.db`.
+- Rewrite `src/core/metadataStore.js` to use the SQLite schema. Keep the
+  same exported interface (`getTenant`, `updateTenant`,
+  `logStateTransition`) so callers don't change.
+- Migration script: if `data/store.json` exists at boot, import it into
+  the SQLite schema, then rename to `store.json.legacy` (don't delete).
+- Backup policy: hourly `VACUUM INTO`-based snapshot to `data/backups/`
+  (cap 24 snapshots). Production-side: Azure Blob upload via Container
+  Apps Jobs cron (separate task, F1 ships the script).
+- Tests: existing 5 metadataStore tests must keep passing; add 3 new
+  tests for migration path + concurrent transactions.
+
+### F2. Schema scan enrichi [BLOCKER, 16-24h]
+- Extend `src/core/schemaProfile.js` → new `src/core/schemaScan.js`.
+- Capture per-tenant : event volumes by `name`, top-N `customDimensions`
+  keys with cardinality + sample values (PII-scrubbed via regex
+  `email|phone|ssn`), timestamps span, gaps detected (e.g. no
+  `userId`-like field present, no campaign tracking, no session
+  duration).
+- Persist scan output as a JSON document in `scans` table, indexed by
+  `tenantId + scannedAt`. Latest scan is the active one; history kept.
+- Cap on scan KQL: use existing `queryTimeoutMs` (12s), summary queries
+  only (no `take 10000`). Total ≤ 5-6 queries per scan.
+- Tests: schema parse roundtrip, PII scrub coverage, gap detection
+  heuristics.
+
+### F3. AI mapping + recommendations service [BLOCKER, 24-32h]
+- New `src/ai/azureFoundry.js` provider implementing the contract in
+  `docs/architecture-ai.md`. Authenticate via the existing Managed
+  Identity (no API keys). Endpoint + deployment name in env vars
+  (`AZURE_FOUNDRY_ENDPOINT`, `AZURE_FOUNDRY_DEPLOYMENT`).
+- Prompt structuré (JSON schema response) that takes a F2 scan as input
+  and returns: `mapping_proposals[]` (canonical field → tenant column,
+  with confidence + explanation), `missing_signals[]` (signal name +
+  recommended KQL to instrument), `dashboard_recommendations` (which
+  charts to show prominently given what's available).
+- **Quota guard**: in-memory daily counter; hard cap at 10 €/day worth
+  of tokens (computed from `gpt-4o-mini` pricing); when exceeded,
+  return a deterministic fallback (existing alias/regex mapping +
+  empty recommendations) plus a `degraded: true` flag the UI surfaces.
+- Cache scan→AI-output in SQLite (so a re-load doesn't re-spend
+  tokens). Invalidate on re-scan.
+- Mode `AI_PROVIDER=none` must continue to work (deterministic-only
+  output, no LLM call) — tests run in this mode.
+- Bicep update: extend `infra/main.bicep` with Azure AI Foundry Hub +
+  Project + connection + model deployment + role assignment
+  (`Cognitive Services User` to the existing MI).
+- Tests: provider contract test, JSON schema validation, fallback
+  trigger on quota exceeded, cache hit/miss.
+
+### F4. Setup wizard UI [BLOCKER, 32-40h]
+- New route `/setup` (or extend existing post-OAuth flow). Multi-step:
+  1. **Scanning** — spinner + live narration ("Reading custom dimensions…
+     Found 47 event types… Detecting user identity…").
+  2. **AI findings** — proposed mappings with confidence badges,
+     missing signals with recommended KQL (copy button), dashboard
+     recommendations.
+  3. **Validate/edit** — user can accept all, override individual
+     mappings, dismiss recommendations. Persists to `validations` table.
+  4. **Save & continue** — redirects to the dashboard with the
+     validated mapping active.
+- Re-scan button in settings ("Found new event types? Re-scan now").
+- Empty-state handling: tenant with no events yet → wizard explains
+  what to instrument and waits.
+- Tests: end-to-end supertest covering the 4-step flow + override path.
+
+### F5. Documentation + AI specs refresh [STRONG, 8-16h]
+- Update `docs/backlog/ai-setup-wizard.md` status from "post-launch
+  optional" to "pre-launch, see Track F". Add the concrete F1-F4
+  scope (replace speculative sections).
+- Update `docs/backlog/ai-environment-analysis.md` similarly — Layer 1
+  alias is done (B1), Layer 2 LLM ships as part of F3.
+- Update `docs/architecture-ai.md` status from DRAFT to ACCEPTED, with
+  the `azure-foundry` provider as the canonical implementation.
+- Remove the `Preview — real LLM coming soon` badge from `narration.js`
+  generator output when `AI_PROVIDER=azure-foundry` and the call
+  succeeds.
+
+### Track F dependencies & sequencing
+
+```
+F1 (SQLite) ─┬─→ F2 (scan) ─→ F3 (AI mapping) ─→ F4 (wizard UI)
+             │                       ↑
+             └───────────────────────┘
+                  (cache + persistence)
+
+F5 in parallel once F1-F4 are conceptually clear (~day 3 of Track F).
+```
+
+Maintainer dependency : Azure AI Foundry workspace + `gpt-4o-mini`
+deployment must exist before F3 can run end-to-end. See
+[`docs/maintainer-todo.md`](../maintainer-todo.md) § "Provisionner Azure
+AI Foundry".
+
 ## Effort summary
 
 | Track                                  | Blockers | Strong | Optional | Total |
@@ -477,11 +585,16 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
 | C — Trust signals                      | 7h       | 3h     | 1h       | 11h   |
 | D — Distribution prep                  | 9h       | 4h     | 2h       | 15h   |
 | E — Anti-fragility                     | 3h       | 3h     | 1h       | 7h    |
-| **Total blockers (must ship)**         | **57h**  |        |          |       |
-| **Total with strong items**            |          |        |          | **96h** |
-| **Total all-in**                       |          |        |          | **104h** |
+| **F — AI-first scope (added 2026-05-11)** | **88-120h** | 8-16h | 0h | **96-136h** |
+| **Total blockers (must ship)**         | **145-177h** | | | |
+| **Total with strong items**            |          |        |          | **192-232h** |
+| **Total all-in**                       |          |        |          | **200-240h** |
 
-Realistic 2-week sprint with all blockers + most strong items: **80 hours**.
+Realistic launch timeline with all blockers + most strong items:
+~5-6 weeks at ~40h/week focused. Most of Phase A blockers already shipped
+(infra, custom domain, CI/CD, GitHub polish, release v0.1.0). Remaining
+heavy lift is Track F (AI setup wizard, ~15 jours focus) plus the
+content/asset drafts in Track D and the Hero GIF / OG image in Track A.
 
 ## Sequencing — recommended order
 
