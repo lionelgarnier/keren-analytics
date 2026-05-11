@@ -219,3 +219,39 @@ est stratégique (pas tactique).
 Trace de cet arbitrage maintenu publiquement = même bénéfice que pour ADRs
 0001-0004 : un journal d'archi qui montre l'auteur sur-corriger et se
 reprendre est plus crédible qu'un repo où tout semble linéaire.
+
+## Addendum 2026-05-11 — corrections de wiring après test bout-en-bout
+
+Après provisioning du Foundry Hub + Project (`keren-analytics-prod`) et un
+test de connectivité réussi (`HTTP 200`, `pong`, 18 tokens), trois points
+de § Decision 3 sont à corriger. Les choix structurants (Foundry, MI auth,
+pas de clé API, fallback déterministe, cap 10 €/jour) restent inchangés —
+ce sont des corrections d'implémentation, pas un pivot stratégique.
+
+### V1 model : `gpt-5.4-mini` (au lieu de `gpt-4o-mini-2024-07-18`)
+
+Inspection du catalogue Foundry post-provisioning : `gpt-5.4-mini`
+(deployment `2026-03-17`) bat `gpt-4o-mini` sur tous les axes mesurés —
+quality 0.67 (vs benchmark non-disponible pour 4o-mini), throughput
+142 (vs n/a), training Aug 2025 (vs Sep 2023). Coût ~40 % plus élevé que
+`gpt-4.1-mini` mais en absolu un scan ≈ quelques cents : la qualité prime
+puisque le mapping est le moment "wow" du wizard. `gpt-4o-mini` est
+techniquement périmé (4.1-mini est son successeur direct). `gpt-4.1-mini`
+reste le fallback budget si le cap 10 €/jour devient tendu.
+
+### Token audience : `https://ai.azure.com/` (pas `cognitiveservices.azure.com/`)
+
+L'endpoint provisionné est de format **projet Foundry** :
+`https://<project>.services.ai.azure.com/api/projects/<project>/openai/v1/responses`
+(API Responses, pas Chat Completions classique). Cet endpoint exige un
+token avec audience `https://ai.azure.com/`. Un token Cognitive Services
+renvoie `HTTP 401: audience is incorrect`. Le code F3 utilisera donc
+`new DefaultAzureCredential().getToken("https://ai.azure.com/.default")`.
+
+### Role MI : `Azure AI User` sur le Project (pas `Cognitive Services User` sur le Hub)
+
+Pour l'endpoint projet Foundry, le rôle requis sur la **Managed Identity
+du Container App** est `Azure AI User` (lecture + inférence) ou
+`Azure AI Developer` (idem + édition projet) assigné sur le **Project**
+Foundry, pas `Cognitive Services User` sur le Hub. Action manuelle
+mainteneur tracée dans `maintainer-todo.md`.

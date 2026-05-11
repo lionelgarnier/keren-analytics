@@ -311,33 +311,89 @@ action are yours.
 
 ### Provisionner Azure AI Foundry (Track F — ADR 0005)
 - **Why**: ADR 0005 acte AI-first setup wizard pre-launch. Track F nécessite
-  un endpoint Azure AI Foundry avec un model deployment `gpt-4o-mini` pour
-  le scan + AI mapping + recommendations.
+  un endpoint Azure AI Foundry avec un model deployment pour le scan +
+  AI mapping + recommendations.
 - **When**: avant le démarrage de F3 (AI mapping service). F1 (SQLite) et F2
   (schema scan enrichi) peuvent commencer en parallèle sans le LLM.
-- **How — étapes maintainer** :
-  1. Vérifier que ta subscription a accès Azure OpenAI / AI Foundry (parfois
-     bloqué par défaut pour les comptes France Central — demander un quota
-     d'accès via le portail Azure si nécessaire).
-  2. Soit provisionner via portail (rapide pour V1) :
-     - Azure Portal → "Azure AI Foundry" → Create Hub →
-       region: France Central (ou West Europe si Foundry pas dispo en FR),
-       associer subscription Founders Hub.
-     - Dans le Hub, créer un Project `keren-analytics-prod`.
-     - Dans le Project, déployer le model `gpt-4o-mini` (deployment name
-       `gpt-4o-mini`, capacité 30k TPM par défaut).
-  3. Soit attendre F3 où l'agent étendra `infra/main.bicep` avec les
-     ressources Foundry (préféré pour reproductibilité). Dans ce cas,
-     juste valider que la subscription a le quota.
-  4. Récupérer l'endpoint Foundry (`https://<hub>.openai.azure.com/`) et
-     l'ajouter aux env vars Container App :
-     `AZURE_FOUNDRY_ENDPOINT`, `AZURE_FOUNDRY_DEPLOYMENT=gpt-4o-mini`.
-     Pas de clé API : utilise la Managed Identity existante avec le role
-     `Cognitive Services User` sur le Hub.
-- **Quota TPM par défaut** : 30k tokens/min pour gpt-4o-mini sur Founders Hub.
-  Suffisant pre-launch. Demander 100k+ TPM avant launch HN si on anticipe
-  un spike.
-- **Status**: TODO — à faire avant F3 (mi-Track F).
+- **What was actually done** (2026-05-11) :
+  - Foundry Hub + Project `keren-analytics-prod` créés via portail.
+  - Model `gpt-5.4-mini` (deployment `2026-03-17`) déployé — choix
+    upgradé depuis `gpt-4o-mini` après inspection du catalogue, cf.
+    addendum ADR 0005.
+  - Endpoint format **projet Responses API** :
+    `https://keren-analytics-prod-foundry.services.ai.azure.com/api/projects/keren-analytics-prod/openai/v1/responses`
+  - Env vars en local (`.env`) : `AZURE_FOUNDRY_ENDPOINT` +
+    `AZURE_FOUNDRY_DEPLOYMENT=gpt-5.4-mini`. Test bout-en-bout OK
+    (HTTP 200, `pong`, 18 tokens — token audience `https://ai.azure.com/`).
+- **What remains** :
+  - Propagation des env vars dans `infra/main.bicep` (l'agent F3 le fait
+    dans la PR de F3).
+  - **Assignation du rôle MI** : entrée séparée ci-dessous (blocking F3
+    en prod).
+- **Quota TPM** : à vérifier dans le portail Foundry sur le deployment
+  `gpt-5.4-mini`. Demander 100k+ TPM avant launch HN si on anticipe un
+  spike Show HN.
+- **Status**: PARTIAL — provisioning + dev local OK ; reste rôle MI + Bicep.
+
+### Assigner le rôle `Azure AI User` à la MI du Container App (Track F3)
+- **Why**: F3 appellera Foundry depuis le Container App via la Managed
+  Identity (`uami-keren-analytics`). Sans le rôle `Azure AI User` sur le
+  Project Foundry, l'inférence renverra `403 Forbidden` en prod. ADR 0005
+  addendum 2026-05-11 corrige le rôle initialement listé
+  (`Cognitive Services User` ne suffit pas pour l'endpoint projet).
+- **When**: avant le **premier deploy de F3 en prod**. Pas bloquant pour
+  le développement local (qui utilise le token `az` du mainteneur).
+- **How** (Azure Portal, le plus simple) :
+  1. Portal → AI Foundry → Project `keren-analytics-prod` → Access
+     control (IAM) → Add role assignment.
+  2. Role : **Azure AI User** (lecture + inférence). `Azure AI Developer`
+     marche aussi mais donne plus que nécessaire.
+  3. Assign to : **Managed Identity** → `id-keren-analytics` (la
+     user-assigned MI déjà créée par `infra/main.bicep`,
+     `var managedIdentityName = 'id-${namePrefix}'`).
+  4. Review + assign.
+- **How** (CLI alternative — vérifié 2026-05-11 contre la prod) :
+  ```bash
+  MI_PRINCIPAL_ID=$(az identity show -g keren-analytics-prod \
+    -n id-keren-analytics --query principalId -o tsv)
+  # Foundry est un Microsoft.CognitiveServices/accounts (kind=AIServices)
+  # avec un sub-resource projects/<projectName>. Scope au projet pour
+  # least-privilege ; scope au compte si tu veux que l'assignment couvre
+  # de futurs projets sous le même Hub.
+  PROJECT_ID=$(az resource show -g keren-analytics-prod \
+    --name keren-analytics-prod-foundry/keren-analytics-prod \
+    --resource-type Microsoft.CognitiveServices/accounts/projects \
+    --query id -o tsv)
+  az role assignment create --assignee-object-id "$MI_PRINCIPAL_ID" \
+    --assignee-principal-type ServicePrincipal \
+    --role "Azure AI User" --scope "$PROJECT_ID"
+  ```
+- **Verify**: depuis le Container App, `curl` vers le Foundry endpoint
+  doit renvoyer 200, pas 401/403. F3 expose une route healthcheck
+  `/api/ai/ping` à utiliser pour ça.
+- **Status**: TODO — à faire avant deploy F3 prod.
+
+### Wirer le backup SQLite en production (Track F1 — ADR 0005)
+- **Why**: F1 a shippé `scripts/backup-sqlite.mjs` (VACUUM INTO + rotation 24
+  snapshots vers `data/backups/`), mais rien ne le déclenche en prod. Sans
+  cron + upload off-host, un redémarrage de Container App sans volume persistent
+  perd les scans (`data/keren.db`). ADR 0005 § Decision 2 acte le risque +
+  la mitigation.
+- **When**: avant launch HN (Track F shipped, demo publique avec vrais
+  utilisateurs). Pas urgent pendant le dev de F2-F4.
+- **How (deux options à arbitrer)** :
+  1. **Volume persistent** (Azure Files mount) sur le Container App : élimine
+     le risque de perte au restart. À évaluer dans Bicep
+     (`Microsoft.App/containerApps/storages` + `volumeMounts`). Coût ~0.06 €/GB/mo.
+  2. **Cron Container Apps Jobs** qui exécute `npm run backup:sqlite` puis
+     `az storage blob upload` vers un Storage Account dédié. Schedule horaire.
+     Bicep : `Microsoft.App/jobs` avec `triggerType: 'Schedule'`.
+- **Recommandation**: option 1 (volume) pour la persistance + option 2 (cron
+  vers Blob) pour la défense en profondeur (snapshot off-host = restore facile
+  même si le Container App env est détruit). Les deux ne s'excluent pas.
+- **Pre-requis**: décider du Storage Account (réutiliser celui du Foundry Hub
+  ou en créer un dédié `stkerenanalyticsbk`).
+- **Status**: TODO — à arbitrer avant launch HN.
 
 ### Provisionner l'hébergement Azure de la démo
 - **Why**: ADR 0004 § Decision 2 — Azure Container Apps. Région retenue :

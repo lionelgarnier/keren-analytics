@@ -44,7 +44,7 @@ test("buildNarration: mock mode returns no badge", () => {
   assert.match(r.tagline, /AI explains/i);
 });
 
-test("buildNarration: real mode adds preview badge", () => {
+test("buildNarration: real mode adds preview badge when no AI mapping", () => {
   const r = buildNarration({
     azureMode: "real",
     dashboard: sampleDashboard,
@@ -54,6 +54,30 @@ test("buildNarration: real mode adds preview badge", () => {
   assert.equal(r.mode, "preview");
   assert.match(r.badge, /Preview/i);
   assert.match(r.badge, /real LLM/i);
+});
+
+test("buildNarration: real mode + degraded AI keeps the preview badge", () => {
+  const r = buildNarration({
+    azureMode: "real",
+    dashboard: sampleDashboard,
+    mapping: sampleMappingAuth,
+    range: "7d",
+    aiMapping: { degraded: true, source: "deterministic", reason: "no provider" },
+  });
+  assert.equal(r.mode, "preview");
+  assert.match(r.badge, /Preview/i);
+});
+
+test("buildNarration: real mode + non-degraded AI drops the preview badge and flips mode to 'ai'", () => {
+  const r = buildNarration({
+    azureMode: "real",
+    dashboard: sampleDashboard,
+    mapping: sampleMappingAuth,
+    range: "7d",
+    aiMapping: { degraded: false, source: "azure-foundry", proposals: { mapping_proposals: [] } },
+  });
+  assert.equal(r.mode, "ai");
+  assert.equal(r.badge, null);
 });
 
 test("buildNarration: paragraph includes visitor + session counts and a source", () => {

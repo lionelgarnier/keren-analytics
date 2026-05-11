@@ -1,11 +1,58 @@
 # AI-Powered Setup Wizard
 
-> **STATUS UPDATE — 2026-05-11.** Re-scoped from "post-launch optional" to
-> **pre-launch BLOCKER** by [ADR 0005](../adr/0005-ai-first-scope.md).
-> Concrete delivery plan lives in
-> [`launch-readiness.md`](launch-readiness.md) § Track F (chantiers F1-F5,
-> ~15 jours focus). The narrative below stays valid as design intent; F1-F4
-> in the readiness doc are the actual implementation contract.
+> **STATUS — SHIPPED 2026-05-11.** Tracks F1-F4 of the launch-readiness plan
+> are live; F5 (this doc, the architecture-ai doc, and the
+> ai-environment-analysis doc) refreshes them to match what was actually
+> built. The narrative below stayed valid as design intent — the
+> implementation diverged on a handful of points captured in the
+> "Implementation status" section right below.
+
+## Implementation status (2026-05-11)
+
+| Stage in the wizard       | Code location                                                | Notes |
+|---------------------------|--------------------------------------------------------------|-------|
+| Persistence (SQLite)      | [`src/core/db.js`](../../src/core/db.js), [`metadataStore.js`](../../src/core/metadataStore.js) | F1 |
+| Schema scan + gaps + PII scrub | [`src/core/schemaScan.js`](../../src/core/schemaScan.js), [`scanStore.js`](../../src/core/scanStore.js) | F2; 3 new KQL templates in `kql/` |
+| AI mapping proposals      | [`src/ai/*`](../../src/ai), [`src/core/aiMappingService.js`](../../src/core/aiMappingService.js), [`mappingStore.js`](../../src/core/mappingStore.js) | F3; provider abstraction, JSON-schema strict, EUR quota guard |
+| Wizard UI (4 steps)       | [`public/setup.html`](../../public/setup.html), [`public/setup.js`](../../public/setup.js), `/api/setup/{state,scan,findings,validate}` in [`src/server.js`](../../src/server.js) | F4; vanilla JS, no bundler |
+| User override → mapping   | [`src/core/validationStore.js`](../../src/core/validationStore.js), `mergeWithValidation` in [`mapping.js`](../../src/core/mapping.js) | F4; Layer 3 of the 3-layer resolution chain |
+| Re-scan button            | "Re-scan" link in the dashboard navbar pointing at `/setup`  | F5 |
+| Pre-fill validate step    | `effectiveMapping[]` in `/api/setup/findings`                | F5; deterministic fallback always populates the validate step, even when `AI_PROVIDER=none` |
+| Narration "Preview" badge | Auto-drops when `aiMapping.source = "azure-foundry"` and non-degraded | F5 |
+
+### Design intent vs. what shipped
+
+The original narrative below describes the **end-state** experience —
+multi-resource triage with an LLM ranking, conversational narration,
+"sign in once, dashboard in 90 seconds". The shipped V1 keeps the
+intent but is leaner:
+
+- **Step 3 (resource triage LLM call) is not wired yet.** Discovery
+  still auto-selects when there's a single resource; multi-resource is
+  surfaced as a 409 from `/api/setup/scan` and routes the user to the
+  legacy "pick a resource" UI on `/`. The LLM ranking is a clear
+  follow-up.
+- **Step 6 (narration LLM call) is also not wired yet.** The narration
+  panel keeps the deterministic generator from `core/narration.js`;
+  what changed is that the "Preview — real LLM coming soon" badge now
+  drops automatically when the **mapping** was AI-generated, because
+  the AI feature is no longer aspirational.
+- **The wizard runs even when `AI_PROVIDER=none`.** In that mode the
+  AI mapping is the deterministic fallback (Layer 1 alias matches) and
+  the wizard surfaces those rows clearly tagged "deterministic" so the
+  user can still override. This was an F5 polish to lift the "wizard
+  shows nothing useful in mock/none mode" limitation.
+- **Validation persists a single decision per scan.** The 3-layer
+  resolution chain (user override → AI → deterministic) is applied
+  pipeline-side at every dashboard render via
+  `mergeWithValidation()`. Per-field overrides are stored as JSON in
+  `validations.overrides`.
+
+The rest of this document remains the right reference for the **next
+iteration** (LLM-driven triage + narration). When picking it up, treat
+F1-F5 as the floor and the sections below as the ceiling.
+
+---
 
 ## Summary
 

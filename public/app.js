@@ -2763,6 +2763,23 @@ async function init() {
       logoutButton.textContent = `${session.user.name} — Logout`;
     }
 
+    // First-run redirect to the Track F4 setup wizard. Only fires when the
+    // user hits "/" without a deep link AND has never validated a mapping
+    // — repeat visits and deep-link routes go straight to the dashboard.
+    if (route.page === "home") {
+      try {
+        const setupState = await apiFetch("/api/setup/state");
+        if (setupState?.needsSetup) {
+          window.location.href = "/setup";
+          return;
+        }
+      } catch (err) {
+        // Setup-state check is best-effort: a failure shouldn't block the
+        // existing dashboard flow.
+        console.warn("[setup-state] check failed:", err.message);
+      }
+    }
+
     const discovery = await apiFetch("/azure/discover");
     lastDiscoveredResources = discovery.resources || [];
 

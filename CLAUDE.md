@@ -37,10 +37,13 @@ together replace the original SaaS-track gate logic.
 - Vanilla JS frontend (`public/app.js`, `public/index.html`) — no bundler
 - Leaflet (maps) + Chart.js (charts) loaded from CDN
 - KQL templates in `kql/` rendered server-side with mapping substitution
-- Persistence (V1) : **SQLite** via `better-sqlite3` or Node 22's
-  `node:sqlite` — single-file `data/keren.db`. Schema:
-  `tenants / scans / mappings / signals / validations`. See ADR 0005.
-  Multi-tenant Postgres deferred to Phase 3 (post-traction).
+- Persistence (V1) : **SQLite via Node 22 native `node:sqlite`** — no
+  extra dep, no native build. Single-file `data/keren.db`. Schema:
+  `tenants / state_transitions / scans / mappings / signals /
+  validations` in [`src/core/db.js`](src/core/db.js); accessed through
+  [`src/core/metadataStore.js`](src/core/metadataStore.js). Hourly
+  backup via `npm run backup:sqlite` (VACUUM INTO, keeps 24
+  snapshots). See ADR 0005. Multi-tenant Postgres deferred to Phase 3.
 - AI inference : **Azure AI Foundry** (Hub + Project + `gpt-4o-mini`
   deployment). Provider abstraction (`AI_PROVIDER=none|ollama|azure-foundry`)
   per `docs/architecture-ai.md`. Auth via Managed Identity (no API keys in
@@ -84,8 +87,21 @@ src/
   core/
     orchestrator.js      # main pipeline (auth -> discover -> profile -> render)
     stateMachine.js      # named pipeline states + transitions
-    metadataStore.js     # FS-backed tenant metadata at data/store.json
-                         # (single-replica only; multi-instance = inconsistent state)
+    db.js                # node:sqlite connection + schema bootstrap (data/keren.db)
+    metadataStore.js     # tenant metadata over SQLite; legacy data/store.json
+                         # auto-migrated on boot (renamed to .legacy)
+    schemaScan.js        # F2: PII scrub + gap detection + scan assembly (pure)
+    scanStore.js         # F2: persist/read scans table (history capped at 50)
+    aiMappingService.js  # F3: orchestrates scan -> AI -> mappings table cache
+    mappingStore.js      # F3: persist/read mappings table (cache key = scan_id)
+    validationStore.js   # F4: persist user accept/override decisions
+  ai/
+    interface.js         # F3: AI provider contract + runtime assert
+    factory.js           # F3: AI_PROVIDER env -> provider instance (cached)
+    noneProvider.js      # F3: returns null -> deterministic fallback
+    azureFoundry.js      # F3: Foundry Responses API; MI auth (audience ai.azure.com)
+    promptBuilder.js     # F3: F2 scan -> system prompt + JSON schema response
+    quotaGuard.js        # F3: in-memory daily EUR cap, degrades on overflow
     schemaProfile.js     # auto-detect userId/sessionId/pagePath columns
     mapping.js           # canonical model <-> tenant schema mapping
     kql.js               # render templates with mapping substitution
@@ -97,9 +113,10 @@ src/
     dashboard.js         # builds dashboard payload from KQL results
     timeRange.js
     audit.js
-kql/                     # 22 versioned .kql templates (Azure-specific; relocation
+kql/                     # 25 versioned .kql templates (Azure-specific; relocation
                          # to queries/azure/ deferred to V2 with second adapter)
 public/                  # static SPA (index.html, app.js, styles.css)
+                         # + setup.html / setup.js (F4 wizard, /setup route)
 tests/                   # 9 test files, native node:test runner
 infra/                   # canonical Bicep + parameters
   main.bicep                 # Container Apps + ACR + Log Analytics + MI
@@ -111,6 +128,10 @@ deploy/                  # auxiliary scripts (one-time setup + manual runs)
   azure-deploy.sh            # wrapper: RG + Bicep + docker build/push
   .session-secret            # gitignored cache; delete to rotate
 .github/workflows/deploy-azure.yml  # OIDC-auth CI: build → push → update image
+scripts/
+  security-audit.mjs           # repo scan for accidental secrets
+  build-strategy-bundle.sh     # docs export
+  backup-sqlite.mjs            # hourly VACUUM INTO snapshot of data/keren.db
 docs/                    # product, technical, multicloud, backlog/, adr/
 ```
 
@@ -145,9 +166,11 @@ docs/                    # product, technical, multicloud, backlog/, adr/
 ## Known gaps (Phase 3 territory — don't fix opportunistically)
 
 These are **intentionally** deferred and tracked in `docs/backlog/phase-3.md`:
-- No DB / Redis — `metadataStore` is fs-backed (`data/store.json`) and cache
-  is in-memory; multi-instance deployments will see inconsistent state.
-  Single-replica is enforced de facto on Azure Container Apps for now.
+- `metadataStore` is now SQLite-backed (`data/keren.db`, since Track F1)
+  but cache stays in-memory and the DB itself is single-file with no
+  replication — multi-instance deployments would still see inconsistent
+  state. Single-replica is enforced de facto on Azure Container Apps
+  for now. Multi-tenant Postgres is the Phase 3 target.
 - No CSRF token (relies on `sameSite=lax` cookie only).
 - Frontend `public/app.js` shipped raw (~92 KB), no bundling/minification.
 - CSP allows `cdn.jsdelivr.net` and `unpkg.com` (supply-chain risk).

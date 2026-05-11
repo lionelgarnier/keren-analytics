@@ -1,0 +1,14 @@
+let start={{timeStart}};
+let end={{timeEnd}};
+union isfuzzy=true withsource=tableName pageViews, requests, customEvents
+| where timestamp between (start..end)
+| mv-apply k = bag_keys(customDimensions) on (
+    extend keyName = tostring(k),
+           val = tostring(customDimensions[tostring(k)])
+  )
+| where isnotempty(val)
+| summarize cardinality = dcount(val),
+            samples = make_set(val, 5),
+            occurrences = count()
+          by tableName, keyName
+| top 30 by occurrences desc

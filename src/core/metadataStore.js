@@ -1,92 +1,265 @@
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 import { config } from "../config.js";
-
-const storePath = path.resolve("data", "store.json");
+import { getDb, closeDb } from "./db.js";
 
 const MAX_STATE_TRANSITIONS = config.maxStateTransitions || 200;
 
-const defaultStore = {
-  tenants: {},
-};
-
-function ensureStore() {
-  if (!fs.existsSync(storePath)) {
-    fs.mkdirSync(path.dirname(storePath), { recursive: true });
-    fs.writeFileSync(storePath, JSON.stringify(defaultStore, null, 2));
-  }
+function legacyPath() {
+  return process.env.KEREN_LEGACY_STORE_PATH || path.resolve("data", "store.json");
 }
 
-function loadStore() {
-  ensureStore();
-  const raw = fs.readFileSync(storePath, "utf8");
+function legacyBackupPath() {
+  return legacyPath() + ".legacy";
+}
+
+const TENANT_JSON_COLUMNS = [
+  ["selectedResource", "selected_resource"],
+  ["mapping", "mapping"],
+  ["schemaProfile", "schema_profile"],
+  ["readinessReport", "readiness_report"],
+  ["dashboardConfig", "dashboard_config"],
+  ["discoveryCache", "discovery_cache"],
+];
+
+function toJSON(value) {
+  if (value === null || value === undefined) return null;
+  return JSON.stringify(value);
+}
+
+function fromJSON(value) {
+  if (value === null || value === undefined) return null;
   try {
-    return JSON.parse(raw);
-  } catch (error) {
-    return { ...defaultStore };
+    return JSON.parse(value);
+  } catch {
+    return null;
   }
 }
 
-/**
- * Atomically save the store by writing to a temporary file first,
- * then renaming to avoid partial-write corruption on concurrent access.
- * Tmp filename includes the pid so concurrent writers (e.g. parallel
- * `node --test` workers) don't race on the same tmp path and trip
- * ENOENT when one process renames the tmp out from under another.
- */
-function saveStore(store) {
-  const tmpPath = `${storePath}.${process.pid}.tmp`;
-  fs.writeFileSync(tmpPath, JSON.stringify(store, null, 2));
-  fs.renameSync(tmpPath, storePath);
-}
-
-function defaultTenant() {
+function defaultTenantRow(now) {
   return {
-    selectedResource: null,
+    selected_resource: null,
     mapping: null,
-    schemaProfile: null,
-    readinessReport: null,
-    stateTransitions: [],
-    dashboardConfig: null,
-    discoveryCache: null,
-    lastAccessedAt: new Date().toISOString(),
+    schema_profile: null,
+    readiness_report: null,
+    dashboard_config: null,
+    discovery_cache: null,
+    last_accessed_at: now,
   };
 }
 
-export function getTenant(tenantId) {
-  const store = loadStore();
-  if (!store.tenants[tenantId]) {
-    store.tenants[tenantId] = defaultTenant();
-    saveStore(store);
-  } else {
-    // Update last accessed timestamp
-    store.tenants[tenantId].lastAccessedAt = new Date().toISOString();
-    saveStore(store);
+function rowToTenant(row, transitions) {
+  return {
+    selectedResource: fromJSON(row.selected_resource),
+    mapping: fromJSON(row.mapping),
+    schemaProfile: fromJSON(row.schema_profile),
+    readinessReport: fromJSON(row.readiness_report),
+    dashboardConfig: fromJSON(row.dashboard_config),
+    discoveryCache: fromJSON(row.discovery_cache),
+    stateTransitions: transitions,
+    lastAccessedAt: row.last_accessed_at,
+  };
+}
+
+function withTransaction(db, fn) {
+  db.exec("BEGIN");
+  try {
+    const result = fn();
+    db.exec("COMMIT");
+    return result;
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
   }
-  return store.tenants[tenantId];
+}
+
+let migrationDone = false;
+
+function migrateLegacyStoreIfNeeded(db) {
+  if (migrationDone) return;
+  migrationDone = true;
+  const src = legacyPath();
+  const dest = legacyBackupPath();
+  if (!fs.existsSync(src)) return;
+
+  // If the DB already holds tenants, the migration ran on a prior boot
+  // (or a fresh DB was provisioned alongside a stale legacy file).
+  // Either way the legacy file should not be re-applied — rename it
+  // so it stops being detected and stays available for forensics.
+  const { n } = db.prepare("SELECT COUNT(*) AS n FROM tenants").get();
+  if (n > 0) {
+    fs.renameSync(src, dest);
+    return;
+  }
+
+  let legacy;
+  try {
+    legacy = JSON.parse(fs.readFileSync(src, "utf8"));
+  } catch {
+    return;
+  }
+  const tenants = legacy?.tenants ?? {};
+  const entries = Object.entries(tenants);
+  if (entries.length === 0) {
+    fs.renameSync(src, dest);
+    return;
+  }
+
+  const upsert = db.prepare(`
+    INSERT INTO tenants (id, selected_resource, mapping, schema_profile,
+      readiness_report, dashboard_config, discovery_cache, last_accessed_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const insertTransition = db.prepare(`
+    INSERT INTO state_transitions (tenant_id, state, detail, timestamp)
+    VALUES (?, ?, ?, ?)
+  `);
+  const now = new Date().toISOString();
+
+  withTransaction(db, () => {
+    for (const [id, t] of entries) {
+      upsert.run(
+        id,
+        toJSON(t.selectedResource),
+        toJSON(t.mapping),
+        toJSON(t.schemaProfile),
+        toJSON(t.readinessReport),
+        toJSON(t.dashboardConfig),
+        toJSON(t.discoveryCache),
+        t.lastAccessedAt || now
+      );
+      const transitions = Array.isArray(t.stateTransitions) ? t.stateTransitions : [];
+      const trimmed = transitions.slice(-MAX_STATE_TRANSITIONS);
+      for (const tr of trimmed) {
+        insertTransition.run(id, tr.state, tr.detail ?? null, tr.timestamp || now);
+      }
+    }
+  });
+
+  fs.renameSync(src, dest);
+}
+
+/**
+ * Test-only: drop the cached DB connection + reset the one-shot
+ * migration guard so the next call to a public function re-bootstraps
+ * the store. Lets tests swap KEREN_DB_PATH / KEREN_LEGACY_STORE_PATH
+ * between cases without leaking state.
+ */
+export function __resetForTests() {
+  closeDb();
+  migrationDone = false;
+}
+
+function ensureReady() {
+  const db = getDb();
+  migrateLegacyStoreIfNeeded(db);
+  return db;
+}
+
+function loadTransitions(db, tenantId) {
+  return db
+    .prepare(
+      `SELECT state, detail, timestamp
+         FROM state_transitions
+        WHERE tenant_id = ?
+        ORDER BY id ASC`
+    )
+    .all(tenantId)
+    .map((row) => ({
+      state: row.state,
+      ...(row.detail !== null ? { detail: row.detail } : {}),
+      timestamp: row.timestamp,
+    }));
+}
+
+function insertDefaultTenant(db, tenantId, now) {
+  const row = defaultTenantRow(now);
+  db.prepare(
+    `INSERT INTO tenants (id, selected_resource, mapping, schema_profile,
+      readiness_report, dashboard_config, discovery_cache, last_accessed_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    tenantId,
+    row.selected_resource,
+    row.mapping,
+    row.schema_profile,
+    row.readiness_report,
+    row.dashboard_config,
+    row.discovery_cache,
+    row.last_accessed_at
+  );
+  return row;
+}
+
+export function getTenant(tenantId) {
+  const db = ensureReady();
+  const now = new Date().toISOString();
+  let row = db.prepare("SELECT * FROM tenants WHERE id = ?").get(tenantId);
+  if (!row) {
+    row = insertDefaultTenant(db, tenantId, now);
+  } else {
+    db.prepare("UPDATE tenants SET last_accessed_at = ? WHERE id = ?").run(now, tenantId);
+    row.last_accessed_at = now;
+  }
+  const transitions = loadTransitions(db, tenantId);
+  return rowToTenant(row, transitions);
 }
 
 export function updateTenant(tenantId, patch) {
-  const store = loadStore();
-  const current = store.tenants[tenantId] || defaultTenant();
-  store.tenants[tenantId] = { ...current, ...patch, lastAccessedAt: new Date().toISOString() };
-  saveStore(store);
-  return store.tenants[tenantId];
+  const db = ensureReady();
+  const now = new Date().toISOString();
+
+  const exists = db.prepare("SELECT 1 FROM tenants WHERE id = ?").get(tenantId);
+  if (!exists) {
+    insertDefaultTenant(db, tenantId, now);
+  }
+
+  const sets = [];
+  const params = [];
+  for (const [key, column] of TENANT_JSON_COLUMNS) {
+    if (Object.prototype.hasOwnProperty.call(patch, key)) {
+      sets.push(`${column} = ?`);
+      params.push(toJSON(patch[key]));
+    }
+  }
+  sets.push("last_accessed_at = ?");
+  params.push(now);
+  params.push(tenantId);
+
+  db.prepare(`UPDATE tenants SET ${sets.join(", ")} WHERE id = ?`).run(...params);
+
+  const row = db.prepare("SELECT * FROM tenants WHERE id = ?").get(tenantId);
+  const transitions = loadTransitions(db, tenantId);
+  return rowToTenant(row, transitions);
 }
 
 export function logStateTransition(tenantId, transition) {
-  const store = loadStore();
-  const current = store.tenants[tenantId] || defaultTenant();
-  current.stateTransitions = current.stateTransitions || [];
-  current.stateTransitions.push({
-    ...transition,
-    timestamp: new Date().toISOString(),
+  const db = ensureReady();
+  const now = new Date().toISOString();
+
+  withTransaction(db, () => {
+    const exists = db.prepare("SELECT 1 FROM tenants WHERE id = ?").get(tenantId);
+    if (!exists) {
+      insertDefaultTenant(db, tenantId, now);
+    } else {
+      db.prepare("UPDATE tenants SET last_accessed_at = ? WHERE id = ?").run(now, tenantId);
+    }
+
+    db.prepare(
+      `INSERT INTO state_transitions (tenant_id, state, detail, timestamp)
+       VALUES (?, ?, ?, ?)`
+    ).run(tenantId, transition.state, transition.detail ?? null, now);
+
+    // Cap retention: delete the oldest rows above the limit.
+    db.prepare(
+      `DELETE FROM state_transitions
+        WHERE tenant_id = ?
+          AND id NOT IN (
+            SELECT id FROM state_transitions
+             WHERE tenant_id = ?
+             ORDER BY id DESC
+             LIMIT ?
+          )`
+    ).run(tenantId, tenantId, MAX_STATE_TRANSITIONS);
   });
-  // Enforce retention: keep only the most recent N transitions
-  if (current.stateTransitions.length > MAX_STATE_TRANSITIONS) {
-    current.stateTransitions = current.stateTransitions.slice(-MAX_STATE_TRANSITIONS);
-  }
-  current.lastAccessedAt = new Date().toISOString();
-  store.tenants[tenantId] = current;
-  saveStore(store);
 }

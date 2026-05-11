@@ -13,6 +13,12 @@ import { buildRecommendations } from "./core/recommendations.js";
 import { computeReadinessScore } from "./core/readinessScore.js";
 import { generatePrompts } from "./core/promptGenerator.js";
 import { getTenant, updateTenant } from "./core/metadataStore.js";
+import { getLatestScan } from "./core/scanStore.js";
+import { getLatestMapping } from "./core/mappingStore.js";
+import {
+  persistValidation,
+  getActiveValidation,
+} from "./core/validationStore.js";
 import { runWithToken } from "./providers/azure/tokenStore.js";
 import { createRateLimiter } from "./core/rateLimit.js";
 
@@ -636,6 +642,200 @@ app.get("/prompts", ensureAuth, (req, res) => {
   res.json({ prompts });
 });
 
+/* ========== Setup wizard (Track F4 — ADR 0005) ========== */
+
+// Static page that hosts the 4-step wizard SPA.
+app.get("/setup", (_req, res) => {
+  res.sendFile(path.resolve(__dirname, "..", "public", "setup.html"));
+});
+
+// State check: tells the frontend whether to enter the wizard or skip
+// straight to the dashboard. Called on /setup load AND from index.html
+// to drive the first-run redirect.
+app.get("/api/setup/state", ensureAuth, (req, res) => {
+  const tenantId = req.session.tenantId;
+  const tenant = getTenant(tenantId);
+  const validation = getActiveValidation(tenantId);
+  const scan = getLatestScan(tenantId);
+  const mapping = getLatestMapping(tenantId);
+  res.set("Cache-Control", "no-store");
+  res.json({
+    needsSetup: !validation,
+    hasScan: !!scan,
+    hasMapping: !!mapping,
+    selectedResource: tenant.selectedResource || null,
+    latestScanId: scan?.id || null,
+    latestMappingId: mapping?.id || null,
+    validation: validation
+      ? { id: validation.id, decision: validation.decision, validatedAt: validation.validatedAt }
+      : null,
+  });
+});
+
+// Trigger a fresh scan + AI analysis. Reuses the dashboard pipeline
+// (which produces scan + mapping as side effects); the dashboard data
+// is computed too, so "Save & Continue" lands on a hot dashboard.
+app.post("/api/setup/scan", ensureAuth, async (req, res) => {
+  const tenantId = req.session.tenantId;
+  try {
+    const result = await runOverviewPipeline({
+      tenantId,
+      rangeKey: "7d",
+      azureClient,
+      cacheTtlMs: config.cacheTtlMs["7d"],
+      azureMode: config.azureMode,
+    });
+    if (result.requiresSelection) {
+      return res.status(409).json({ error: "RESOURCE_SELECTION_REQUIRED", resources: result.resources });
+    }
+    if (result.error === "NO_ACCESS") {
+      return res.status(403).json({ error: "NO_ACCESS", message: result.message });
+    }
+    const scan = getLatestScan(tenantId);
+    const mapping = getLatestMapping(tenantId);
+    res.set("Cache-Control", "no-store");
+    res.json({
+      ok: true,
+      scanId: scan?.id || null,
+      mappingId: mapping?.id || null,
+      readiness: result.readinessReport
+        ? {
+            overallStatus: result.readinessReport.overallStatus,
+            availableSignals: result.readinessReport.availableSignals,
+          }
+        : null,
+    });
+  } catch (error) {
+    res.status(500).json({ error: "SCAN_FAILED", message: error.message });
+  }
+});
+
+const CANONICAL_FIELDS = [
+  "canonicalUserId",
+  "canonicalSessionId",
+  "canonicalPagePath",
+  "canonicalReferrer",
+];
+
+function confidenceFromMatchType(matchType) {
+  if (matchType === "builtin") return "high";
+  if (matchType === "user-override") return "high";
+  if (matchType === "alias" || matchType === "pattern") return "medium";
+  return "low";
+}
+
+/**
+ * Assemble a per-canonical "effective mapping" the wizard can render
+ * uniformly, whether the AI produced proposals (Track F3) or only the
+ * deterministic mapping is available (Track F4 degraded path).
+ *
+ * Priority per field: AI proposal (if non-degraded) > deterministic
+ * mapping field > null (no proposal at all).
+ */
+function buildEffectiveMapping(deterministicMapping, aiMapping) {
+  const aiProposals = aiMapping?.degraded ? [] : (aiMapping?.proposals?.mapping_proposals || []);
+  const byCanonical = Object.fromEntries(aiProposals.map((p) => [p.canonical, p]));
+  return CANONICAL_FIELDS.map((field) => {
+    const ai = byCanonical[field];
+    if (ai) {
+      return {
+        canonical: field,
+        source: ai.source,
+        expr: ai.expr,
+        origin: "ai",
+        confidence: ai.confidence,
+        reasoning: ai.reasoning,
+      };
+    }
+    const det = deterministicMapping?.[field];
+    if (det && det.expr) {
+      return {
+        canonical: field,
+        source: det.source,
+        expr: det.expr,
+        origin: "deterministic",
+        confidence: confidenceFromMatchType(det.matchType),
+        reasoning: `Resolved via ${det.matchType} from the schema profile.`,
+      };
+    }
+    return { canonical: field, source: null, expr: null, origin: null, confidence: "low", reasoning: "No source found in the scan." };
+  });
+}
+
+// Returns scan + AI mapping for the wizard's "AI findings" + "Validate" steps.
+app.get("/api/setup/findings", ensureAuth, (req, res) => {
+  const tenantId = req.session.tenantId;
+  const tenant = getTenant(tenantId);
+  const scan = getLatestScan(tenantId);
+  const mapping = getLatestMapping(tenantId);
+  const validation = getActiveValidation(tenantId);
+  if (!scan) {
+    return res.status(409).json({
+      error: "NO_SCAN",
+      message: "Run /api/setup/scan first to produce a scan.",
+    });
+  }
+  const effectiveMapping = buildEffectiveMapping(tenant.mapping, mapping);
+  res.set("Cache-Control", "no-store");
+  res.json({
+    selectedResource: tenant.selectedResource || null,
+    scan: { id: scan.id, scannedAt: scan.scannedAt, ...scan.payload },
+    mapping: mapping
+      ? {
+          id: mapping.id,
+          source: mapping.source,
+          degraded: mapping.degraded,
+          createdAt: mapping.createdAt,
+          proposals: mapping.proposals,
+        }
+      : null,
+    effectiveMapping,
+    validation: validation || null,
+  });
+});
+
+const ALLOWED_OVERRIDE_FIELDS = new Set([
+  "canonicalUserId", "canonicalSessionId", "canonicalPagePath", "canonicalReferrer",
+]);
+const VALID_DECISIONS = new Set(["accept_all", "override", "reject"]);
+
+// Persist the user's accept/override/reject decision. Subsequent dashboard
+// loads will apply the override via mergeWithValidation in the orchestrator.
+app.post("/api/setup/validate", ensureAuth, (req, res) => {
+  const tenantId = req.session.tenantId;
+  const { decision, overrides } = req.body || {};
+  if (!VALID_DECISIONS.has(decision)) {
+    return res.status(400).json({ error: "INVALID_DECISION", message: "decision must be accept_all|override|reject" });
+  }
+  let cleanedOverrides = null;
+  if (decision === "override") {
+    if (!overrides || typeof overrides !== "object") {
+      return res.status(400).json({ error: "MISSING_OVERRIDES", message: "decision=override requires overrides object" });
+    }
+    cleanedOverrides = {};
+    for (const [field, value] of Object.entries(overrides)) {
+      if (!ALLOWED_OVERRIDE_FIELDS.has(field)) continue;
+      if (!value || typeof value.expr !== "string" || typeof value.source !== "string") continue;
+      // Light KQL safety: forbid newlines/semicolons/pipe so user input can't
+      // smuggle a multi-statement KQL through the renderer's whitelist later.
+      if (/[;|\r\n]/.test(value.expr)) {
+        return res.status(400).json({ error: "INVALID_OVERRIDE_EXPR", field });
+      }
+      cleanedOverrides[field] = { source: value.source.slice(0, 200), expr: value.expr.slice(0, 500) };
+    }
+    if (Object.keys(cleanedOverrides).length === 0) {
+      return res.status(400).json({ error: "MISSING_OVERRIDES", message: "no valid override fields provided" });
+    }
+  }
+  const mapping = getLatestMapping(tenantId);
+  const persisted = persistValidation(tenantId, {
+    mappingId: mapping?.id || null,
+    decision,
+    overrides: cleanedOverrides,
+  });
+  res.json({ ok: true, validation: persisted });
+});
+
 /* ========== Preview mode (no auth required) ========== */
 
 app.get("/preview/dashboard", async (req, res) => {
@@ -706,7 +906,7 @@ app.get("/preview/dashboard", async (req, res) => {
 });
 
 /* ========== SPA catch-all (History API routing) ========== */
-const API_ROUTE = /^\/(auth|azure|dashboard|readiness|recommendations|prompts|docs)(\/|$)/;
+const API_ROUTE = /^\/(auth|azure|dashboard|readiness|recommendations|prompts|docs|api|setup)(\/|$)/;
 app.get("/{*splat}", (req, res, next) => {
   if (API_ROUTE.test(req.path) || req.path.startsWith("/preview/")) return next();
   res.sendFile(path.resolve(__dirname, "..", "public", "index.html"));

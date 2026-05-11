@@ -50,4 +50,23 @@ export const config = {
   azureRedirectUri: process.env.AZURE_REDIRECT_URI || `http://localhost:${port}/auth/callback`,
   /** Entra ID tenant: "organizations" (multi-tenant work accounts), "common", or a specific tenant ID */
   azureTenantId: process.env.AZURE_TENANT_ID || "organizations",
+
+  // --- AI provider (ADR 0005, Track F3) ---
+  /** Provider selector: "none" disables LLM calls; "azure-foundry" wires the Foundry Responses API. */
+  aiProvider:
+    process.env.NODE_ENV === "test"
+      ? "none"
+      : (process.env.AI_PROVIDER || "none"),
+  /** Foundry project Responses API endpoint (full URL incl. /openai/v1/responses). */
+  azureFoundryEndpoint: process.env.AZURE_FOUNDRY_ENDPOINT || "",
+  /** Foundry model deployment name (e.g. "gpt-5.4-mini"). */
+  azureFoundryDeployment: process.env.AZURE_FOUNDRY_DEPLOYMENT || "",
+  /** Per-call request timeout (ms). */
+  aiRequestTimeoutMs: Number(process.env.AI_REQUEST_TIMEOUT_MS || 20000),
+  /** Hard daily spend cap in EUR. Beyond this, providers degrade to deterministic fallback. */
+  aiDailyEurCap: Number(process.env.AI_DAILY_EUR_CAP || 10),
+  /** EUR per million input tokens (gpt-5.4-mini est.) — overridable via env once invoiced for real. */
+  aiPricePerMillionInputEur: Number(process.env.AI_PRICE_PER_M_IN_EUR || 0.25),
+  /** EUR per million output tokens. */
+  aiPricePerMillionOutputEur: Number(process.env.AI_PRICE_PER_M_OUT_EUR || 1.0),
 };

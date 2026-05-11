@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dev-mock",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000,
+      "env": {
+        "AZURE_MODE": "mock",
+        "AI_PROVIDER": "none",
+        "SESSION_SECRET": "preview-only-not-for-production",
+        "KEREN_DB_PATH": "/tmp/keren-preview.db"
+      }
+    }
+  ]
+}

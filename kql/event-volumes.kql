@@ -1,0 +1,6 @@
+let start={{timeStart}};
+let end={{timeEnd}};
+customEvents
+| where timestamp between (start..end)
+| summarize count = count() by name
+| top 50 by count desc
