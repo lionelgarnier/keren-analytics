@@ -3143,6 +3143,54 @@ body {
   text-decoration: none;
 }
 
+/* Resource picker shown inside step 1 when the tenant has >1 App Insights. */
+.setup-resource-picker {
+  text-align: center;
+  padding: 8px 0 16px;
+}
+.setup-resource-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  margin: 20px auto 0;
+  max-width: 720px;
+  text-align: left;
+}
+.setup-resource-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  cursor: pointer;
+  font: inherit;
+  color: var(--text-primary);
+  text-align: left;
+  transition: border-color 120ms, transform 120ms, box-shadow 120ms;
+}
+.setup-resource-card:hover:not(:disabled) {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+.setup-resource-card:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.setup-resource-card.loading {
+  border-color: var(--accent);
+  opacity: 0.7;
+}
+.setup-resource-card-name {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text-primary);
+}
+.setup-resource-card-meta {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
 /* Step 2 — Findings */
 .setup-findings-grid {
   display: grid;

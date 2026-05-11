@@ -76,11 +76,131 @@
     return payload;
   }
 
-  // ── Step 1 — Scanning ─────────────────────────────────────────
-  async function runScan() {
+  // ── Step 1 — Resource selection + Scanning ────────────────────
+  //
+  // Sub-views inside #step-scanning: a resource picker (only when the
+  // tenant has >1 App Insights and none is selected) and the scanning
+  // animation. We pre-flight /azure/discover so the picker is offered
+  // *before* /api/setup/scan ever runs — without that, the orchestrator
+  // returned RESOURCE_SELECTION_REQUIRED and the wizard had no UI to
+  // resolve it.
+  function showPickerView() {
+    $("resourcePicker").classList.remove("hidden");
+    $("scanningPanel").classList.add("hidden");
+  }
+  function showScanningView() {
+    $("resourcePicker").classList.add("hidden");
+    $("scanningPanel").classList.remove("hidden");
+  }
+
+  async function startStep1() {
+    show("scanning");
+    const pickerErrorEl = $("resourcePickerError");
+    pickerErrorEl.classList.add("hidden");
+    pickerErrorEl.textContent = "";
+
+    let discovery;
+    try {
+      discovery = await api("GET", "/azure/discover");
+    } catch (err) {
+      // No picker yet → render the error in the scanning panel so the user
+      // still sees something actionable. 401 falls through to runScan which
+      // handles auth redirect.
+      showScanningView();
+      await runScan({ skipApiCall: true, prefetchError: err });
+      return;
+    }
+
+    const resources = discovery.resources || [];
+    if (resources.length === 0) {
+      showScanningView();
+      const errorEl = $("scanningError");
+      errorEl.innerHTML = "";
+      const msg = document.createElement("p");
+      msg.className = "setup-error-message";
+      msg.textContent =
+        "No Application Insights resources found in this tenant. Create one in Azure, then come back.";
+      errorEl.appendChild(msg);
+      errorEl.classList.remove("hidden");
+      $("scanningNarration").textContent = "Nothing to scan.";
+      return;
+    }
+
+    if (discovery.selectedResource || discovery.autoSelected || resources.length === 1) {
+      // Single resource → orchestrator already wrote selectedResource, or a
+      // prior selection survives. Skip the picker.
+      showScanningView();
+      await runScan();
+      return;
+    }
+
+    renderResourcePicker(resources);
+    showPickerView();
+  }
+
+  function renderResourcePicker(resources) {
+    const list = $("resourcePickerList");
+    list.innerHTML = "";
+
+    // Same env detection / sort order as /services so users see the same
+    // grouping in both surfaces.
+    const sorted = [...resources].sort((a, b) =>
+      (a.appInsightsName || "").localeCompare(b.appInsightsName || "")
+    );
+
+    for (const resource of sorted) {
+      const card = document.createElement("button");
+      card.type = "button";
+      card.className = "setup-resource-card";
+
+      const name = document.createElement("div");
+      name.className = "setup-resource-card-name";
+      name.textContent = resource.appInsightsName || "(unnamed)";
+      card.appendChild(name);
+
+      const meta = document.createElement("div");
+      meta.className = "setup-resource-card-meta";
+      const parts = [];
+      if (resource.resourceGroup) parts.push(resource.resourceGroup);
+      if (resource.subscriptionId) parts.push(resource.subscriptionId.slice(0, 8) + "…");
+      meta.textContent = parts.join(" · ");
+      card.appendChild(meta);
+
+      card.addEventListener("click", () => selectResource(resource, card));
+      list.appendChild(card);
+    }
+  }
+
+  async function selectResource(resource, cardEl) {
+    const list = $("resourcePickerList");
+    const errorEl = $("resourcePickerError");
+    errorEl.classList.add("hidden");
+    for (const c of list.children) c.disabled = true;
+    if (cardEl) cardEl.classList.add("loading");
+
+    try {
+      await api("POST", "/azure/select", {
+        resourceId: resource.resourceId,
+        workspaceId: resource.workspaceId,
+        subscriptionId: resource.subscriptionId,
+        resourceGroup: resource.resourceGroup,
+        appInsightsName: resource.appInsightsName,
+      });
+      showScanningView();
+      await runScan();
+    } catch (err) {
+      for (const c of list.children) c.disabled = false;
+      if (cardEl) cardEl.classList.remove("loading");
+      errorEl.textContent = err.message || "Could not select that resource.";
+      errorEl.classList.remove("hidden");
+    }
+  }
+
+  async function runScan(opts = {}) {
     const narrationEl = $("scanningNarration");
     const errorEl = $("scanningError");
     errorEl.classList.add("hidden");
+    errorEl.innerHTML = "";
     $("scanningLog").innerHTML = "";
 
     let i = 0;
@@ -93,15 +213,7 @@
     tick();
     const interval = setInterval(tick, 1100);
 
-    try {
-      const result = await api("POST", "/api/setup/scan");
-      clearInterval(interval);
-      narrationEl.textContent = "Scan complete.";
-      appendLog(`Scan complete (scan #${result.scanId || "?"}, mapping #${result.mappingId || "?"}).`, "ok");
-      await loadFindings();
-      show("findings");
-    } catch (err) {
-      clearInterval(interval);
+    const handleFailure = (err) => {
       narrationEl.textContent = "Scan failed.";
       errorEl.innerHTML = "";
       const msgEl = document.createElement("p");
@@ -114,29 +226,41 @@
         msgEl.textContent = "You're not signed in. Redirecting…";
         setTimeout(() => { window.location.href = "/"; }, 1200);
       } else if (err.status === 409 && err.payload?.error === "RESOURCE_SELECTION_REQUIRED") {
-        // Don't auto-redirect to "/": index.html sends users with no validation
-        // straight back to /setup, which would re-trigger the scan and loop
-        // until ARM rate-limits. Surface a manual action that goes to the
-        // resource picker (/services bypasses the home → /setup redirect).
-        msgEl.textContent = "Multiple Application Insights resources detected. Pick one to continue.";
-        const pickBtn = document.createElement("a");
-        pickBtn.href = "/services";
-        pickBtn.className = "btn-primary";
-        pickBtn.textContent = "Choose a resource";
-        actionsEl.appendChild(pickBtn);
+        // Should not happen now that startStep1() pre-flights, but stay safe:
+        // re-run the pre-flight, which will surface the picker.
+        msgEl.textContent = "A resource selection is required. Loading picker…";
+        setTimeout(() => startStep1(), 600);
       } else {
         msgEl.textContent = err.message || "Unknown error";
         const retryBtn = document.createElement("button");
         retryBtn.type = "button";
         retryBtn.className = "btn-primary";
         retryBtn.textContent = "Retry";
-        retryBtn.addEventListener("click", () => runScan());
+        retryBtn.addEventListener("click", () => startStep1());
         actionsEl.appendChild(retryBtn);
       }
 
       errorEl.appendChild(msgEl);
       if (actionsEl.childElementCount > 0) errorEl.appendChild(actionsEl);
       errorEl.classList.remove("hidden");
+    };
+
+    if (opts.skipApiCall) {
+      clearInterval(interval);
+      handleFailure(opts.prefetchError || new Error("Scan unavailable"));
+      return;
+    }
+
+    try {
+      const result = await api("POST", "/api/setup/scan");
+      clearInterval(interval);
+      narrationEl.textContent = "Scan complete.";
+      appendLog(`Scan complete (scan #${result.scanId || "?"}, mapping #${result.mappingId || "?"}).`, "ok");
+      await loadFindings();
+      show("findings");
+    } catch (err) {
+      clearInterval(interval);
+      handleFailure(err);
     }
   }
 
@@ -393,8 +517,7 @@
   // ── Wire up ───────────────────────────────────────────────────
   function init() {
     $("findingsBack").addEventListener("click", () => {
-      show("scanning");
-      runScan();
+      startStep1();
     });
     $("findingsContinue").addEventListener("click", () => {
       renderValidate();
@@ -417,8 +540,7 @@
       });
     }
 
-    show("scanning");
-    runScan();
+    startStep1();
   }
 
   if (document.readyState === "loading") {
