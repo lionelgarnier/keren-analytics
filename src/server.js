@@ -828,6 +828,21 @@ app.post("/api/setup/validate", ensureAuth, (req, res) => {
     }
   }
   const mapping = getLatestMapping(tenantId);
+  // accept_all: snapshot the effective mapping (AI proposals + deterministic
+  // fallback) into `overrides`. Without this, the dashboard pipeline would
+  // re-derive the deterministic mapping on every load and silently discard
+  // AI-only proposals (see mergeWithValidation chain).
+  if (decision === "accept_all") {
+    const tenant = getTenant(tenantId);
+    const effective = buildEffectiveMapping(tenant.mapping, mapping);
+    const snapshot = {};
+    for (const row of effective) {
+      if (!ALLOWED_OVERRIDE_FIELDS.has(row.canonical)) continue;
+      if (!row.source || !row.expr) continue;
+      snapshot[row.canonical] = { source: row.source, expr: row.expr };
+    }
+    cleanedOverrides = Object.keys(snapshot).length > 0 ? snapshot : null;
+  }
   const persisted = persistValidation(tenantId, {
     mappingId: mapping?.id || null,
     decision,

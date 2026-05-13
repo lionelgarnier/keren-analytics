@@ -52,6 +52,28 @@ by what we learned during F3 implementation.
    usage. This survives cost variance across models far better than
    request count.
 
+4. **`mappingAnalysis` schema gained `code_prompt` (2026-05-12).** The
+   missing-signals branch of the response now requires `code_prompt`
+   alongside `recommended_kql` and `remediation`. The wizard surfaces
+   `code_prompt` as the primary call to action (a self-contained prompt
+   the user pastes into Cursor / Copilot / Claude Code so it can detect
+   their stack and produce the code diff); `recommended_kql` is kept for
+   power users behind a disclosure. Existing AI mappings persisted before
+   this change have no `code_prompt` — the frontend treats it as optional
+   (the wizard falls back to KQL-only rendering when the field is absent)
+   and any new scan repopulates the schema.
+
+5. **Validation overrides apply on any decision (2026-05-12).**
+   `mergeWithValidation` used to require `decision === "override"` to
+   apply overrides — and `accept_all` was always persisted with
+   `overrides: null`, so AI-only proposals were silently discarded on
+   the next pipeline run. The API now snapshots the effective mapping
+   into `validation.overrides` on `accept_all`, and `mergeWithValidation`
+   applies overrides whenever they exist. The `decision` label is now
+   pure audit. Regression covered by
+   `tests/setupApi.test.js` → "accept_all snapshots the effective mapping
+   and flows through to the dashboard".
+
 The rest of this doc — privacy contract, sanitizer rules, deployment
 patterns — is unchanged and remains binding on any new provider.
 

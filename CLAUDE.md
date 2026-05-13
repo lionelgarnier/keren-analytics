@@ -9,7 +9,7 @@ Plug-and-play analytics dashboard that turns Azure Application Insights telemetr
 into Marketing / Technical / Readiness views in under 2 minutes. Zero agent
 deployment, zero raw data storage, KQL-only.
 
-Status: **Phase 1 + Phase 2 + Phase A DONE**.
+Status: **Phase 1 + Phase 2 + Phase A + Track F DONE**.
 
 - **Phase A (Azure-first hosting)** shipped 2026-05-10/11: Azure Container
   Apps France Central, custom domain `https://analytics.keren.run` with
@@ -17,13 +17,20 @@ Status: **Phase 1 + Phase 2 + Phase A DONE**.
   Insights, CI/CD via OIDC (`.github/workflows/deploy-azure.yml`) — see
   ADR 0004.
 
-**In flight — Track F (AI-first setup wizard, ADR 0005, ~15 jours focus)**.
-This re-scopes the pre-launch sprint: the AI setup wizard moves from
-"post-launch optional" to "pre-launch blocker" because without it the
-"AI-mapped schema / AI explains your telemetry" claims are AI-washing.
-Track F adds SQLite persistence + Azure AI Foundry inference + a
-4-step setup wizard. See `docs/backlog/launch-readiness.md` Track F and
-ADR 0005 for the rationale and chantier breakdown (F1-F5).
+- **Track F (AI-first setup wizard, ADR 0005)** shipped 2026-05-11 (F1-F5)
+  + post-shipment iteration 2026-05-12: the wizard surface pivoted from
+  technical mapping plumbing to **graph-level "what we can render for you"
+  cards** (✓ Ready / ! Needs instrumentation), and the missing-signals
+  list now ships an **AI-generated `code_prompt`** the user copies into
+  Cursor / Copilot / Claude Code (shared split-button in
+  [`public/promptActionButton.js`](public/promptActionButton.js), also
+  reused by the readiness "How to fix" rows). The `accept_all` validation
+  branch now snapshots the effective mapping into `overrides` — before
+  this fix, AI-only proposals were silently discarded on the next
+  pipeline run. See [`docs/backlog/ai-setup-wizard.md`](docs/backlog/ai-setup-wizard.md)
+  § "Post-shipment iterations (2026-05-12)" for the change ledger and
+  [`docs/architecture-ai.md`](docs/architecture-ai.md) divergences 4 & 5
+  for the schema + merge contract evolution.
 
 **Post-launch / deferred**: Phase 3 multi-tenant Postgres (single-instance
 SQLite suffices for V1), Phase 4 multi-cloud, the other AI surfaces
@@ -182,10 +189,15 @@ If a task explicitly asks to harden one of these, do it. Otherwise leave alone.
 
 ## Docs to read before non-trivial work
 
-- **`docs/next-session.md`** — if you are picking up Track F (AI-first
-  setup wizard) in a fresh branch / session, read this FIRST. It is the
-  self-contained briefing with all decisions already made + execution
-  order, so the new session doesn't re-litigate the AI-first scope.
+- **`docs/backlog/ai-setup-wizard.md`** § "Implementation status" +
+  § "Post-shipment iterations (2026-05-12)" — the change ledger for what
+  shipped (F1-F5) plus the dogfooding pass that pivoted the wizard surface.
+  Read this before touching the wizard, the AI prompt schema, or
+  `mergeWithValidation` so you don't undo a deliberate design choice.
+- **`docs/next-session.md`** — original Track F kickoff brief. Now
+  historical — kept because it documents *why* the F1-F5 sequence was
+  chosen and what decisions were locked in up front. Useful when extending
+  the wizard but no longer the "start here" doc.
 - **`docs/adr/0005-ai-first-scope.md`** — the strategic decision behind
   Track F (why AI-first is pre-launch, SQLite vs Postgres, Foundry vs
   OpenAI direct).

@@ -268,14 +268,16 @@ export function buildMapping({ schemaProfile, readinessReport }) {
  * dashboards.
  *
  * Resolution chain (high-to-low priority):
- *   1. user override (this function)
- *   2. AI proposal (future — currently the AI mapping is persisted in
- *      `mappings` but applied via the wizard, not auto-merged)
- *   3. deterministic alias / built-in (already in `buildMapping`)
+ *   1. validation overrides (this function) — populated by either:
+ *        - `decision=override` (explicit user edits in the wizard), or
+ *        - `decision=accept_all` (snapshot of the effective AI+deterministic
+ *          mapping the user saw and accepted). The snapshot is taken in
+ *          /api/setup/validate so the dashboard always uses what was shown.
+ *   2. deterministic alias / built-in (already in `buildMapping`)
  */
 export function mergeWithValidation(mapping, validation) {
   if (!mapping || !validation) return mapping;
-  if (validation.decision !== "override" || !validation.overrides) return mapping;
+  if (!validation.overrides) return mapping;
 
   const merged = { ...mapping };
   const fields = ["canonicalUserId", "canonicalSessionId", "canonicalPagePath", "canonicalReferrer"];

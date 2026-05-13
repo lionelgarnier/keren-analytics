@@ -9,12 +9,16 @@
 
   const STEPS = ["scanning", "findings", "validate", "complete"];
 
-  const SCANNING_NARRATION = [
-    "Connecting to Application Insights…",
-    "Reading custom dimensions…",
-    "Counting event types and volumes…",
-    "Detecting user identity, sessions, and page paths…",
-    "Asking the AI to make sense of it…",
+  // Each scanning step in the log is clickable post-scan: a renderer maps the
+  // findings payload onto a debug panel that expands beneath the step row.
+  // This gives the user (and us, when debugging) full transparency about what
+  // the orchestrator actually fetched at each stage.
+  const SCANNING_STEPS = [
+    { key: "connect", label: "Connecting to Application Insights…" },
+    { key: "customDimensions", label: "Reading custom dimensions…" },
+    { key: "eventVolumes", label: "Counting event types and volumes…" },
+    { key: "identity", label: "Detecting user identity, sessions, and page paths…" },
+    { key: "ai", label: "Asking the AI to make sense of it…" },
   ];
 
   const state = {
@@ -52,11 +56,192 @@
       .replace(/'/g, "&#39;");
   }
 
-  function appendLog(text, kind = "info") {
-    const li = document.createElement("li");
-    li.className = `setup-log-line setup-log-${kind}`;
-    li.textContent = text;
-    $("scanningLog").appendChild(li);
+  // ── Scanning log helpers ──────────────────────────────────────
+  // The log starts as a fixed list of "pending" steps. The narration ticker
+  // marks the active one, and once /api/setup/scan returns we mark them all
+  // done and wire each row to its renderStepDetails() debug panel.
+
+  function initScanningLog() {
+    const ul = $("scanningLog");
+    ul.innerHTML = "";
+    for (const step of SCANNING_STEPS) {
+      const li = document.createElement("li");
+      li.className = "setup-log-line setup-log-pending";
+      li.dataset.step = step.key;
+      li.innerHTML = `
+        <button type="button" class="setup-log-toggle" aria-expanded="false" aria-disabled="true">
+          <span class="setup-log-marker" aria-hidden="true"></span>
+          <span class="setup-log-text"></span>
+          <span class="setup-log-chevron" aria-hidden="true">▸</span>
+        </button>
+        <div class="setup-log-details" role="region" hidden></div>
+      `;
+      li.querySelector(".setup-log-text").textContent = step.label;
+      ul.appendChild(li);
+    }
+  }
+
+  function markStepActive(idx) {
+    const items = $("scanningLog").children;
+    for (let i = 0; i < items.length; i++) {
+      items[i].classList.toggle("setup-log-active", i === idx);
+    }
+  }
+
+  function markStepsComplete(findings) {
+    for (const li of $("scanningLog").children) {
+      li.classList.remove("setup-log-pending", "setup-log-active");
+      li.classList.add("setup-log-done");
+      const toggle = li.querySelector(".setup-log-toggle");
+      const details = li.querySelector(".setup-log-details");
+      toggle.removeAttribute("aria-disabled");
+      details.innerHTML = renderStepDetails(li.dataset.step, findings);
+      toggle.addEventListener("click", () => {
+        const expanded = toggle.getAttribute("aria-expanded") === "true";
+        toggle.setAttribute("aria-expanded", String(!expanded));
+        details.hidden = expanded;
+      });
+    }
+  }
+
+  function renderStepDetails(key, findings) {
+    const f = findings || {};
+    if (key === "connect") return renderConnectDetails(f);
+    if (key === "customDimensions") return renderCustomDimensionsDetails(f);
+    if (key === "eventVolumes") return renderEventVolumesDetails(f);
+    if (key === "identity") return renderIdentityDetails(f);
+    if (key === "ai") return renderAiDetails(f);
+    return "";
+  }
+
+  function renderConnectDetails(f) {
+    const r = f.selectedResource || {};
+    const span = f.scan?.timestampSpan || {};
+    const rows = [
+      ["Resource", r.appInsightsName || r.name],
+      ["Subscription", r.subscriptionId],
+      ["Resource group", r.resourceGroup],
+      ["Workspace ID", r.workspaceId],
+      ["Scanned at", f.scan?.scannedAt],
+      ["Earliest event", span.earliest],
+      ["Latest event", span.latest],
+    ];
+    return `<dl class="setup-log-kv">${rows.map(([k, v]) => `
+      <dt>${escapeHtml(k)}</dt><dd>${v ? `<code>${escapeHtml(v)}</code>` : "<em>—</em>"}</dd>
+    `).join("")}</dl>`;
+  }
+
+  function renderCustomDimensionsDetails(f) {
+    const cds = f.scan?.customDimensions || [];
+    if (cds.length === 0) {
+      return `<p class="setup-log-empty">No custom dimensions found in the scan window.</p>`;
+    }
+    const rows = cds.map((cd) => `
+      <tr>
+        <td><code>${escapeHtml(cd.keyName)}</code></td>
+        <td><code>${escapeHtml(cd.tableName)}</code></td>
+        <td>${cd.cardinality ?? "?"}</td>
+        <td>${cd.occurrences ?? "?"}</td>
+        <td>${(cd.samples || []).slice(0, 3).map((s) => `<code>${escapeHtml(s)}</code>`).join(", ") || "<em>—</em>"}</td>
+      </tr>
+    `).join("");
+    return `
+      <p class="setup-log-summary">${cds.length} custom-dimension key(s) detected across all tables. Sample values are PII-scrubbed before persistence.</p>
+      <div class="setup-log-table-wrap">
+        <table class="setup-log-table">
+          <thead><tr><th>Key</th><th>Table</th><th>Cardinality</th><th>Occurrences</th><th>Sample values</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function renderEventVolumesDetails(f) {
+    const tables = f.scan?.tables || {};
+    const events = f.scan?.eventNames || [];
+    const tablePills = Object.entries(tables).map(([name, present]) => `
+      <li class="setup-pill setup-pill-${present ? "present" : "missing"}">${escapeHtml(name)}</li>
+    `).join("") || `<li class="setup-log-empty">No table presence info reported.</li>`;
+    const evRows = events.length === 0
+      ? `<tr><td colspan="2"><em>No events recorded in the scan window.</em></td></tr>`
+      : events.map((e) => `
+          <tr><td><code>${escapeHtml(e.name)}</code></td><td>${e.count}</td></tr>
+        `).join("");
+    return `
+      <h4 class="setup-log-h4">Tables populated</h4>
+      <ul class="setup-pill-list setup-log-pills">${tablePills}</ul>
+      <h4 class="setup-log-h4">Event types (${events.length})</h4>
+      <div class="setup-log-table-wrap">
+        <table class="setup-log-table">
+          <thead><tr><th>Event name</th><th>Count</th></tr></thead>
+          <tbody>${evRows}</tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function renderIdentityDetails(f) {
+    const eff = Array.isArray(f.effectiveMapping) ? f.effectiveMapping : [];
+    const gaps = f.scan?.gaps || [];
+    const mapRows = eff.length === 0
+      ? `<tr><td colspan="4"><em>No mapping produced yet.</em></td></tr>`
+      : eff.map((row) => `
+          <tr>
+            <td><code>${escapeHtml(row.canonical)}</code></td>
+            <td>${row.source ? `<code>${escapeHtml(row.source)}</code>` : "<em>—</em>"}</td>
+            <td><span class="setup-origin setup-origin-${escapeHtml(row.origin || "none")}">${escapeHtml(row.origin || "missing")}</span></td>
+            <td><span class="setup-confidence setup-confidence-${escapeHtml(row.confidence)}">${escapeHtml(row.confidence)}</span></td>
+          </tr>
+        `).join("");
+    const gapBlock = gaps.length === 0
+      ? `<p class="setup-log-empty">No gaps detected — canonical identity coverage looks complete.</p>`
+      : `<ul class="setup-gaps-list">${gaps.map((g) => `
+          <li class="setup-gap setup-gap-${escapeHtml(g.severity || "medium")}">
+            <strong>${escapeHtml(g.title)}</strong><span>${escapeHtml(g.detail || "")}</span>
+          </li>
+        `).join("")}</ul>`;
+    return `
+      <h4 class="setup-log-h4">Effective canonical mapping</h4>
+      <div class="setup-log-table-wrap">
+        <table class="setup-log-table">
+          <thead><tr><th>Canonical field</th><th>Source</th><th>Origin</th><th>Confidence</th></tr></thead>
+          <tbody>${mapRows}</tbody>
+        </table>
+      </div>
+      <h4 class="setup-log-h4">Gaps flagged by the heuristic</h4>
+      ${gapBlock}
+    `;
+  }
+
+  function renderAiDetails(f) {
+    const m = f.mapping;
+    if (!m) {
+      return `<p class="setup-log-empty">No AI mapping was returned — the deterministic fallback is in effect.</p>`;
+    }
+    const kv = [
+      ["Source", m.source],
+      ["Degraded", m.degraded ? "yes (fell back to deterministic)" : "no"],
+      ["Created at", m.createdAt],
+    ];
+    const recs = m.proposals?.dashboard_recommendations;
+    const recsBlock = recs ? `
+      <h4 class="setup-log-h4">Dashboard recommendations</h4>
+      <dl class="setup-log-kv">
+        <dt>Feature</dt><dd>${(recs.feature || []).map((s) => `<code>${escapeHtml(s)}</code>`).join(", ") || "<em>—</em>"}</dd>
+        <dt>Hide</dt><dd>${(recs.hide || []).map((s) => `<code>${escapeHtml(s)}</code>`).join(", ") || "<em>—</em>"}</dd>
+        <dt>Rationale</dt><dd>${escapeHtml(recs.rationale || "—")}</dd>
+      </dl>
+    ` : "";
+    return `
+      <dl class="setup-log-kv">${kv.map(([k, v]) => `
+        <dt>${escapeHtml(k)}</dt><dd>${v ? escapeHtml(v) : "<em>—</em>"}</dd>
+      `).join("")}</dl>
+      <h4 class="setup-log-h4">AI summary</h4>
+      <p class="setup-log-prose">${escapeHtml(m.proposals?.summary || "—")}</p>
+      ${recsBlock}
+      <h4 class="setup-log-h4">Raw proposals payload</h4>
+      <pre class="setup-log-json"><code>${escapeHtml(JSON.stringify(m.proposals ?? null, null, 2))}</code></pre>
+    `;
   }
 
   // ── API ───────────────────────────────────────────────────────
@@ -198,16 +383,24 @@
 
   async function runScan(opts = {}) {
     const narrationEl = $("scanningNarration");
+    const headingEl = $("scanningHeading");
+    const spinnerEl = $("scanningSpinner");
+    const footerEl = $("scanningFooter");
     const errorEl = $("scanningError");
+
+    // Reset scanning view for a fresh run (including Re-scan from findings).
     errorEl.classList.add("hidden");
     errorEl.innerHTML = "";
-    $("scanningLog").innerHTML = "";
+    footerEl.classList.add("hidden");
+    spinnerEl.classList.remove("hidden");
+    headingEl.textContent = "Scanning your telemetry…";
+    initScanningLog();
 
     let i = 0;
     const tick = () => {
-      if (i >= SCANNING_NARRATION.length) return;
-      narrationEl.textContent = SCANNING_NARRATION[i];
-      appendLog(SCANNING_NARRATION[i]);
+      if (i >= SCANNING_STEPS.length) return;
+      narrationEl.textContent = SCANNING_STEPS[i].label;
+      markStepActive(i);
       i += 1;
     };
     tick();
@@ -215,6 +408,8 @@
 
     const handleFailure = (err) => {
       narrationEl.textContent = "Scan failed.";
+      headingEl.textContent = "Scan failed.";
+      spinnerEl.classList.add("hidden");
       errorEl.innerHTML = "";
       const msgEl = document.createElement("p");
       msgEl.className = "setup-error-message";
@@ -252,12 +447,16 @@
     }
 
     try {
-      const result = await api("POST", "/api/setup/scan");
+      await api("POST", "/api/setup/scan");
       clearInterval(interval);
-      narrationEl.textContent = "Scan complete.";
-      appendLog(`Scan complete (scan #${result.scanId || "?"}, mapping #${result.mappingId || "?"}).`, "ok");
       await loadFindings();
-      show("findings");
+      // Don't auto-advance: stay on the scanning panel so the user can inspect
+      // what was retrieved at each step. They click "Continue" to move on.
+      spinnerEl.classList.add("hidden");
+      headingEl.textContent = "Scan complete.";
+      narrationEl.textContent = "Click any step to inspect what we collected.";
+      markStepsComplete(state.findings);
+      footerEl.classList.remove("hidden");
     } catch (err) {
       clearInterval(interval);
       handleFailure(err);
@@ -270,159 +469,128 @@
     renderFindings();
   }
 
+  // Dashboard panels the AI is told to score in promptBuilder.js. Order here
+  // drives the visual grid order on step 2; labels stay short to fit a card.
+  const DASHBOARD_PANELS = [
+    { id: "traffic",     label: "Traffic trends",      hint: "Visits over time, hourly peaks." },
+    { id: "users",       label: "User analytics",      hint: "Unique users, cohorts, retention." },
+    { id: "sessions",    label: "Session insights",    hint: "Length, engagement, return rate." },
+    { id: "pages",       label: "Top pages",           hint: "Most-viewed paths, content performance." },
+    { id: "geo",         label: "Geo distribution",    hint: "Where your traffic comes from." },
+    { id: "devices",     label: "Devices & browsers",  hint: "OS, browser, screen split." },
+    { id: "performance", label: "Performance",         hint: "Slow endpoints, request duration." },
+    { id: "campaigns",   label: "Campaigns & sources", hint: "UTM tracking, referrer attribution." },
+  ];
+
   function renderFindings() {
     const f = state.findings;
     if (!f) return;
     const resName = f.selectedResource?.appInsightsName || f.selectedResource?.name || "your resource";
     $("findingsSubtitle").textContent =
-      `Scanned ${escapeHtml(resName)} on ${new Date(f.scan.scannedAt).toLocaleString()}.`;
+      `Scanned ${resName} on ${new Date(f.scan.scannedAt).toLocaleString()}.`;
 
-    // Tables present
-    const tablesUl = $("tablesList");
-    tablesUl.innerHTML = "";
-    const tables = f.scan.tables || {};
-    const present = Object.entries(tables).filter(([, v]) => v).map(([k]) => k);
-    const missing = Object.entries(tables).filter(([, v]) => !v).map(([k]) => k);
-    for (const name of present) {
-      const li = document.createElement("li");
-      li.className = "setup-pill setup-pill-present";
-      li.textContent = name;
-      tablesUl.appendChild(li);
-    }
-    for (const name of missing) {
-      const li = document.createElement("li");
-      li.className = "setup-pill setup-pill-missing";
-      li.textContent = name;
-      li.title = "Not populated in the scan window";
-      tablesUl.appendChild(li);
-    }
-
-    // Custom dimensions
-    const cds = f.scan.customDimensions || [];
-    $("customDimsCount").textContent = `(${cds.length})`;
-    const cdUl = $("customDimsList");
-    cdUl.innerHTML = "";
-    for (const cd of cds.slice(0, 12)) {
-      const li = document.createElement("li");
-      li.className = "setup-cd-row";
-      li.innerHTML = `
-        <div class="setup-cd-key">${escapeHtml(cd.keyName)}<span class="setup-cd-table">@ ${escapeHtml(cd.tableName)}</span></div>
-        <div class="setup-cd-meta">cardinality ${cd.cardinality ?? "?"} · ${cd.occurrences ?? "?"} occurrences</div>
-        ${cd.samples && cd.samples.length ? `<div class="setup-cd-samples">e.g. ${cd.samples.slice(0,3).map((s) => `<code>${escapeHtml(s)}</code>`).join(", ")}</div>` : ""}
-      `;
-      cdUl.appendChild(li);
-    }
-    if (cds.length > 12) {
-      const li = document.createElement("li");
-      li.className = "setup-cd-more";
-      li.textContent = `…and ${cds.length - 12} more`;
-      cdUl.appendChild(li);
-    }
-
-    // Event names
-    const evs = f.scan.eventNames || [];
-    $("eventNamesCount").textContent = `(${evs.length})`;
-    const evUl = $("eventNamesList");
-    evUl.innerHTML = "";
-    for (const ev of evs.slice(0, 10)) {
-      const li = document.createElement("li");
-      li.className = "setup-pill";
-      li.innerHTML = `${escapeHtml(ev.name)} <span class="setup-pill-count">${ev.count}</span>`;
-      evUl.appendChild(li);
-    }
-
-    // Gaps
-    const gaps = f.scan.gaps || [];
-    const gapsUl = $("gapsList");
-    gapsUl.innerHTML = "";
-    if (gaps.length === 0) {
-      const li = document.createElement("li");
-      li.className = "setup-gap-empty";
-      li.textContent = "None — your instrumentation covers the canonical signals.";
-      gapsUl.appendChild(li);
-    } else {
-      for (const gap of gaps) {
-        const li = document.createElement("li");
-        li.className = `setup-gap setup-gap-${escapeHtml(gap.severity || "medium")}`;
-        li.innerHTML = `<strong>${escapeHtml(gap.title)}</strong><span>${escapeHtml(gap.detail || "")}</span>`;
-        gapsUl.appendChild(li);
-      }
-    }
-
-    // Effective mapping = unified view across AI proposals + deterministic
-    // fallback. Wizard always shows what the dashboard will actually use,
-    // regardless of AI status. Source badge per row tells the user which
-    // layer is responsible.
+    // AI summary (banner). When the AI was degraded, we still get a deterministic
+    // result — say so explicitly so the user knows the cards below are
+    // heuristic, not LLM-judged.
     const m = f.mapping;
-    const effective = Array.isArray(f.effectiveMapping) ? f.effectiveMapping : [];
-    const tagEl = $("mappingSource");
-    const hasAi = m && !m.degraded;
-    if (hasAi) {
-      tagEl.textContent = `via ${m.source}`;
-      tagEl.className = "setup-source-tag setup-source-ai";
-    } else {
-      tagEl.textContent = "deterministic fallback";
-      tagEl.className = "setup-source-tag setup-source-fallback";
-    }
-    $("aiSummary").textContent =
-      m?.proposals?.summary ||
-      "No AI summary available — your dashboard will use the deterministic mapping shown below. You can still override any field in the next step.";
-
-    const proposalsBody = $("proposalsBody");
-    proposalsBody.innerHTML = "";
-    state.activeSources = {};
-    for (const row of effective) {
-      state.activeSources[row.canonical] = { source: row.source, expr: row.expr };
-      const originTag = row.origin === "ai"
-        ? `<span class="setup-origin setup-origin-ai">AI</span>`
-        : row.origin === "deterministic"
-          ? `<span class="setup-origin setup-origin-det">deterministic</span>`
-          : `<span class="setup-origin setup-origin-none">missing</span>`;
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td><code>${escapeHtml(row.canonical)}</code> ${originTag}</td>
-        <td>${row.source ? `<code>${escapeHtml(row.source)}</code>` : "<em>—</em>"}</td>
-        <td><span class="setup-confidence setup-confidence-${escapeHtml(row.confidence)}">${escapeHtml(row.confidence)}</span></td>
-        <td class="setup-cell-reasoning">${escapeHtml(row.reasoning || "")}</td>
+    const summary = m?.proposals?.summary;
+    const summaryEl = $("findingsSummary");
+    summaryEl.innerHTML = "";
+    if (summary) {
+      summaryEl.classList.remove("hidden");
+      summaryEl.innerHTML = `
+        <p class="setup-summary-text">${escapeHtml(summary)}</p>
+        <span class="setup-summary-source">via ${escapeHtml(m?.source || "ai")}</span>
       `;
-      proposalsBody.appendChild(tr);
+    } else if (m?.degraded || !m) {
+      summaryEl.classList.remove("hidden");
+      summaryEl.innerHTML = `
+        <p class="setup-summary-text">No AI summary — the cards below reflect a deterministic heuristic. The dashboard will still render based on what we detected.</p>
+        <span class="setup-summary-source setup-summary-source-fallback">deterministic fallback</span>
+      `;
+    } else {
+      summaryEl.classList.add("hidden");
     }
 
-    // Missing signals
+    // Graph-level cards: ✓ ready / ! needs setup / · partial, driven entirely
+    // by AI's dashboard_recommendations. We trust the AI here — there is no
+    // hard signal→panel table on the backend (would have to be maintained as
+    // panels evolve). Low-confidence overrides are caught in step 3.
+    const recs = m?.proposals?.dashboard_recommendations || { feature: [], hide: [] };
+    const featureSet = new Set(recs.feature || []);
+    const hideSet = new Set(recs.hide || []);
+    const grid = $("graphsGrid");
+    grid.innerHTML = "";
+    for (const panel of DASHBOARD_PANELS) {
+      const featured = featureSet.has(panel.id);
+      const hidden = hideSet.has(panel.id);
+      let statusClass, statusLabel, icon;
+      if (featured) { statusClass = "ready"; statusLabel = "Ready"; icon = "✓"; }
+      else if (hidden) { statusClass = "missing"; statusLabel = "Needs instrumentation"; icon = "!"; }
+      else { statusClass = "partial"; statusLabel = "Partial"; icon = "·"; }
+      const card = document.createElement("article");
+      card.className = `setup-graph-card setup-graph-${statusClass}`;
+      card.innerHTML = `
+        <span class="setup-graph-card-icon" aria-hidden="true">${icon}</span>
+        <div class="setup-graph-card-body">
+          <h4>${escapeHtml(panel.label)}</h4>
+          <p class="setup-graph-card-hint">${escapeHtml(panel.hint)}</p>
+        </div>
+        <span class="setup-graph-card-status">${escapeHtml(statusLabel)}</span>
+      `;
+      grid.appendChild(card);
+    }
+
+    // Stash activeSources for the validate step; step 2 no longer renders the
+    // technical proposals table itself.
+    state.activeSources = {};
+    for (const row of (f.effectiveMapping || [])) {
+      state.activeSources[row.canonical] = { source: row.source, expr: row.expr };
+    }
+
+    // "Improve your coverage" — primary action is the AI-generated code prompt
+    // the user pastes into Cursor / Claude Code. The KQL stays available under
+    // a disclosure for power users who want to see the query that would run.
     const ms = m?.proposals?.missing_signals || [];
     const msUl = $("missingSignalsList");
+    const coverageIntro = $("coverageIntro");
     msUl.innerHTML = "";
     if (ms.length === 0) {
-      const li = document.createElement("li");
-      li.className = "setup-missing-empty";
-      li.textContent = "Nothing flagged. Solid telemetry coverage.";
-      msUl.appendChild(li);
+      coverageIntro.textContent = "Solid coverage — nothing flagged.";
     } else {
+      coverageIntro.textContent = "Add the signals below to unlock the ‘Needs instrumentation’ panels.";
       for (const s of ms) {
         const li = document.createElement("li");
         li.className = "setup-missing";
+        const codePrompt = s.code_prompt || "";
         const kqlSnippet = s.recommended_kql || "";
         li.innerHTML = `
           <div class="setup-missing-head">
             <strong>${escapeHtml(s.signal)}</strong>
-            <button class="setup-copy-btn" data-copy="${escapeHtml(kqlSnippet)}" type="button">Copy KQL</button>
+            <span class="setup-missing-actions"></span>
           </div>
           <p class="setup-missing-why">${escapeHtml(s.why_missing)}</p>
-          ${kqlSnippet ? `<pre class="setup-missing-kql"><code>${escapeHtml(kqlSnippet)}</code></pre>` : ""}
           <p class="setup-missing-remediation">${escapeHtml(s.remediation || "")}</p>
+          ${codePrompt ? `
+            <details class="setup-prompt-disclosure">
+              <summary>Show the prompt</summary>
+              <pre class="setup-missing-prompt"><code>${escapeHtml(codePrompt)}</code></pre>
+            </details>
+          ` : ""}
+          ${kqlSnippet ? `
+            <details class="setup-kql-disclosure">
+              <summary>Show the KQL this would unlock (power users)</summary>
+              <pre class="setup-missing-kql"><code>${escapeHtml(kqlSnippet)}</code></pre>
+            </details>
+          ` : ""}
         `;
+        if (codePrompt && typeof window.createPromptActionButton === "function") {
+          const actionBtn = window.createPromptActionButton({ prompt: codePrompt, label: "Use prompt" });
+          li.querySelector(".setup-missing-actions").appendChild(actionBtn);
+        }
         msUl.appendChild(li);
       }
     }
-    msUl.querySelectorAll(".setup-copy-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const text = btn.dataset.copy || "";
-        navigator.clipboard?.writeText(text).then(() => {
-          btn.textContent = "Copied";
-          setTimeout(() => { btn.textContent = "Copy KQL"; }, 1500);
-        }).catch(() => { /* clipboard denied — leave label */ });
-      });
-    });
   }
 
   // ── Step 3 — Validate ────────────────────────────────────────
@@ -431,6 +599,28 @@
     const effective = Array.isArray(f?.effectiveMapping) ? f.effectiveMapping : [];
     const fields = ["canonicalUserId", "canonicalSessionId", "canonicalPagePath", "canonicalReferrer"];
     const byCanonical = Object.fromEntries(effective.map((r) => [r.canonical, r]));
+
+    // Auto-expand the technical disclosure + show a warning when the AI is
+    // unsure about any field. The user can still one-click save, but the
+    // critical bit is now visible without an extra click.
+    const lowConf = effective
+      .filter((r) => fields.includes(r.canonical) && r.confidence === "low")
+      .map((r) => r.canonical);
+    const warn = $("validateWarning");
+    const disclosure = $("mappingDisclosure");
+    if (lowConf.length > 0) {
+      warn.innerHTML = `
+        <strong>Heads up — low confidence on:</strong>
+        ${lowConf.map((name) => `<code>${escapeHtml(name)}</code>`).join(", ")}.
+        Open the technical mapping below and confirm before saving.
+      `;
+      warn.classList.remove("hidden");
+      disclosure.open = true;
+    } else {
+      warn.classList.add("hidden");
+      disclosure.open = false;
+    }
+
     const tbody = $("validateBody");
     tbody.innerHTML = "";
 
@@ -516,6 +706,12 @@
 
   // ── Wire up ───────────────────────────────────────────────────
   function init() {
+    $("scanningContinue").addEventListener("click", () => {
+      show("findings");
+    });
+    $("scanningRescan").addEventListener("click", () => {
+      startStep1();
+    });
     $("findingsBack").addEventListener("click", () => {
       startStep1();
     });
