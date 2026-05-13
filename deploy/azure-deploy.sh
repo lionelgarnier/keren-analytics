@@ -37,6 +37,12 @@ SKIP_BUILD=0
 AI_PROVIDER=""
 AZURE_FOUNDRY_ENDPOINT=""
 AZURE_FOUNDRY_DEPLOYMENT=""
+# Custom domain overrides. Defaults come from main.parameters.json (prod
+# values). Pass an empty string to clear, e.g. for a staging environment
+# that should only be reachable via the azurecontainerapps.io FQDN.
+CUSTOM_DOMAIN_NAME=""
+CUSTOM_DOMAIN_CERT=""
+CUSTOM_DOMAIN_OVERRIDDEN=0
 
 usage() {
   cat <<EOF
@@ -55,6 +61,10 @@ Options:
   --ai-provider <none|azure-foundry>     Override AI_PROVIDER env var
   --foundry-endpoint <url>     Override AZURE_FOUNDRY_ENDPOINT env var
   --foundry-deployment <name>  Override AZURE_FOUNDRY_DEPLOYMENT env var
+  --custom-domain <fqdn>       Override customDomainName Bicep param. Pass
+                               "" to disable (FQDN-only ingress).
+  --custom-domain-cert <name>  Override customDomainCertificateName Bicep
+                               param (existing managedCertificate name).
   -h, --help                   Show this help
 EOF
 }
@@ -71,6 +81,8 @@ while [[ $# -gt 0 ]]; do
     --ai-provider)       AI_PROVIDER="$2"; shift 2 ;;
     --foundry-endpoint)  AZURE_FOUNDRY_ENDPOINT="$2"; shift 2 ;;
     --foundry-deployment) AZURE_FOUNDRY_DEPLOYMENT="$2"; shift 2 ;;
+    --custom-domain)     CUSTOM_DOMAIN_NAME="$2"; CUSTOM_DOMAIN_OVERRIDDEN=1; shift 2 ;;
+    --custom-domain-cert) CUSTOM_DOMAIN_CERT="$2"; CUSTOM_DOMAIN_OVERRIDDEN=1; shift 2 ;;
     -h|--help)           usage; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; usage; exit 2 ;;
   esac
@@ -148,6 +160,11 @@ if [[ -n "$AI_PROVIDER" ]];          then FOUNDRY_PARAMS+=(aiProvider="$AI_PROVI
 if [[ -n "$AZURE_FOUNDRY_ENDPOINT" ]]; then FOUNDRY_PARAMS+=(azureFoundryEndpoint="$AZURE_FOUNDRY_ENDPOINT"); fi
 if [[ -n "$AZURE_FOUNDRY_DEPLOYMENT" ]]; then FOUNDRY_PARAMS+=(azureFoundryDeployment="$AZURE_FOUNDRY_DEPLOYMENT"); fi
 
+CUSTOM_DOMAIN_PARAMS=()
+if [[ $CUSTOM_DOMAIN_OVERRIDDEN -eq 1 ]]; then
+  CUSTOM_DOMAIN_PARAMS+=(customDomainName="$CUSTOM_DOMAIN_NAME" customDomainCertificateName="$CUSTOM_DOMAIN_CERT")
+fi
+
 az deployment group create \
   --resource-group "$RESOURCE_GROUP" \
   --name "$DEPLOY_NAME" \
@@ -161,14 +178,21 @@ az deployment group create \
       sessionSecret="$SESSION_SECRET" \
       "${IMAGE_PARAMS[@]}" \
       "${FOUNDRY_PARAMS[@]}" \
+      "${CUSTOM_DOMAIN_PARAMS[@]}" \
   --output none
 
-# Pull outputs.
-OUTPUTS=$(az deployment group show --resource-group "$RESOURCE_GROUP" --name "$DEPLOY_NAME" --query properties.outputs -o json)
-ACR_LOGIN_SERVER=$(echo "$OUTPUTS" | python3 -c "import json,sys;print(json.load(sys.stdin)['acrLoginServer']['value'])")
-ACR_NAME=$(echo "$OUTPUTS" | python3 -c "import json,sys;print(json.load(sys.stdin)['acrName']['value'])")
-APP_NAME=$(echo "$OUTPUTS" | python3 -c "import json,sys;print(json.load(sys.stdin)['containerAppName']['value'])")
-APP_FQDN=$(echo "$OUTPUTS" | python3 -c "import json,sys;print(json.load(sys.stdin)['containerAppFqdn']['value'])")
+# Pull outputs. One `az` call per value rather than parsing the JSON
+# locally — `python3` isn't reliably installed on Windows (the bundled
+# Microsoft Store stub returns "Permission denied" from Git Bash) and
+# `jq` isn't guaranteed either. `--query ... -o tsv` is portable.
+fetch_output() {
+  az deployment group show --resource-group "$RESOURCE_GROUP" --name "$DEPLOY_NAME" \
+    --query "properties.outputs.$1.value" -o tsv
+}
+ACR_LOGIN_SERVER=$(fetch_output acrLoginServer)
+ACR_NAME=$(fetch_output acrName)
+APP_NAME=$(fetch_output containerAppName)
+APP_FQDN=$(fetch_output containerAppFqdn)
 
 echo "    ACR:           ${ACR_LOGIN_SERVER}"
 echo "    Container App: ${APP_NAME}"
@@ -184,19 +208,40 @@ if [[ $SKIP_BUILD -eq 0 ]]; then
   docker push "$IMAGE"
   docker push "${ACR_LOGIN_SERVER}/keren-analytics:latest"
 
-  # --- 4. Update Container App with the real image + final redirect URI ---
+  # --- 4. Update Container App with the real image ---
+  # AZURE_REDIRECT_URI is *not* overridden here: Bicep already computed it
+  # from customDomainName / azureRedirectUri params. Setting it here would
+  # clobber the custom-domain URI with the azurecontainerapps.io FQDN —
+  # exactly the drift documented in docs/maintainer-todo.md before the
+  # 2026-05-13 reconciliation. The fallback path (no custom domain
+  # configured) is handled below: we only patch AZURE_REDIRECT_URI when
+  # the Bicep template left it empty.
   echo "[4/4] Updating Container App with new image..."
-  REDIRECT_URI="https://${APP_FQDN}/auth/callback"
-  az containerapp update \
-    --name "$APP_NAME" \
-    --resource-group "$RESOURCE_GROUP" \
-    --image "$IMAGE" \
-    --set-env-vars "AZURE_REDIRECT_URI=${REDIRECT_URI}" \
-    --output none
+  EFFECTIVE_REDIRECT_URI=$(fetch_output effectiveRedirectUri)
+  CUSTOM_DOMAIN_CONFIGURED=$(fetch_output customDomainConfigured)
+  if [[ -z "$EFFECTIVE_REDIRECT_URI" ]]; then
+    REDIRECT_URI="https://${APP_FQDN}/auth/callback"
+    echo "    No custom domain configured — falling back to FQDN redirect URI."
+    az containerapp update \
+      --name "$APP_NAME" \
+      --resource-group "$RESOURCE_GROUP" \
+      --image "$IMAGE" \
+      --set-env-vars "AZURE_REDIRECT_URI=${REDIRECT_URI}" \
+      --output none
+  else
+    REDIRECT_URI="$EFFECTIVE_REDIRECT_URI"
+    echo "    Redirect URI from Bicep: ${REDIRECT_URI} (custom domain: ${CUSTOM_DOMAIN_CONFIGURED})"
+    az containerapp update \
+      --name "$APP_NAME" \
+      --resource-group "$RESOURCE_GROUP" \
+      --image "$IMAGE" \
+      --output none
+  fi
 else
   echo "[3/4] Skipping docker build (--skip-build)."
   echo "[4/4] Skipping container update."
-  REDIRECT_URI="https://${APP_FQDN}/auth/callback"
+  EFFECTIVE_REDIRECT_URI=$(fetch_output effectiveRedirectUri)
+  REDIRECT_URI="${EFFECTIVE_REDIRECT_URI:-https://${APP_FQDN}/auth/callback}"
 fi
 
 cat <<EOF
