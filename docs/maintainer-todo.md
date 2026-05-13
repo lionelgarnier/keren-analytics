@@ -75,52 +75,48 @@ links to the agent-side work that depends on it.
   a valid TLS cert.
 
 ### Bicep ↔ prod drift on custom domain + redirect URI
-- **Why this exists**: discovered 2026-05-11 during the Track F5 what-if
+- **Why this existed**: discovered 2026-05-11 during the Track F5 what-if
   for the Foundry env vars push. Three configurations live on the
-  production Container App that **are not represented** in
+  production Container App that were **not represented** in
   [`infra/main.bicep`](../infra/main.bicep):
   1. `properties.configuration.ingress.customDomains[0]` — binding for
      `analytics.keren.run` to managed cert
      `mc-cae-keren-anal-analytics-keren--4208`.
   2. The managed cert resource itself on the Container Apps environment.
   3. `AZURE_REDIRECT_URI=https://analytics.keren.run/auth/callback` env
-     var. The Bicep param defaults to empty; the deploy script *does*
-     `--set-env-vars AZURE_REDIRECT_URI=https://${APP_FQDN}/auth/callback`
-     at the end, but `${APP_FQDN}` is the Container App's
-     `azurecontainerapps.io` FQDN, not the custom domain — so even
-     re-running `./deploy/azure-deploy.sh` would clobber the right
-     value with the wrong one.
-- **Risk**: anyone running `./deploy/azure-deploy.sh` against prod
-  today regresses OAuth + breaks the custom domain. F5's what-if caught
-  this before we did it; we used a targeted
-  `az containerapp update --set-env-vars` instead. The image-only CI
-  workflow (`.github/workflows/deploy-azure.yml`) does **not** redeploy
-  Bicep so it stays safe.
-- **When**: before any future provisioning of a second environment
-  (staging, EU2 region, etc.) or any disaster-recovery rebuild from
-  Bicep. Not blocking the pre-launch sprint.
-- **How — two paths to choose from**:
-  1. **Lift into Bicep**. Add a `customDomainName` param (default empty),
-     a `Microsoft.App/managedEnvironments/managedCertificates` resource
-     gated on that param, the `customDomains` block on
-     `containerApp.properties.configuration.ingress`, and a
-     `customDomainRedirectUri` param that defaults to
-     `https://<customDomainName>/auth/callback` when set, else falls
-     back to the FQDN. Result: Bicep becomes the full source of truth,
-     re-deploys are safe. Effort: ~50 lines Bicep + the deploy script
-     stops needing the post-deploy `--set-env-vars` for the redirect.
-  2. **Codify post-deploy as a script**. Add `deploy/post-deploy.sh`
-     that runs the three `az containerapp` / `az ... managedCertificate`
-     commands, idempotent. Put a comment at the top of Bicep stating
-     "this template is intentionally minimal — see
-     `deploy/post-deploy.sh`". Result: Bicep stays thin but a separate
-     human-readable runbook exists. Effort: ~30 lines bash.
-- **Recommendation**: option 1. The current "Bicep then manual" split
-  is bug-prone (we already hit it once). Lifting into Bicep makes the
-  template true to the prod reality and removes the failure mode.
-  Option 2 is acceptable if you want to defer Bicep complexity.
-- **Status**: TODO — to plan before staging/EU2 env or disaster-recovery
-  exercise.
+     var.
+- **Risk that existed**: anyone running `./deploy/azure-deploy.sh`
+  against prod regressed OAuth + broke the custom domain. The image-only
+  CI workflow (`.github/workflows/deploy-azure.yml`) did **not**
+  redeploy Bicep so it stayed safe.
+- **Status**: DONE — 2026-05-13 — option 1 (lift into Bicep) shipped.
+  Changes:
+  - Two new params on `infra/main.bicep`: `customDomainName` (defaults
+    to `analytics.keren.run` via `infra/main.parameters.json`) and
+    `customDomainCertificateName` (defaults to
+    `mc-cae-keren-anal-analytics-keren--4208`). The cert is referenced
+    by name rather than created (cert provisioning depends on DNS
+    being live, which isn't expressible in pure IaC) — fresh
+    environments must create the cert out-of-band before running
+    Bicep, then plug the name in.
+  - `containerApp.properties.configuration.ingress.customDomains` now
+    binds the custom domain to the existing cert when both params are
+    set.
+  - New `effectiveRedirectUri` variable: explicit `azureRedirectUri`
+    override > `https://<customDomainName>/auth/callback` > empty
+    (deploy script patches with the FQDN only when neither is set).
+    Container App env var `AZURE_REDIRECT_URI` is wired to this.
+  - `deploy/azure-deploy.sh` reads the new `effectiveRedirectUri`
+    output and **no longer clobbers** AZURE_REDIRECT_URI when Bicep
+    has filled it in. New `--custom-domain` / `--custom-domain-cert`
+    flags let staging environments override the prod defaults.
+  - Two new outputs (`effectiveRedirectUri`, `customDomainConfigured`)
+    so future scripts / CI can introspect the binding without re-querying.
+- **Re-run safety**: confirmed via inspection — re-running
+  `./deploy/azure-deploy.sh` against prod with the default params will
+  preserve `AZURE_REDIRECT_URI=https://analytics.keren.run/auth/callback`
+  and the custom-domain binding. A what-if dry-run before the next deploy
+  is still good hygiene.
 
 ---
 
@@ -419,29 +415,97 @@ action are yours.
 - **Verify**: depuis le Container App, `curl` vers le Foundry endpoint
   doit renvoyer 200, pas 401/403. F3 expose une route healthcheck
   `/api/ai/ping` à utiliser pour ça.
-- **Status**: TODO — à faire avant deploy F3 prod.
+- **Status**: DONE — 2026-05-13 — vérifié via
+  `az role assignment list --assignee <MI principalId> --all`. Rôle
+  `Azure AI User` assigné au scope
+  `…/Microsoft.CognitiveServices/accounts/keren-analytics-prod-foundry`
+  (scope compte plutôt que projet, ce qui couvre aussi les futurs
+  projets sous le même Hub — léger sur-périmètre acceptable). La MI
+  `id-keren-analytics` a également `AcrPull` sur le registry, comme
+  prévu par `infra/main.bicep`.
 
 ### Wirer le backup SQLite en production (Track F1 — ADR 0005)
 - **Why**: F1 a shippé `scripts/backup-sqlite.mjs` (VACUUM INTO + rotation 24
   snapshots vers `data/backups/`), mais rien ne le déclenche en prod. Sans
-  cron + upload off-host, un redémarrage de Container App sans volume persistent
-  perd les scans (`data/keren.db`). ADR 0005 § Decision 2 acte le risque +
-  la mitigation.
-- **When**: avant launch HN (Track F shipped, demo publique avec vrais
-  utilisateurs). Pas urgent pendant le dev de F2-F4.
-- **How (deux options à arbitrer)** :
-  1. **Volume persistent** (Azure Files mount) sur le Container App : élimine
-     le risque de perte au restart. À évaluer dans Bicep
-     (`Microsoft.App/containerApps/storages` + `volumeMounts`). Coût ~0.06 €/GB/mo.
-  2. **Cron Container Apps Jobs** qui exécute `npm run backup:sqlite` puis
-     `az storage blob upload` vers un Storage Account dédié. Schedule horaire.
-     Bicep : `Microsoft.App/jobs` avec `triggerType: 'Schedule'`.
-- **Recommandation**: option 1 (volume) pour la persistance + option 2 (cron
-  vers Blob) pour la défense en profondeur (snapshot off-host = restore facile
-  même si le Container App env est détruit). Les deux ne s'excluent pas.
-- **Pre-requis**: décider du Storage Account (réutiliser celui du Foundry Hub
-  ou en créer un dédié `stkerenanalyticsbk`).
-- **Status**: TODO — à arbitrer avant launch HN.
+  cron + upload off-host, un redémarrage de Container App perd `data/keren.db`
+  (tous les mappings, validations, scans).
+- **What shipped (2026-05-13)**: option 2 (snapshot off-host vers Blob) en
+  **in-process scheduler** plutôt qu'en Container Apps Job séparé. Un Job
+  séparé n'a pas accès au filesystem de l'app (besoin d'un Azure Files mount
+  partagé qui ralentit aussi les INSERT du wizard), donc le scheduler tourne
+  directement dans le process Node — un `setInterval` horaire qui exécute
+  `VACUUM INTO` vers un fichier temp puis `BlockBlobClient.uploadFile`.
+  Auth via la MI déjà utilisée par Foundry (rôle `Storage Blob Data
+  Contributor` ajouté sur le Storage Account dans Bicep).
+  Code : [`src/core/backupScheduler.js`](../src/core/backupScheduler.js),
+  câblé dans [`src/server.js`](../src/server.js) ; 7 tests dans
+  [`tests/backupScheduler.test.js`](../tests/backupScheduler.test.js).
+- **Trade-off accepté**: si l'app crash, plus de snapshot tant qu'elle n'est
+  pas redémarrée (RPO ≤ 1h pendant un outage long). Pour le launch HN,
+  acceptable : le wizard est idempotent (nouveau OAuth → re-scan gratuit),
+  donc 1h de perte = nuisance UX, pas drame.
+- **Bicep ressources ajoutées**: Storage Account `Standard_LRS` /
+  StorageV2 (nom auto-généré `stkbk…<uniqueSuffix>`, max 24 chars), Blob
+  container privé `sqlite-backups`, role assignment `Storage Blob Data
+  Contributor` (GUID `ba92f5b4-2d11-453d-a403-e96b0029c9fe`) sur la MI
+  `id-keren-analytics`. Env vars sur le Container App :
+  `BACKUP_BLOB_ACCOUNT`, `BACKUP_BLOB_CONTAINER=sqlite-backups`,
+  `BACKUP_INTERVAL_MS=3600000`, `BACKUP_MAX_SNAPSHOTS=24`.
+
+#### À faire côté Azure pour activer en prod
+1. **Re-déployer Bicep** une fois pour provisionner le Storage Account
+   et l'attribution de rôle :
+   ```bash
+   ./deploy/azure-deploy.sh --client-id <GUID> --client-secret <secret> --skip-build
+   ```
+   (Le `--skip-build` évite de rebuilder l'image — on veut juste l'infra
+   pour cette première passe. Bicep est idempotent : les ressources déjà
+   provisionnées ne sont pas re-créées.)
+2. **Récupérer le nom du Storage Account** depuis les outputs :
+   ```bash
+   az deployment group list -g keren-analytics-prod \
+     --query "[?contains(name, 'keren-analytics-')] | [0].properties.outputs.storageAccountName.value" \
+     -o tsv
+   ```
+3. **Vérifier que la MI peut bien écrire** (avant de pousser une image qui
+   en dépend) :
+   ```bash
+   STORAGE_ACCOUNT=<output from step 2>
+   az storage blob list --account-name "$STORAGE_ACCOUNT" \
+     --container-name sqlite-backups --auth-mode login -o table
+   ```
+   Doit retourner une liste vide (pas une erreur 403). Si 403 →
+   l'attribution de rôle n'a pas encore propagé (peut prendre 1-2 min).
+4. **Pousser une nouvelle image** via le workflow OIDC GitHub Actions
+   (`deploy-azure.yml`) ou en relançant `azure-deploy.sh` sans
+   `--skip-build`. Le scheduler démarre au boot, premier snapshot
+   ~60s après le démarrage du replica.
+5. **Vérifier qu'un snapshot apparaît** au bout de quelques minutes :
+   ```bash
+   az storage blob list --account-name "$STORAGE_ACCOUNT" \
+     --container-name sqlite-backups --auth-mode login -o table
+   ```
+   Doit montrer un blob `keren-2026-MM-DDTHH-MM-SS-mmmZ.db`. Les logs
+   du Container App montrent aussi `[backup] uploaded keren-…` :
+   ```bash
+   az containerapp logs show -n ca-keren-analytics -g keren-analytics-prod \
+     --tail 100 | grep backup
+   ```
+
+#### Restore (si jamais)
+```bash
+STORAGE_ACCOUNT=<from step 2 above>
+# Pick a snapshot
+az storage blob list --account-name "$STORAGE_ACCOUNT" \
+  --container-name sqlite-backups --auth-mode login -o table
+# Download it
+az storage blob download --account-name "$STORAGE_ACCOUNT" \
+  --container-name sqlite-backups --auth-mode login \
+  --name keren-2026-05-13T10-00-00-000Z.db --file restored.db
+# Copy into the Container App (or rebuild a revision with --bind it)
+```
+- **Status**: DONE — 2026-05-13 — code + Bicep shipped. Maintainer
+  doit exécuter les 5 étapes ci-dessus pour activer en prod.
 
 ### Provisionner l'hébergement Azure de la démo
 - **Why**: ADR 0004 § Decision 2 — Azure Container Apps. Région retenue :

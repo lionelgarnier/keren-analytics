@@ -21,6 +21,7 @@ import {
 } from "./core/validationStore.js";
 import { runWithToken } from "./providers/azure/tokenStore.js";
 import { createRateLimiter } from "./core/rateLimit.js";
+import { startBackupScheduler } from "./core/backupScheduler.js";
 
 const app = express();
 const azureClient = getAzureClient();
@@ -929,6 +930,7 @@ app.get("/{*splat}", (req, res, next) => {
 
 /* ========== Server ========== */
 let server;
+let backupScheduler;
 if (process.env.NODE_ENV !== "test") {
   server = app.listen(config.port, () => {
     console.log(`Server running on http://localhost:${config.port} (mode: ${config.azureMode})`);
@@ -943,6 +945,11 @@ if (process.env.NODE_ENV !== "test") {
   });
   const keepAlive = setInterval(() => {}, 2_147_483_647);
   server.on("close", () => clearInterval(keepAlive));
+
+  // In-process SQLite → Azure Blob backup. No-op when BACKUP_BLOB_ACCOUNT
+  // is unset (dev, first deploy before infra is wired).
+  backupScheduler = startBackupScheduler();
+  server.on("close", () => backupScheduler?.stop?.());
 }
 
 export { app, server };
