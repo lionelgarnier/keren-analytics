@@ -181,12 +181,18 @@ az deployment group create \
       "${CUSTOM_DOMAIN_PARAMS[@]}" \
   --output none
 
-# Pull outputs.
-OUTPUTS=$(az deployment group show --resource-group "$RESOURCE_GROUP" --name "$DEPLOY_NAME" --query properties.outputs -o json)
-ACR_LOGIN_SERVER=$(echo "$OUTPUTS" | python3 -c "import json,sys;print(json.load(sys.stdin)['acrLoginServer']['value'])")
-ACR_NAME=$(echo "$OUTPUTS" | python3 -c "import json,sys;print(json.load(sys.stdin)['acrName']['value'])")
-APP_NAME=$(echo "$OUTPUTS" | python3 -c "import json,sys;print(json.load(sys.stdin)['containerAppName']['value'])")
-APP_FQDN=$(echo "$OUTPUTS" | python3 -c "import json,sys;print(json.load(sys.stdin)['containerAppFqdn']['value'])")
+# Pull outputs. One `az` call per value rather than parsing the JSON
+# locally — `python3` isn't reliably installed on Windows (the bundled
+# Microsoft Store stub returns "Permission denied" from Git Bash) and
+# `jq` isn't guaranteed either. `--query ... -o tsv` is portable.
+fetch_output() {
+  az deployment group show --resource-group "$RESOURCE_GROUP" --name "$DEPLOY_NAME" \
+    --query "properties.outputs.$1.value" -o tsv
+}
+ACR_LOGIN_SERVER=$(fetch_output acrLoginServer)
+ACR_NAME=$(fetch_output acrName)
+APP_NAME=$(fetch_output containerAppName)
+APP_FQDN=$(fetch_output containerAppFqdn)
 
 echo "    ACR:           ${ACR_LOGIN_SERVER}"
 echo "    Container App: ${APP_NAME}"
@@ -211,8 +217,8 @@ if [[ $SKIP_BUILD -eq 0 ]]; then
   # configured) is handled below: we only patch AZURE_REDIRECT_URI when
   # the Bicep template left it empty.
   echo "[4/4] Updating Container App with new image..."
-  EFFECTIVE_REDIRECT_URI=$(echo "$OUTPUTS" | python3 -c "import json,sys;print(json.load(sys.stdin)['effectiveRedirectUri']['value'])")
-  CUSTOM_DOMAIN_CONFIGURED=$(echo "$OUTPUTS" | python3 -c "import json,sys;print(json.load(sys.stdin)['customDomainConfigured']['value'])")
+  EFFECTIVE_REDIRECT_URI=$(fetch_output effectiveRedirectUri)
+  CUSTOM_DOMAIN_CONFIGURED=$(fetch_output customDomainConfigured)
   if [[ -z "$EFFECTIVE_REDIRECT_URI" ]]; then
     REDIRECT_URI="https://${APP_FQDN}/auth/callback"
     echo "    No custom domain configured — falling back to FQDN redirect URI."
@@ -234,7 +240,7 @@ if [[ $SKIP_BUILD -eq 0 ]]; then
 else
   echo "[3/4] Skipping docker build (--skip-build)."
   echo "[4/4] Skipping container update."
-  EFFECTIVE_REDIRECT_URI=$(echo "$OUTPUTS" | python3 -c "import json,sys;print(json.load(sys.stdin)['effectiveRedirectUri']['value'])")
+  EFFECTIVE_REDIRECT_URI=$(fetch_output effectiveRedirectUri)
   REDIRECT_URI="${EFFECTIVE_REDIRECT_URI:-https://${APP_FQDN}/auth/callback}"
 fi
 
