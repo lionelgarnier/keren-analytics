@@ -2303,25 +2303,22 @@ function renderReadinessScore(readinessScore, readiness) {
               pre.textContent = match.prompt;
               detail.appendChild(pre);
 
-              const copyBtn = document.createElement("button");
-              copyBtn.className = "prompt-copy-btn";
-              copyBtn.textContent = "Copy prompt";
-              copyBtn.addEventListener("click", async () => {
-                try {
-                  await navigator.clipboard.writeText(match.prompt);
-                } catch {
-                  const ta = document.createElement("textarea");
-                  ta.value = match.prompt;
-                  document.body.appendChild(ta);
-                  ta.select();
-                  document.execCommand("copy");
-                  document.body.removeChild(ta);
-                }
-                copyBtn.textContent = "Copied!";
-                copyBtn.classList.add("copied");
-                setTimeout(() => { copyBtn.textContent = "Copy prompt"; copyBtn.classList.remove("copied"); }, 2000);
-              });
-              detail.appendChild(copyBtn);
+              if (typeof window.createPromptActionButton === "function") {
+                detail.appendChild(window.createPromptActionButton({ prompt: match.prompt, label: "Use prompt" }));
+              } else {
+                // Fallback if the shared component failed to load — keep the
+                // legacy single-action button so the row stays functional.
+                const copyBtn = document.createElement("button");
+                copyBtn.className = "prompt-copy-btn";
+                copyBtn.textContent = "Copy prompt";
+                copyBtn.addEventListener("click", async () => {
+                  try { await navigator.clipboard.writeText(match.prompt); }
+                  catch { /* ignore */ }
+                  copyBtn.textContent = "Copied!";
+                  setTimeout(() => { copyBtn.textContent = "Copy prompt"; }, 2000);
+                });
+                detail.appendChild(copyBtn);
+              }
             } else {
               detail.innerHTML = "<p class=\"text-muted\">No prompt available for this signal yet.</p>";
             }

@@ -62,85 +62,66 @@
         </div>
 
         <div id="scanningPanel" class="setup-scanning hidden">
-          <div class="setup-spinner" aria-hidden="true"></div>
-          <h2 class="setup-h2">Scanning your telemetry…</h2>
+          <div class="setup-spinner" id="scanningSpinner" aria-hidden="true"></div>
+          <h2 class="setup-h2" id="scanningHeading">Scanning your telemetry…</h2>
           <p class="setup-narration" id="scanningNarration">Connecting to Application Insights…</p>
           <ul class="setup-progress-log" id="scanningLog" aria-live="polite"></ul>
           <div class="setup-error hidden" id="scanningError"></div>
+          <div class="setup-footer hidden" id="scanningFooter">
+            <button class="btn btn-ghost" id="scanningRescan">Re-scan</button>
+            <button class="btn btn-primary" id="scanningContinue">Continue to findings →</button>
+          </div>
         </div>
       </section>
 
-      <!-- Step 2: AI findings -->
+      <!-- Step 2: AI findings — graph-level verdict per dashboard panel -->
       <section id="step-findings" class="setup-panel hidden">
         <header class="setup-panel-head">
-          <h2 class="setup-h2">What I found in your tenant</h2>
+          <h2 class="setup-h2">What we can render for you</h2>
           <p class="setup-subtitle" id="findingsSubtitle"></p>
         </header>
 
-        <div class="setup-findings-grid">
-          <article class="setup-card">
-            <h3>Tables present</h3>
-            <ul id="tablesList" class="setup-pill-list"></ul>
-          </article>
+        <div class="setup-findings-summary hidden" id="findingsSummary"></div>
 
-          <article class="setup-card">
-            <h3>Custom dimensions <span class="setup-card-meta" id="customDimsCount"></span></h3>
-            <ul id="customDimsList" class="setup-cd-list"></ul>
-          </article>
+        <div class="setup-graphs-grid" id="graphsGrid"></div>
 
-          <article class="setup-card">
-            <h3>Event types <span class="setup-card-meta" id="eventNamesCount"></span></h3>
-            <ul id="eventNamesList" class="setup-pill-list"></ul>
-          </article>
-
-          <article class="setup-card setup-card-wide">
-            <h3>Gaps detected</h3>
-            <ul id="gapsList" class="setup-gaps-list"></ul>
-          </article>
-
-          <article class="setup-card setup-card-wide">
-            <h3>AI proposed mappings <span class="setup-source-tag" id="mappingSource"></span></h3>
-            <p class="setup-summary" id="aiSummary"></p>
-            <table class="setup-mapping-table" id="proposalsTable">
-              <thead>
-                <tr><th>Canonical field</th><th>Proposed source</th><th>Confidence</th><th>Why</th></tr>
-              </thead>
-              <tbody id="proposalsBody"></tbody>
-            </table>
-          </article>
-
-          <article class="setup-card setup-card-wide">
-            <h3>Missing signals + how to fix</h3>
-            <ul id="missingSignalsList" class="setup-missing-list"></ul>
-          </article>
-        </div>
+        <section class="setup-coverage-section">
+          <h3 class="setup-coverage-title">Improve your coverage</h3>
+          <p class="setup-coverage-intro" id="coverageIntro"></p>
+          <ul id="missingSignalsList" class="setup-missing-list"></ul>
+        </section>
 
         <div class="setup-footer">
           <button class="btn btn-ghost" id="findingsBack">Re-scan</button>
-          <button class="btn btn-primary" id="findingsContinue">Review &amp; validate →</button>
+          <button class="btn btn-primary" id="findingsContinue">Review &amp; save →</button>
         </div>
       </section>
 
-      <!-- Step 3: Validate / edit -->
+      <!-- Step 3: Save — accept AI mapping, override hidden behind a disclosure -->
       <section id="step-validate" class="setup-panel hidden">
         <header class="setup-panel-head">
-          <h2 class="setup-h2">Validate the mapping</h2>
+          <h2 class="setup-h2">Save your mapping</h2>
           <p class="setup-subtitle">
-            Accept all of the AI proposals as-is, or override any individual mapping below.
-            Your decision is saved per tenant and the dashboard will use it from now on.
+            The AI proposed a mapping for the four canonical fields. Save as-is, or open
+            the technical view to override individual fields.
           </p>
         </header>
 
-        <table class="setup-mapping-table" id="validateTable">
-          <thead>
-            <tr><th>Canonical field</th><th>Active source</th><th>KQL expression</th><th></th></tr>
-          </thead>
-          <tbody id="validateBody"></tbody>
-        </table>
+        <div class="setup-validate-warning hidden" id="validateWarning"></div>
+
+        <details class="setup-mapping-disclosure" id="mappingDisclosure">
+          <summary>Show / edit technical mapping</summary>
+          <table class="setup-mapping-table" id="validateTable">
+            <thead>
+              <tr><th>Canonical field</th><th>Active source</th><th>KQL expression</th><th></th></tr>
+            </thead>
+            <tbody id="validateBody"></tbody>
+          </table>
+        </details>
 
         <div class="setup-footer">
           <button class="btn btn-ghost" id="validateBack">← Back</button>
-          <button class="btn btn-primary" id="validateAcceptAll">Accept all proposals</button>
+          <button class="btn btn-primary" id="validateAcceptAll">Save mapping</button>
           <button class="btn btn-primary hidden" id="validateSaveOverrides">Save my overrides</button>
         </div>
       </section>
@@ -155,6 +136,7 @@
       </section>
     </main>
 
+    <script src="/promptActionButton.js"></script>
     <script src="/setup.js"></script>
   </body>
 </html>

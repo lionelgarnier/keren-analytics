@@ -190,6 +190,30 @@ test("/api/setup/validate override roundtrips and is reflected in /state", async
   } finally { restore(); }
 });
 
+test("accept_all snapshots the effective mapping and flows through to the dashboard", async () => {
+  // Regression: before this fix, accept_all stored decision=accept_all with
+  // overrides=null, and the dashboard silently re-derived the deterministic
+  // mapping — discarding any AI-only proposal the user had just approved.
+  const restore = withFreshDb();
+  try {
+    const { agent } = await authedAgent("acceptflow");
+    await agent.post("/api/setup/scan").expect(200);
+    await agent.post("/api/setup/validate")
+      .send({ decision: "accept_all" })
+      .expect(200);
+
+    const findings = await agent.get("/api/setup/findings").expect(200);
+    assert.equal(findings.body.validation.decision, "accept_all");
+    assert.ok(findings.body.validation.overrides, "accept_all must snapshot overrides");
+    assert.ok(findings.body.validation.overrides.canonicalUserId, "userId snapshotted");
+
+    const dashboard = await agent.get("/dashboard/overview?range=7d").expect(200);
+    const mapping = dashboard.body.mapping;
+    assert.ok(mapping?.canonicalUserId?.expr, "dashboard mapping must carry canonicalUserId");
+    assert.equal(mapping.canonicalUserId.matchType, "user-override");
+  } finally { restore(); }
+});
+
 test("override flows through to mapping on the next dashboard pipeline run", async () => {
   const restore = withFreshDb();
   try {

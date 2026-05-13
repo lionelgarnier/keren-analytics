@@ -20,6 +20,26 @@
 | Pre-fill validate step    | `effectiveMapping[]` in `/api/setup/findings`                | F5; deterministic fallback always populates the validate step, even when `AI_PROVIDER=none` |
 | Narration "Preview" badge | Auto-drops when `aiMapping.source = "azure-foundry"` and non-degraded | F5 |
 
+### Post-shipment iterations (2026-05-12)
+
+A first round of dogfooding on real Foundry telemetry surfaced UX gaps and one
+silent correctness bug. The wizard's shape was reworked while keeping the
+4-step state machine intact:
+
+| Change | Before | After | Code |
+|--------|--------|-------|------|
+| Step-1 scan log | Plain narration ticks, no introspection. | Each step expands into a debug panel populated from the findings payload (resource info / customDimensions / event volumes / identity gaps / raw AI proposals JSON). The scan no longer auto-advances — a "Continue to findings →" button explicitly hands off, so users can inspect what the orchestrator actually fetched before moving on. | `initScanningLog` / `renderStepDetails` in [`setup.js`](../../public/setup.js) |
+| Step-2 framing | Technical grid: tables present, customDimensions, gaps, AI mapping table, KQL. Power-user oriented. | 8 graph-level cards (✓ Ready / ! Needs instrumentation / · Partial) driven by `dashboard_recommendations.feature` / `.hide` from the AI. The technical mapping table moved to step 3 behind a disclosure. The user sees "what we can render for you" instead of canonical field plumbing. | `DASHBOARD_PANELS` / `renderFindings` in [`setup.js`](../../public/setup.js) |
+| Step-3 default | Mapping table always visible, `Accept all proposals` button. | Mapping table is hidden under `<details>` "Show / edit technical mapping". One-click `Save mapping` accepts the AI proposals. When **any** field has `confidence: "low"`, the disclosure auto-expands and a warning bandeau lists which fields to confirm. | `renderValidate` in [`setup.js`](../../public/setup.js) |
+| Missing-signals action | Single button "Copy KQL". The KQL was aspirational (the data doesn't exist yet), so the action was misleading. | New required schema field `code_prompt` — a 40-90 word self-contained instruction the user pastes into their AI coding assistant (Cursor / Copilot / Claude Code) so it can detect the stack and produce the actual diff. Surfaced via a shared split-button: primary = copy, caret = menu with "Copy to clipboard" / "Open in Cursor" (`cursor://anysphere.cursor-deeplink/prompt?text=...`). The original KQL is kept under a power-user disclosure. | `code_prompt` in [`promptBuilder.js`](../../src/ai/promptBuilder.js); shared component [`promptActionButton.js`](../../public/promptActionButton.js); also reused in the readiness panel's "How to fix" rows ([`app.js`](../../public/app.js)) |
+| `accept_all` semantics (**bug fix**) | The user clicked "Save", a validation row was persisted with `decision: accept_all` and `overrides: null`. The dashboard pipeline ran `buildMapping` from scratch every load, then `mergeWithValidation` no-op'd (no overrides). **AI-only proposals were silently discarded** — only fields the deterministic heuristic also matched survived. | On `accept_all`, the API now snapshots the effective mapping (AI + deterministic fallback) into `validation.overrides`. `mergeWithValidation` applies overrides on any decision that carries them — the `decision` label is now purely audit. The dashboard renders with exactly what the user saw and approved. Regression test in [`tests/setupApi.test.js`](../../tests/setupApi.test.js) (`accept_all snapshots the effective mapping and flows through to the dashboard`). | [`src/server.js`](../../src/server.js) `/api/setup/validate`; [`src/core/mapping.js`](../../src/core/mapping.js) `mergeWithValidation` |
+| Local AI dev loop | None — `npm run dev` defaulted to `AI_PROVIDER=none`. Testing AI changes required pushing to prod. | New launch config `dev-ai` in [`.claude/launch.json`](../../.claude/launch.json): `AZURE_MODE=mock` + `AI_PROVIDER=azure-foundry`. Endpoint/deployment come from `.env`. Auth path: `AzureCliCredential` (the existing `az login`) — no key shipped, no managed identity required. Runs the wizard against real Foundry on deterministic mock telemetry. | [`.claude/launch.json`](../../.claude/launch.json) (uncommitted env block) |
+
+The post-shipment changes did not change the persistence model, the 3-layer
+resolution chain, or the `/api/setup/*` route contracts — they're additive
+on the schema (`code_prompt`) and a corrected default on
+`mergeWithValidation`.
+
 ### Design intent vs. what shipped
 
 The original narrative below describes the **end-state** experience —

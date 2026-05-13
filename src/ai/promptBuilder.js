@@ -45,17 +45,22 @@ export const MAPPING_RESPONSE_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["signal", "why_missing", "recommended_kql", "remediation"],
+        required: ["signal", "why_missing", "recommended_kql", "remediation", "code_prompt"],
         properties: {
           signal: { type: "string" },
           why_missing: { type: "string" },
           recommended_kql: {
             type: "string",
-            description: "A short KQL snippet that would surface this signal if the data were present.",
+            description: "A short KQL snippet that would surface this signal if the data were present (kept for power users; the user-facing primary action is code_prompt).",
           },
           remediation: {
             type: "string",
-            description: "Plain-language instrumentation step the engineer should take.",
+            description: "One-sentence plain-language instrumentation step the engineer should take.",
+          },
+          code_prompt: {
+            type: "string",
+            description:
+              "A self-contained prompt the user pastes into their AI coding assistant (Cursor / Claude Code / Copilot) so it can detect their stack and produce the actual code diff. Name the Application Insights SDK calls and custom property names involved. Keep it 40-90 words.",
           },
         },
       },
@@ -106,11 +111,18 @@ Confidence rules (apply literally):
                semantic alias (uid, sessionId, page, etc).
   - "low"    = inference from name semantics alone (opaque key, unsure mapping).
 
-Also enumerate missing_signals: each gap from the scan plus any you spot yourself,
-with a remediation step the engineer can paste. Each missing_signal MUST include
-a recommended_kql snippet — if no useful query is possible until the data is
-instrumented, use a literal placeholder like "// requires instrumentation: add
-session_Id to all pageView events" rather than leaving the field empty.
+Also enumerate missing_signals: each gap from the scan plus any you spot yourself.
+For each, produce:
+  - remediation: ONE plain-language sentence the engineer can read at a glance.
+  - code_prompt: a self-contained instruction the user will paste into their AI
+    coding assistant (Cursor, Claude Code, Copilot). It must (a) ask the
+    assistant to detect the user's web framework / Application Insights SDK
+    flavor first, (b) name the specific custom properties / SDK methods to
+    wire, (c) ask for the exact code diff. 40-90 words.
+  - recommended_kql: the KQL the dashboard would issue once the signal is
+    present (kept as power-user reference, NOT the primary call to action).
+    If no useful query is possible until instrumentation lands, use a literal
+    placeholder like "// requires instrumentation: add session_Id to pageView".
 
 Rules:
 - Only reference columns / keys present in the scan. Do not invent fields.
