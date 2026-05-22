@@ -23,6 +23,15 @@ const PII_PATTERNS = [
   { name: "email", regex: /[\w.+-]+@[\w-]+\.[\w.-]+/g, replacement: "<email>" },
   { name: "ssn", regex: /\b\d{3}-\d{2}-\d{4}\b/g, replacement: "<ssn>" },
   { name: "ipv4", regex: /\b(?:\d{1,3}\.){3}\d{1,3}\b/g, replacement: "<ip>" },
+  // UUIDs (tenant/user identifiers) and long hex strings (auth/session
+  // tokens, API keys) — both observed leaking through URL query params.
+  // UUID before hextoken so a dashed UUID is labelled as such.
+  {
+    name: "uuid",
+    regex: /\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b/g,
+    replacement: "<uuid>",
+  },
+  { name: "hextoken", regex: /\b[0-9a-fA-F]{32,}\b/g, replacement: "<token>" },
   // Phone last — its loose pattern is the most likely to over-match.
   // Min 8 chars total (e.g. `555-0100`); accepts `+`, spaces, `()`,
   // `.`, `-` as separators.

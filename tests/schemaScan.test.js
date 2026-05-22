@@ -31,10 +31,22 @@ test("scrubPii: replaces phone-shaped strings", () => {
   assert.equal(scrubPii("call 555-0100 now"), "call <phone> now");
 });
 
+test("scrubPii: replaces UUIDs and long hex tokens", () => {
+  assert.equal(
+    scrubPii("tenant 9795c661-067f-5e14-854d-1fba7be53827 here"),
+    "tenant <uuid> here"
+  );
+  assert.equal(
+    scrubPii("token=c9e8ccfca7720f5b99b7fbdb12bdf63691181227547c81dec2a72e17113d4220"),
+    "token=<token>"
+  );
+});
+
 test("scrubPii: leaves benign values alone", () => {
   assert.equal(scrubPii("/pricing"), "/pricing");
   assert.equal(scrubPii("checkout_started"), "checkout_started");
   assert.equal(scrubPii("v1.2.3"), "v1.2.3");
+  assert.equal(scrubPii("deadbeef"), "deadbeef"); // 8 hex — below the token threshold
 });
 
 test("scrubPii: passes non-string values through unchanged", () => {

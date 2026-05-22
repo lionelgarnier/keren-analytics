@@ -3,8 +3,9 @@ let end={{timeEnd}};
 {{tableName}}
 | where timestamp between (start..end)
 | extend pagePath = {{pagePathExpr}}
+| extend canonicalSessionId = {{sessionIdExpr}}
 | summarize
-    visitors = dcount({{sessionIdExpr}}),
+    visitors = dcountif(canonicalSessionId, isnotempty(canonicalSessionId)),
     pageViews = countif(isnotempty(pagePath))
   by period = bin(timestamp, {{binSize}})
 | order by period asc

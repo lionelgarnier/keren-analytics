@@ -546,6 +546,29 @@ body {
   font-weight: 500;
 }
 
+/* Clickable hint shown when a KPI's telemetry signal is missing */
+.kpi-hint {
+  margin-top: 4px;
+  padding: 0;
+  background: none;
+  border: none;
+  text-align: left;
+  font-size: 11px;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.kpi-hint:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+.param-value-empty {
+  padding: 12px 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 /* ========== Grids ========== */
 .grid-2 {
   display: grid;

@@ -157,6 +157,54 @@ test("buildNarration: empty dashboard falls back to a sober sentence", () => {
   assert.match(r.paragraph, /today/);
 });
 
+test("buildNarration: empty identity signals never claim visitor counts", () => {
+  // dcountif() now yields 0 for an empty column, but even a stale `1` must
+  // not be narrated as a real visitor figure — trust the readiness probe.
+  const r = buildNarration({
+    azureMode: "real",
+    dashboard: {
+      kpis: { uniqueVisitors: 1, sessions: 1, errorRate: 0.04 },
+      charts: { peakHours: [{ dayIndex: 0, hour: 0, count: 0 }] },
+    },
+    mapping: sampleMappingAuth,
+    range: "7d",
+    readinessReport: {
+      availableSignals: { userId: false, sessionId: false },
+      probeCounts: { userAuthCount: 0 },
+    },
+  });
+  assert.doesNotMatch(r.paragraph, /captured 1 visitors/);
+  assert.match(r.paragraph, /not populated|unavailable/i);
+  assert.match(r.paragraph, /Readiness/);
+});
+
+test("buildNarration: an empty user ID column is not called cohort-ready", () => {
+  const r = buildNarration({
+    azureMode: "real",
+    dashboard: sampleDashboard,
+    mapping: sampleMappingAuth,
+    range: "7d",
+    readinessReport: {
+      availableSignals: { userId: false, sessionId: true },
+      probeCounts: { userAuthCount: 0 },
+    },
+  });
+  assert.doesNotMatch(r.paragraph, /suitable for cohort analysis/);
+  assert.match(r.paragraph, /user ID column is empty/i);
+});
+
+test("buildNarration: a uniform peak-hours grid produces no peak sentence", () => {
+  const flat = [];
+  for (let h = 0; h < 24; h++) flat.push({ dayIndex: 0, hour: h, count: 1 });
+  const r = buildNarration({
+    azureMode: "mock",
+    dashboard: { ...sampleDashboard, charts: { ...sampleDashboard.charts, peakHours: flat } },
+    mapping: sampleMappingAuth,
+    range: "7d",
+  });
+  assert.doesNotMatch(r.paragraph, /Traffic peaks on/);
+});
+
 test("buildNarration: never leaks unrendered template tokens", () => {
   for (const mode of ["mock", "real"]) {
     const r = buildNarration({
