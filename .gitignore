@@ -3,3 +3,4 @@ data/
 .env
 .claude/settings.local.json
 deploy/.session-secret
+.playwright-mcp/
