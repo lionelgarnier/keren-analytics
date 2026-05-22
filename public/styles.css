@@ -301,12 +301,14 @@ body {
   100% { background-position:  480px 0; }
 }
 
-[data-card].is-loading {
+[data-card].is-loading,
+[data-card].is-error {
   position: relative;
   min-height: 140px;
 }
 
-[data-card].is-loading > :not(.card-overlay) {
+[data-card].is-loading > :not(.card-overlay),
+[data-card].is-error > :not(.card-overlay) {
   visibility: hidden;
 }
 

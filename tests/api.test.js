@@ -126,7 +126,10 @@ test("preview dashboard stream also emits per-card messages", async () => {
   assert.equal(messages.filter((m) => m.type === "done").length, 1);
 });
 
-test("dashboard: a failed query is isolated to its own card", async () => {
+const EMPTY_TABLE = { tables: [{ columns: [], rows: [] }] };
+
+/** Minimal-but-valid inputs for a direct buildOverviewDashboard() call. */
+function dashboardFixture() {
   const schemaProfile = {
     tables: { pageViews: {}, requests: {}, browserTimings: {} },
     customDimensionsKeys: {},
@@ -136,23 +139,26 @@ test("dashboard: a failed query is isolated to its own card", async () => {
     availableSignals: { geo: true, requests: true, browserTimings: true, pageViews: true },
     latestTimestamp: null,
   };
-  const mapping = buildMapping({ schemaProfile, readinessReport });
-  const timeRange = resolveTimeRange("7d");
-  const emptyTable = { tables: [{ columns: [], rows: [] }] };
-
-  // Fake client: every query succeeds with empty data except geoDistribution.
-  const azureClient = {
-    async queryWorkspace({ queryName }) {
-      if (queryName === "geoDistribution") throw new Error("simulated KQL failure");
-      return emptyTable;
-    },
+  return {
+    schemaProfile,
+    readinessReport,
+    mapping: buildMapping({ schemaProfile, readinessReport }),
+    timeRange: resolveTimeRange("7d"),
   };
+}
 
+/**
+ * Build a dashboard against a fake azureClient. `label` keys the tenant /
+ * resource so each test gets its own cache namespace (cacheStore is a
+ * process-wide singleton — a shared id would leak results between tests).
+ */
+async function runDashboardWithClient(label, azureClient) {
+  const { mapping, schemaProfile, readinessReport, timeRange } = dashboardFixture();
   const cards = {};
   const dashboard = await buildOverviewDashboard({
-    tenantId: "isolation-test-tenant",
-    resourceId: "isolation-test-resource",
-    workspaceId: "isolation-test-workspace",
+    tenantId: `isolation-${label}`,
+    resourceId: `res-${label}`,
+    workspaceId: `ws-${label}`,
     mapping,
     schemaProfile,
     readinessReport,
@@ -161,6 +167,16 @@ test("dashboard: a failed query is isolated to its own card", async () => {
     azureClient,
     azureMode: "mock",
     onCard: (name, data) => { cards[name] = data; },
+  });
+  return { dashboard, cards };
+}
+
+test("dashboard: a failed query is isolated to its own card", async () => {
+  const { dashboard, cards } = await runDashboardWithClient("geo-fail", {
+    async queryWorkspace({ queryName }) {
+      if (queryName === "geoDistribution") throw new Error("simulated KQL failure");
+      return EMPTY_TABLE;
+    },
   });
 
   // The dashboard still builds — one failed query no longer takes it down.
@@ -172,4 +188,42 @@ test("dashboard: a failed query is isolated to its own card", async () => {
   assert.equal(cards.topPages?.error, undefined, "topPages card has no error");
   assert.ok(Array.isArray(cards.topPages?.topPages), "topPages card still carries data");
   assert.equal(cards.marketingKpis?.error, undefined, "marketingKpis card has no error");
+});
+
+test("dashboard: a non-critical query failure does not blank the marketing KPI card", async () => {
+  // previousKpis feeds only the period-over-period delta chips. Its failure
+  // must NOT flag the whole Marketing KPI card as an error.
+  const { cards } = await runDashboardWithClient("prevkpis-fail", {
+    async queryWorkspace({ queryName }) {
+      if (queryName === "previousKpis") throw new Error("simulated comparison failure");
+      return EMPTY_TABLE;
+    },
+  });
+
+  assert.equal(cards.marketingKpis?.error, undefined, "marketingKpis must not error on previousKpis failure");
+  assert.equal(typeof cards.marketingKpis?.uniqueVisitors, "number", "marketingKpis still carries visitor data");
+  assert.equal(typeof cards.marketingKpis?.sessions, "number", "marketingKpis still carries session data");
+});
+
+test("dashboard: an assembler transform exception is isolated to its card", async () => {
+  // A topNavigation row with a null `from` makes buildSankeyFromNav throw
+  // inside assembleUserFlow (groupOf(null) -> null.startsWith). The throw
+  // must degrade to an error card, not reject the whole dashboard build.
+  const malformedNav = {
+    tables: [{
+      columns: [{ name: "from" }, { name: "to" }, { name: "transitions" }],
+      rows: [[null, "/checkout", 5]],
+    }],
+  };
+  const { dashboard, cards } = await runDashboardWithClient("assembler-throw", {
+    async queryWorkspace({ queryName }) {
+      if (queryName === "topNavigation") return malformedNav;
+      return EMPTY_TABLE;
+    },
+  });
+
+  assert.ok(dashboard && dashboard.charts, "dashboard still builds despite an assembler throwing");
+  assert.equal(cards.userFlow?.error, true, "userFlow card is flagged after its assembler threw");
+  assert.equal(cards.topPages?.error, undefined, "unrelated cards are unaffected");
+  assert.equal(cards.geo?.error, undefined, "unrelated cards are unaffected");
 });

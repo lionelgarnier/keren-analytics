@@ -2406,7 +2406,9 @@ const SKELETON_HTML =
 function showAllSkeletons() {
   receivedCards.clear();
   document.querySelectorAll("[data-card]").forEach((el) => {
+    // Fresh load: drop any prior skeleton AND error overlay/state.
     el.querySelectorAll(":scope > .card-overlay").forEach((o) => o.remove());
+    el.classList.remove("is-error");
     el.classList.add("is-loading");
     const overlay = document.createElement("div");
     overlay.className = "card-overlay skeleton-overlay";
@@ -2415,26 +2417,31 @@ function showAllSkeletons() {
   });
 }
 
+// Removes a card's skeleton only — never an error overlay. An errored card
+// carries `is-error` (not `is-loading`), so it is left untouched here.
 function clearSkeleton(name) {
   document.querySelectorAll(`[data-card="${name}"]`).forEach((el) => {
     el.classList.remove("is-loading");
-    el.querySelectorAll(":scope > .card-overlay").forEach((o) => o.remove());
+    el.querySelectorAll(":scope > .skeleton-overlay").forEach((o) => o.remove());
   });
 }
 
 function clearAllSkeletons() {
   document.querySelectorAll("[data-card].is-loading").forEach((el) => {
     el.classList.remove("is-loading");
-    el.querySelectorAll(":scope > .card-overlay").forEach((o) => o.remove());
+    el.querySelectorAll(":scope > .skeleton-overlay").forEach((o) => o.remove());
   });
 }
 
 // One failed query is isolated to its own card: an error message + Retry,
-// while every other card renders normally.
+// while every other card renders normally. The card is marked `is-error`
+// (a distinct state from `is-loading`) so the terminal clearAllSkeletons()
+// in renderDashboard does not wipe the error overlay.
 function showCardError(name, message) {
   document.querySelectorAll(`[data-card="${name}"]`).forEach((el) => {
     el.querySelectorAll(":scope > .card-overlay").forEach((o) => o.remove());
-    el.classList.add("is-loading"); // keep real (empty) content hidden
+    el.classList.remove("is-loading");
+    el.classList.add("is-error"); // keep real (empty) content hidden, persist past `done`
     const overlay = document.createElement("div");
     overlay.className = "card-overlay card-error";
     const p = document.createElement("p");

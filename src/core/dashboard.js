@@ -663,10 +663,36 @@ export async function buildOverviewDashboard({
     `${names.filter((name) => failed.has(name)).join(", ")} query failed`;
 
   // Card payload accumulators — each assembler owns a disjoint set of keys,
-  // so concurrent writes never collide. `result` is composed from these.
-  const kpis = {};
-  const charts = { abTests: null };
-  const tables = {};
+  // so concurrent writes never collide. Pre-seeded with safe defaults so
+  // that, even if an assembler throws before writing its slice, the
+  // composed `result` still has a well-formed value for every field.
+  const kpis = {
+    uniqueVisitors: 0,
+    sessions: 0,
+    avgResponseTimeMs: 0,
+    p95ResponseTimeMs: 0,
+    errorRate: 0,
+    comparison: null,
+  };
+  const charts = {
+    dailyTrend: [],
+    topPages: [],
+    topNavigationPaths: [],
+    browsers: [],
+    os: [],
+    devices: [],
+    geoDistribution: [],
+    userFlow: null,
+    abTests: null,
+    kpiSparklines: null,
+    sessionReplays: null,
+    peakHours: [],
+    urlParams: null,
+    campaignBreakdown: [],
+    referrerSources: [],
+    browserTimings: null,
+  };
+  const tables = { slowEndpoints: [] };
 
   /** Emit a card: the data payload, or an error stub if any dep failed. */
   function publish(name, deps, data) {
@@ -674,6 +700,22 @@ export async function buildOverviewDashboard({
       emitCard(name, { error: true, message: failMessage(deps) });
     } else {
       emitCard(name, data);
+    }
+  }
+
+  /**
+   * Run a card assembler in isolation. A thrown transform error degrades
+   * to an error stub for that assembler's card(s) instead of rejecting the
+   * whole `Promise.all` and taking the entire dashboard build down.
+   */
+  async function runAssembler(cardNames, fn) {
+    try {
+      await fn();
+    } catch (error) {
+      console.error(`[dashboard] assembler for '${cardNames.join(", ")}' threw: ${error.message}`);
+      for (const name of cardNames) {
+        emitCard(name, { error: true, message: "card data could not be built" });
+      }
     }
   }
 
@@ -700,7 +742,10 @@ export async function buildOverviewDashboard({
     kpis.uniqueVisitors = currentVisitors;
     kpis.sessions = currentSessions;
     kpis.comparison = comparison;
-    publish("marketingKpis", deps, {
+    // Visitors + sessions are the heart of this card; a trend or
+    // period-comparison query failure only costs the page-views tile or
+    // the delta chips, so it must not blank the whole KPI row.
+    publish("marketingKpis", ["uniqueVisitors", "sessions"], {
       uniqueVisitors: currentVisitors,
       sessions: currentSessions,
       pageViews: currentPageViews,
@@ -876,22 +921,22 @@ export async function buildOverviewDashboard({
   }
 
   await Promise.all([
-    assembleMarketingKpis(),
-    assembleTechnicalKpis(),
-    assembleDailyTrend(),
-    assembleTopPages(),
-    assembleUserFlow(),
-    assembleTechMix("browsers", "techBrowser", "browser"),
-    assembleTechMix("os", "techOs", "os"),
-    assembleTechMix("devices", "techDevice", "device"),
-    assembleGeo(),
-    assemblePeakHours(),
-    assembleCampaigns(),
-    assembleReferrers(),
-    assembleSlowEndpoints(),
-    assembleBrowserTimings(),
-    assembleSessionReplays(),
-    assembleNavDerived(),
+    runAssembler(["marketingKpis"], assembleMarketingKpis),
+    runAssembler(["technicalKpis"], assembleTechnicalKpis),
+    runAssembler(["dailyTrend"], assembleDailyTrend),
+    runAssembler(["topPages"], assembleTopPages),
+    runAssembler(["userFlow"], assembleUserFlow),
+    runAssembler(["browsers"], () => assembleTechMix("browsers", "techBrowser", "browser")),
+    runAssembler(["os"], () => assembleTechMix("os", "techOs", "os")),
+    runAssembler(["devices"], () => assembleTechMix("devices", "techDevice", "device")),
+    runAssembler(["geo"], assembleGeo),
+    runAssembler(["peakHours"], assemblePeakHours),
+    runAssembler(["campaigns"], assembleCampaigns),
+    runAssembler(["referrers"], assembleReferrers),
+    runAssembler(["slowEndpoints"], assembleSlowEndpoints),
+    runAssembler(["browserTimings"], assembleBrowserTimings),
+    runAssembler(["sessionReplays"], assembleSessionReplays),
+    runAssembler(["contentScoring", "funnel"], assembleNavDerived),
   ]);
 
   // --- Compose the full dashboard object ----------------------------------
@@ -944,13 +989,20 @@ export async function buildOverviewDashboard({
     },
   };
 
-  result.narration = buildNarration({
-    azureMode,
-    dashboard: result,
-    mapping,
-    range: timeRange.key,
-    aiMapping,
-  });
+  // Narration is non-critical framing text — never let it sink a dashboard
+  // whose cards have already streamed and rendered.
+  try {
+    result.narration = buildNarration({
+      azureMode,
+      dashboard: result,
+      mapping,
+      range: timeRange.key,
+      aiMapping,
+    });
+  } catch (error) {
+    console.error(`[dashboard] buildNarration failed: ${error.message}`);
+    result.narration = null;
+  }
 
   return result;
 }
