@@ -13,14 +13,12 @@ const changeResourceButton = document.getElementById("changeResourceButton");
 const landingPage = document.getElementById("landingPage");
 const previewBanner = document.getElementById("previewBanner");
 const onboardingBanner = document.getElementById("onboardingBanner");
-const progressPanel = document.getElementById("progressPanel");
-const progressLabel = document.getElementById("progressLabel");
-const progressPct = document.getElementById("progressPct");
-const progressBar = document.getElementById("progressBar");
 
 let lastDiscoveredResources = [];
 let lastDashboardData = null;
 let isPreviewMode = false;
+/** Card names whose data arrived this load — drives the done-message safety net. */
+const receivedCards = new Set();
 
 /* ========== Client-side router (History API) ========== */
 const router = {
@@ -189,16 +187,11 @@ changeResourceButton.addEventListener("click", async () => {
   dashboardPanel.classList.add("hidden");
   selectedResourceBar.classList.add("hidden");
   router.push({ page: "services" });
-  if (lastDiscoveredResources.length > 0) {
-    renderResources(lastDiscoveredResources);
-  } else {
-    try {
-      const discovery = await apiFetch("/azure/discover");
-      lastDiscoveredResources = discovery.resources || [];
-      renderResources(lastDiscoveredResources);
-    } catch (error) {
-      setStatus(error.message || "Unable to load resources.", "error");
-    }
+  try {
+    const resp = await apiFetch("/api/setup/services");
+    renderResources(resp.services || []);
+  } catch (error) {
+    setStatus(error.message || "Unable to load resources.", "error");
   }
 });
 
@@ -236,10 +229,12 @@ async function enterPreviewMode() {
     router.push({ page: "preview" });
   }
   try {
+    showAllSkeletons();
     const data = await loadDashboardStream(`/preview/dashboard?range=${rangeSelect.value}&stream=1`);
     renderDashboard(data);
     setStatus("Preview loaded -- sample data.", "success");
   } catch (error) {
+    clearAllSkeletons();
     setStatus(error.message || "Unable to load preview.", "error");
   }
 }
@@ -315,6 +310,61 @@ function showSelectedResource(name) {
   selectedResourceBar.classList.remove("hidden");
 }
 
+/** POST /azure/select for a resource — shared by the hub cards and the
+ *  init() deep-link / single-resource paths. */
+function selectResourceApi(resource) {
+  return apiFetch("/azure/select", {
+    method: "POST",
+    body: JSON.stringify({
+      resourceId: resource.resourceId,
+      workspaceId: resource.workspaceId,
+      subscriptionId: resource.subscriptionId,
+      resourceGroup: resource.resourceGroup,
+      appInsightsName: resource.appInsightsName,
+    }),
+  });
+}
+
+function maybeShowOnboarding() {
+  try {
+    if (!localStorage.getItem("ea_onboarding_seen")) {
+      onboardingBanner.classList.remove("hidden");
+    }
+  } catch { /* localStorage unavailable */ }
+}
+
+// Per-status presentation for the service hub cards.
+const SERVICE_STATUS_META = {
+  ready:        { label: "Prêt",                     action: "Ouvrir" },
+  incomplete:   { label: "Configuration incomplète", action: "Reprendre la config" },
+  unconfigured: { label: "À configurer",             action: "Configurer" },
+};
+
+/**
+ * Select a resource then route to its dashboard or the setup wizard.
+ * `destination` is "dashboard" for a ready service, "setup" otherwise.
+ */
+async function gotoService(resource, card, destination) {
+  card.style.opacity = "0.6";
+  card.style.pointerEvents = "none";
+  setStatus(`Connecting to ${resource.appInsightsName}…`);
+  try {
+    await selectResourceApi(resource);
+    if (destination === "setup") {
+      window.location.href = "/setup";
+      return;
+    }
+    resourcePanel.classList.add("hidden");
+    showSelectedResource(resource.appInsightsName);
+    router.push({ page: "dashboard", service: resource.appInsightsName, tab: "marketing" });
+    await loadDashboard(rangeSelect.value);
+  } catch (err) {
+    card.style.opacity = "";
+    card.style.pointerEvents = "";
+    setStatus(err.message || "Selection failed.", "error");
+  }
+}
+
 function renderResources(resources) {
   lastDiscoveredResources = resources;
   resourceList.innerHTML = "";
@@ -356,9 +406,12 @@ function renderResources(resources) {
   sorted.forEach((resource, idx) => {
     const env = detectEnvironment(resource);
     const wsName = extractWorkspaceName(resource.workspaceId);
+    const status = SERVICE_STATUS_META[resource.status] ? resource.status : "unconfigured";
+    const statusMeta = SERVICE_STATUS_META[status];
+    const destination = status === "ready" ? "dashboard" : "setup";
 
     const card = document.createElement("div");
-    card.className = `resource-card-v2 ${env.css}`;
+    card.className = `resource-card-v2 ${env.css} resource-card-status-${status}`;
     card.style.animationDelay = `${idx * 60}ms`;
     card.dataset.search = [resource.appInsightsName, resource.subscriptionId, resource.resourceGroup, wsName, env.label].join(" ").toLowerCase();
 
@@ -384,6 +437,18 @@ function renderResources(resources) {
       top.appendChild(badge);
     }
     card.appendChild(top);
+
+    // Per-resource configuration status
+    const statusRow = document.createElement("div");
+    statusRow.className = "resource-card-statusrow";
+    const statusDot = document.createElement("span");
+    statusDot.className = "resource-status-dot";
+    statusRow.appendChild(statusDot);
+    const statusText = document.createElement("span");
+    statusText.className = "resource-status-label";
+    statusText.textContent = statusMeta.label;
+    statusRow.appendChild(statusText);
+    card.appendChild(statusRow);
 
     // Metadata rows
     const meta = document.createElement("div");
@@ -415,36 +480,23 @@ function renderResources(resources) {
     action.className = "resource-card-action";
     const selText = document.createElement("span");
     selText.className = "resource-card-select-text";
-    selText.innerHTML = 'Analyze <span class="resource-card-select-arrow">\u2192</span>';
+    selText.innerHTML = `${statusMeta.action} <span class="resource-card-select-arrow">\u2192</span>`;
     action.appendChild(selText);
+    if (status === "ready") {
+      const reconfigureBtn = document.createElement("button");
+      reconfigureBtn.type = "button";
+      reconfigureBtn.className = "resource-card-reconfigure";
+      reconfigureBtn.textContent = "Reconfigurer";
+      reconfigureBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        gotoService(resource, card, "setup");
+      });
+      action.appendChild(reconfigureBtn);
+    }
     card.appendChild(action);
 
     // Click handler — entire card is clickable
-    card.addEventListener("click", async () => {
-      card.style.opacity = "0.6";
-      card.style.pointerEvents = "none";
-      setStatus(`Connecting to ${resource.appInsightsName}\u2026`);
-      try {
-        await apiFetch("/azure/select", {
-          method: "POST",
-          body: JSON.stringify({
-            resourceId: resource.resourceId,
-            workspaceId: resource.workspaceId,
-            subscriptionId: resource.subscriptionId,
-            resourceGroup: resource.resourceGroup,
-            appInsightsName: resource.appInsightsName,
-          }),
-        });
-        resourcePanel.classList.add("hidden");
-        showSelectedResource(resource.appInsightsName);
-        router.push({ page: "dashboard", service: resource.appInsightsName, tab: "marketing" });
-        await loadDashboard(rangeSelect.value);
-      } catch (err) {
-        card.style.opacity = "";
-        card.style.pointerEvents = "";
-        setStatus(err.message || "Selection failed.", "error");
-      }
-    });
+    card.addEventListener("click", () => gotoService(resource, card, destination));
 
     resourceList.appendChild(card);
   });
@@ -2344,215 +2396,256 @@ function safeRender(label, fn) {
   }
 }
 
-/* ========== Main render ========== */
+/* ========== Skeleton loaders ========== */
+// Each dashboard card carries a [data-card] attribute. On load every card
+// gets a shimmering overlay; it is removed the instant that card's data
+// streams in (or replaced by an error state if its query failed).
+const SKELETON_HTML =
+  '<div class="skeleton skeleton-line sk-40"></div><div class="skeleton skeleton-fill"></div>';
+
+function showAllSkeletons() {
+  receivedCards.clear();
+  document.querySelectorAll("[data-card]").forEach((el) => {
+    el.querySelectorAll(":scope > .card-overlay").forEach((o) => o.remove());
+    el.classList.add("is-loading");
+    const overlay = document.createElement("div");
+    overlay.className = "card-overlay skeleton-overlay";
+    overlay.innerHTML = SKELETON_HTML;
+    el.appendChild(overlay);
+  });
+}
+
+function clearSkeleton(name) {
+  document.querySelectorAll(`[data-card="${name}"]`).forEach((el) => {
+    el.classList.remove("is-loading");
+    el.querySelectorAll(":scope > .card-overlay").forEach((o) => o.remove());
+  });
+}
+
+function clearAllSkeletons() {
+  document.querySelectorAll("[data-card].is-loading").forEach((el) => {
+    el.classList.remove("is-loading");
+    el.querySelectorAll(":scope > .card-overlay").forEach((o) => o.remove());
+  });
+}
+
+// One failed query is isolated to its own card: an error message + Retry,
+// while every other card renders normally.
+function showCardError(name, message) {
+  document.querySelectorAll(`[data-card="${name}"]`).forEach((el) => {
+    el.querySelectorAll(":scope > .card-overlay").forEach((o) => o.remove());
+    el.classList.add("is-loading"); // keep real (empty) content hidden
+    const overlay = document.createElement("div");
+    overlay.className = "card-overlay card-error";
+    const p = document.createElement("p");
+    p.className = "card-error-msg";
+    p.textContent = message || "Couldn't load this section.";
+    const btn = document.createElement("button");
+    btn.className = "btn btn-ghost btn-sm";
+    btn.textContent = "Retry";
+    btn.addEventListener("click", () => {
+      if (isPreviewMode) enterPreviewMode();
+      else loadDashboard(rangeSelect.value);
+    });
+    overlay.append(p, btn);
+    el.appendChild(overlay);
+  });
+}
+
+/* ========== Per-card renderers ========== */
+function renderMarketingKpis(d) {
+  document.getElementById("kpiVisitors").textContent = fmt(d.uniqueVisitors);
+  document.getElementById("kpiSessions").textContent = fmt(d.sessions);
+  document.getElementById("kpiPageViews").textContent = fmt(d.pageViews);
+  document.getElementById("kpiPagesPerSession").textContent =
+    d.pagesPerSession != null ? d.pagesPerSession.toFixed(1) : "-";
+  renderKpiComparison({ comparison: d.comparison });
+}
+
+function renderTechnicalKpis(d) {
+  document.getElementById("kpiAvg").textContent = fmtMs(d.avgResponseTimeMs);
+  document.getElementById("kpiP95").textContent = fmtMs(d.p95ResponseTimeMs);
+  document.getElementById("kpiErrors").textContent = fmtPct(d.errorRate);
+  const errorCard = document.getElementById("kpiErrorCard");
+  if (d.errorRate > 0.05) {
+    errorCard.style.borderLeft = "3px solid var(--danger)";
+  } else if (d.errorRate > 0.02) {
+    errorCard.style.borderLeft = "3px solid var(--warning)";
+  } else {
+    errorCard.style.borderLeft = "3px solid var(--success)";
+  }
+}
+
+function renderDailyTrendCard(d) {
+  renderDailyTrend(d.dailyTrend);
+  renderAllSparklines(d.kpiSparklines);
+}
+
+function renderTopPagesCard(topPages) {
+  const all = topPages || [];
+  const checkbox = document.getElementById("topPagesFilterTechnical");
+  const draw = () => {
+    const rows = checkbox?.checked ? filterTechnicalRoutes(all) : all;
+    renderTableRows("topPagesBody", "topPagesEmpty", "topPagesCount", rows, (tr, row) => {
+      tr.appendChild(td(row.path));
+      tr.appendChild(td(fmt(row.views), "num"));
+      tr.appendChild(td(fmtPct(row.share), "num"));
+    });
+  };
+  draw();
+  if (checkbox) checkbox.onchange = draw;
+}
+
+function renderSlowEndpointsCard(slowEndpoints) {
+  const all = slowEndpoints || [];
+  const checkbox = document.getElementById("slowEndpointsFilterTechnical");
+  const draw = () => {
+    const rows = checkbox?.checked ? filterTechnicalRoutes(all) : all;
+    renderTableRows("slowEndpointsBody", "slowEndpointsEmpty", "slowEndpointsCount", rows, (tr, row) => {
+      tr.appendChild(td(row.path));
+      tr.appendChild(td(fmtMs(row.p50), "num"));
+      tr.appendChild(td(fmtMs(row.p95), "num"));
+      tr.appendChild(td(fmtMs(row.p99), "num"));
+      tr.appendChild(td(fmt(row.count), "num"));
+      tr.appendChild(td(fmtPct(row.errorRate), "num"));
+    });
+  };
+  draw();
+  if (checkbox) checkbox.onchange = draw;
+}
+
+function renderUserFlowCard(d) {
+  renderSankeyFlow(d.userFlow);
+  renderTableRows("topNavBody", null, null, d.topNavigationPaths, (tr, row) => {
+    tr.appendChild(td(row.from));
+    tr.appendChild(td(row.to));
+    tr.appendChild(td(fmt(row.count), "num"));
+  });
+}
+
+function renderGeoCard(d) {
+  renderGeoChart(d.geoDistribution);
+  renderGeoMap(d.geoDistribution);
+  if (geoMapInstance) setTimeout(() => geoMapInstance.invalidateSize(), 60);
+}
+
+function renderBrowserTimingsCard(d) {
+  renderBrowserTimings(d.browserTimings);
+  document.getElementById("kpiFrontendAvg").textContent =
+    d.browserTimings ? fmtMs(d.browserTimings.avgTotal) : "-";
+}
+
+// card name -> renderer. Each renderer takes the card's streamed payload.
+const CARD_RENDERERS = {
+  marketingKpis: renderMarketingKpis,
+  technicalKpis: renderTechnicalKpis,
+  dailyTrend: renderDailyTrendCard,
+  topPages: (d) => renderTopPagesCard(d.topPages),
+  userFlow: renderUserFlowCard,
+  browsers: (d) => renderDoughnut("browserChart", "browserEmpty", "browser", d.browsers, "name", "count"),
+  os: (d) => renderDoughnut("osChart", "osEmpty", "os", d.os, "name", "count"),
+  devices: (d) => renderDoughnut("deviceChart", "deviceEmpty", "device", d.devices, "name", "count"),
+  geo: renderGeoCard,
+  peakHours: (d) => renderPeakHours(d.peakHours),
+  campaigns: (d) => { renderCampaignTable(d.campaignBreakdown); renderUrlParams(d.urlParams); },
+  referrers: (d) => renderReferrerChart(d.referrerSources),
+  slowEndpoints: (d) => renderSlowEndpointsCard(d.slowEndpoints),
+  browserTimings: renderBrowserTimingsCard,
+  sessionReplays: (d) => renderSessionReplays(d.sessionReplays),
+  contentScoring: (d) => renderContentScoring(d.topNavigationPaths, d.topPages),
+  funnel: (d) => renderFunnel(d.topNavigationPaths, d.topPages),
+};
+
+// Rebuild a card's streamed-payload shape from a full dashboard object —
+// used by the done-message safety net when no per-card message arrived.
+function cardDataFromDashboard(name, dash) {
+  const c = dash.charts || {};
+  const k = dash.kpis || {};
+  const t = dash.tables || {};
+  const totalPv = (c.dailyTrend || []).reduce((s, d) => s + (d.pageViews || 0), 0);
+  switch (name) {
+    case "marketingKpis":
+      return {
+        uniqueVisitors: k.uniqueVisitors,
+        sessions: k.sessions,
+        pageViews: totalPv,
+        pagesPerSession: k.sessions > 0 ? totalPv / k.sessions : null,
+        comparison: k.comparison,
+      };
+    case "technicalKpis":
+      return {
+        avgResponseTimeMs: k.avgResponseTimeMs,
+        p95ResponseTimeMs: k.p95ResponseTimeMs,
+        errorRate: k.errorRate,
+      };
+    case "dailyTrend": return { dailyTrend: c.dailyTrend, kpiSparklines: c.kpiSparklines };
+    case "topPages": return { topPages: c.topPages };
+    case "userFlow": return { userFlow: c.userFlow, topNavigationPaths: c.topNavigationPaths };
+    case "browsers": return { browsers: c.browsers };
+    case "os": return { os: c.os };
+    case "devices": return { devices: c.devices };
+    case "geo": return { geoDistribution: c.geoDistribution };
+    case "peakHours": return { peakHours: c.peakHours };
+    case "campaigns": return { campaignBreakdown: c.campaignBreakdown, urlParams: c.urlParams };
+    case "referrers": return { referrerSources: c.referrerSources };
+    case "slowEndpoints": return { slowEndpoints: t.slowEndpoints };
+    case "browserTimings": return { browserTimings: c.browserTimings };
+    case "sessionReplays": return { sessionReplays: c.sessionReplays };
+    case "contentScoring":
+    case "funnel":
+      return { topNavigationPaths: c.topNavigationPaths, topPages: c.topPages };
+    default: return {};
+  }
+}
+
+// Render one card from its streamed payload (or show its error state).
+function applyCard(name, data) {
+  receivedCards.add(name);
+  const renderer = CARD_RENDERERS[name];
+  if (!renderer) return;
+  if (data && data.error) {
+    showCardError(name, data.message);
+    return;
+  }
+  safeRender(`card:${name}`, () => renderer(data || {}));
+  clearSkeleton(name);
+}
+
+/* ========== Main render (done message) ========== */
+// Per-card data arrives via `applyCard` while the stream runs. This handler
+// only paints what cannot stream per-card: whole-dashboard derived panels,
+// plus a safety net for any card that never streamed (non-stream response).
 function renderDashboard(data) {
   lastDashboardData = data;
   const dashboard = data.dashboard;
-  const readiness = data.readiness;
-  const readinessScore = data.readinessScore;
 
-  // Marketing KPIs
-  safeRender("Marketing KPIs", () => {
-    document.getElementById("kpiVisitors").textContent = fmt(dashboard.kpis.uniqueVisitors);
-    document.getElementById("kpiSessions").textContent = fmt(dashboard.kpis.sessions);
-
-    // Compute total page views from trend data
-    const totalPageViews = (dashboard.charts.dailyTrend || []).reduce((sum, d) => sum + (d.pageViews || 0), 0);
-    document.getElementById("kpiPageViews").textContent = fmt(totalPageViews);
-
-    // Pages per session
-    const pagesPerSession = dashboard.kpis.sessions > 0
-      ? (totalPageViews / dashboard.kpis.sessions).toFixed(1)
-      : "-";
-    document.getElementById("kpiPagesPerSession").textContent = pagesPerSession;
-  });
-
-  // Technical KPIs
-  safeRender("Technical KPIs", () => {
-    document.getElementById("kpiAvg").textContent = fmtMs(dashboard.kpis.avgResponseTimeMs);
-    document.getElementById("kpiP95").textContent = fmtMs(dashboard.kpis.p95ResponseTimeMs);
-    document.getElementById("kpiErrors").textContent = fmtPct(dashboard.kpis.errorRate);
-
-    // Color-code error rate
-    const errorCard = document.getElementById("kpiErrorCard");
-    if (dashboard.kpis.errorRate > 0.05) {
-      errorCard.style.borderLeft = "3px solid var(--danger)";
-    } else if (dashboard.kpis.errorRate > 0.02) {
-      errorCard.style.borderLeft = "3px solid var(--warning)";
-    } else {
-      errorCard.style.borderLeft = "3px solid var(--success)";
-    }
-  });
-
-  // Frontend avg KPI
-  safeRender("Frontend KPI", () => {
-    const btData = dashboard.charts.browserTimings;
-    document.getElementById("kpiFrontendAvg").textContent = btData ? fmtMs(btData.avgTotal) : "-";
-  });
-
-  // KPI Sparklines with anomaly detection
-  safeRender("Sparklines", () => renderAllSparklines(dashboard.charts.kpiSparklines));
-
-  // Environment analysis narration (deterministic; AI-style framing)
   safeRender("Narration", () => renderNarration(dashboard.narration));
-
-  // Period-over-period comparison chips on the top 3 KPI tiles (B4).
-  safeRender("KPI comparison", () => renderKpiComparison(dashboard.kpis));
-
-  // Smart Insights (auto-generated from all data)
   safeRender("Insights", () => renderInsights(dashboard));
-
-  // Daily trend
-  safeRender("Daily trend", () => renderDailyTrend(dashboard.charts.dailyTrend));
-
-  // Top Pages table (with technical route filtering)
-  safeRender("Top Pages", () => {
-    const topPagesCheckbox = document.getElementById("topPagesFilterTechnical");
-    const renderTopPages = () => {
-      const all = dashboard.charts.topPages || [];
-      const rows = topPagesCheckbox?.checked ? filterTechnicalRoutes(all) : all;
-      renderTableRows("topPagesBody", "topPagesEmpty", "topPagesCount", rows, (tr, row) => {
-        tr.appendChild(td(row.path));
-        tr.appendChild(td(fmt(row.views), "num"));
-        tr.appendChild(td(fmtPct(row.share), "num"));
-      });
-    };
-    renderTopPages();
-    if (topPagesCheckbox) topPagesCheckbox.onchange = renderTopPages;
-  });
-
-  // Geo distribution (map + chart)
-  safeRender("Geo chart", () => renderGeoChart(dashboard.charts.geoDistribution));
-  safeRender("Geo map", () => renderGeoMap(dashboard.charts.geoDistribution));
-
-  // Doughnut charts
-  safeRender("Doughnuts", () => {
-    renderDoughnut("browserChart", "browserEmpty", "browser", dashboard.charts.browsers, "name", "count");
-    renderDoughnut("osChart", "osEmpty", "os", dashboard.charts.os, "name", "count");
-    renderDoughnut("deviceChart", "deviceEmpty", "device", dashboard.charts.devices, "name", "count");
-  });
-
-  // Browser timings
-  safeRender("Browser timings", () => renderBrowserTimings(dashboard.charts.browserTimings));
-
-  // Slow endpoints table (with technical route filtering)
-  safeRender("Slow endpoints", () => {
-    const slowCheckbox = document.getElementById("slowEndpointsFilterTechnical");
-    const renderSlowEndpoints = () => {
-      const all = dashboard.tables.slowEndpoints || [];
-      const rows = slowCheckbox?.checked ? filterTechnicalRoutes(all) : all;
-      renderTableRows("slowEndpointsBody", "slowEndpointsEmpty", "slowEndpointsCount", rows, (tr, row) => {
-        tr.appendChild(td(row.path));
-        tr.appendChild(td(fmtMs(row.p50), "num"));
-        tr.appendChild(td(fmtMs(row.p95), "num"));
-        tr.appendChild(td(fmtMs(row.p99), "num"));
-        tr.appendChild(td(fmt(row.count), "num"));
-        tr.appendChild(td(fmtPct(row.errorRate), "num"));
-      });
-    };
-    renderSlowEndpoints();
-    if (slowCheckbox) slowCheckbox.onchange = renderSlowEndpoints;
-  });
-
-  // Sankey User Flow + table fallback
-  safeRender("User flow", () => {
-    renderSankeyFlow(dashboard.charts.userFlow);
-    renderTableRows("topNavBody", null, null, dashboard.charts.topNavigationPaths, (tr, row) => {
-      tr.appendChild(td(row.from));
-      tr.appendChild(td(row.to));
-      tr.appendChild(td(fmt(row.count), "num"));
-    });
-  });
-
-  // A/B Test Monitor
   safeRender("A/B tests", () => renderAbTests(dashboard.charts.abTests));
+  safeRender("Readiness", () => renderReadinessScore(data.readinessScore, data.readiness));
+  safeRender("FirstRunBanner", () => renderFirstRunBanner(data.readinessScore));
 
-  // Peak Hours heatmap
-  safeRender("Peak hours", () => renderPeakHours(dashboard.charts.peakHours));
-
-  // Content Performance scoring
-  safeRender("Content scoring", () => renderContentScoring(dashboard.charts.topNavigationPaths, dashboard.charts.topPages));
-
-  // Campaigns & URL Parameters
-  safeRender("Campaigns", () => {
-    renderCampaignTable(dashboard.charts.campaignBreakdown);
-    renderUrlParams(dashboard.charts.urlParams);
-  });
-
-  // Conversion Funnel
-  safeRender("Funnel", () => renderFunnel(dashboard.charts.topNavigationPaths, dashboard.charts.topPages));
-
-  // Traffic Sources
-  safeRender("Referrers", () => renderReferrerChart(dashboard.charts.referrerSources));
-
-  // Session Replay Timelines (Technical tab)
-  safeRender("Session replays", () => renderSessionReplays(dashboard.charts.sessionReplays));
-
-  // Readiness score
-  safeRender("Readiness", () => renderReadinessScore(readinessScore, readiness));
-
-  // First-run banner (B3): score + 1-2 quick wins above the tab bar.
-  safeRender("FirstRunBanner", () => renderFirstRunBanner(readinessScore));
-
-  // Show dashboard
-  dashboardPanel.classList.remove("hidden");
-
-  // Leaflet needs a valid container size to position markers correctly;
-  // the panel was hidden during render so we must refresh now.
-  if (geoMapInstance) {
-    setTimeout(() => geoMapInstance.invalidateSize(), 50);
+  // Safety net: a card with no streamed message (classic JSON response, or
+  // an older server) is rendered here from the full payload.
+  for (const name of Object.keys(CARD_RENDERERS)) {
+    if (!receivedCards.has(name)) {
+      applyCard(name, cardDataFromDashboard(name, dashboard));
+    }
   }
 
+  clearAllSkeletons();
+  dashboardPanel.classList.remove("hidden");
+  if (geoMapInstance) setTimeout(() => geoMapInstance.invalidateSize(), 50);
   setStatus("Dashboard loaded.", "success");
 }
 
-/* ========== Progress indicator ========== */
-function showProgress(label, pct) {
-  progressPanel.classList.remove("hidden");
-  progressLabel.textContent = label;
-  progressPct.textContent = `${pct}%`;
-  progressBar.style.width = `${pct}%`;
-}
-
-function hideProgress() {
-  progressPanel.classList.add("hidden");
-  progressBar.style.width = "0%";
-}
-
-function startFallbackProgress() {
-  const stepLabels = [
-    "Connecting...",
-    "Checking access...",
-    "Preparing data...",
-    "Running analytics queries...",
-    "Building dashboard...",
-    "Finalizing...",
-  ];
-  let pct = 2;
-  showProgress(stepLabels[0], pct);
-
-  const timer = setInterval(() => {
-    if (pct >= 90) return;
-    if (pct < 20) pct += 3;
-    else if (pct < 55) pct += 2;
-    else pct += 1;
-    pct = Math.min(pct, 90);
-    const idx = Math.min(stepLabels.length - 1, Math.floor((pct / 90) * stepLabels.length));
-    showProgress(stepLabels[idx], pct);
-  }, 350);
-
-  return {
-    stop() {
-      clearInterval(timer);
-    },
-  };
-}
-
-/* ========== Dashboard loading (NDJSON stream with progress) ========== */
+/* ========== Dashboard loading (NDJSON stream, per-card) ========== */
+// Reads the NDJSON stream: `card` messages fill cards progressively (each
+// removing its skeleton), the terminal `done` carries the full payload and
+// the derived panels. `progress` messages are ignored — the per-card
+// skeletons are the loading indicator now.
 async function loadDashboardStream(url) {
   statusPanel.textContent = "";
-  const fallbackProgress = startFallbackProgress();
-  let hasLiveProgress = false;
 
   const streamUrl = `${url}${url.includes("?") ? "&" : "?"}_stream=${Date.now()}`;
   const response = await fetch(streamUrl, {
@@ -2566,8 +2659,6 @@ async function loadDashboardStream(url) {
   });
 
   if (!response.ok) {
-    fallbackProgress.stop();
-    hideProgress();
     const text = await response.text().catch(() => "");
     let data = {};
     try { data = JSON.parse(text); } catch { /* not JSON */ }
@@ -2577,77 +2668,57 @@ async function loadDashboardStream(url) {
     throw err;
   }
 
-  const contentType = response.headers.get("content-type") || "";
-  console.log("[loadDashboardStream] response OK, content-type:", contentType, "reading stream...");
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let result = null;
-  let chunkCount = 0;
+
+  function handle(msg) {
+    if (msg.type === "card") {
+      applyCard(msg.name, msg.data);
+    } else if (msg.type === "done") {
+      result = msg;
+    } else if (msg.type === "error") {
+      const err = new Error(msg.message || msg.error || "Pipeline error");
+      err.data = msg;
+      throw err;
+    } else if (msg.dashboard) {
+      // Classic JSON (non-stream) response.
+      result = msg;
+    }
+    // `progress` messages are intentionally ignored.
+  }
 
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
-    const text = decoder.decode(value, { stream: true });
-    chunkCount++;
-    if (chunkCount <= 3) console.log("[stream] chunk", chunkCount, "length:", text.length, "preview:", text.slice(0, 120));
-    buffer += text;
+    buffer += decoder.decode(value, { stream: true });
 
     let newlineIdx;
     while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
       const line = buffer.slice(0, newlineIdx).trim();
       buffer = buffer.slice(newlineIdx + 1);
       if (!line) continue;
-
+      let msg;
       try {
-        const msg = JSON.parse(line);
-        console.log("[stream] msg:", msg.type, msg.label || "");
-        if (msg.type === "progress") {
-          if (!hasLiveProgress) {
-            hasLiveProgress = true;
-            fallbackProgress.stop();
-          }
-          showProgress(msg.label, msg.pct);
-        } else if (msg.type === "done") {
-          result = msg;
-        } else if (msg.type === "error") {
-          fallbackProgress.stop();
-          hideProgress();
-          const err = new Error(msg.message || msg.error || "Pipeline error");
-          err.data = msg;
-          throw err;
-        } else if (msg.dashboard) {
-          // Fallback when the server returns classic JSON (non-stream response).
-          result = msg;
-        }
-      } catch (e) {
-        if (e.data) throw e;
+        msg = JSON.parse(line);
+      } catch {
         console.warn("[stream] parse error on line:", line.slice(0, 200));
+        continue;
       }
+      handle(msg);
     }
   }
 
   // Parse any trailing buffered payload (e.g. classic JSON without newline).
   if (!result && buffer.trim()) {
     try {
-      const tail = JSON.parse(buffer.trim());
-      if (tail.type === "error") {
-        const err = new Error(tail.message || tail.error || "Pipeline error");
-        err.data = tail;
-        throw err;
-      }
-      if (tail.type === "done" || tail.dashboard) {
-        result = tail;
-      }
+      handle(JSON.parse(buffer.trim()));
     } catch (e) {
       if (e.data) throw e;
       console.warn("[stream] trailing payload parse error:", buffer.slice(0, 200));
     }
   }
-
-  console.log("[loadDashboardStream] stream ended, chunks:", chunkCount, "hasResult:", !!result);
-  fallbackProgress.stop();
-  hideProgress();
 
   if (!result) {
     throw new Error("No data received from server");
@@ -2657,12 +2728,22 @@ async function loadDashboardStream(url) {
 
 async function loadDashboard(range) {
   try {
+    dashboardPanel.classList.remove("hidden");
+    showAllSkeletons();
     const data = await loadDashboardStream(`/dashboard/overview?range=${range}&stream=1`);
     renderDashboard(data);
   } catch (error) {
+    clearAllSkeletons();
+    dashboardPanel.classList.add("hidden");
     if (error.data && error.data.error === "RESOURCE_SELECTION_REQUIRED") {
       selectedResourceBar.classList.add("hidden");
       renderResources(error.data.resources || []);
+      return;
+    }
+    // Resource not configured yet — config belongs to the setup wizard,
+    // never to a dashboard load. Send the user there.
+    if (error.data && error.data.error === "SETUP_REQUIRED") {
+      window.location.href = "/setup";
       return;
     }
     console.error("[loadDashboard]", error);
@@ -2760,78 +2841,65 @@ async function init() {
       logoutButton.textContent = `${session.user.name} — Logout`;
     }
 
-    // First-run redirect to the Track F4 setup wizard. Only fires when the
-    // user hits "/" without a deep link AND has never validated a mapping
-    // — repeat visits and deep-link routes go straight to the dashboard.
-    if (route.page === "home") {
-      try {
-        const setupState = await apiFetch("/api/setup/state");
-        if (setupState?.needsSetup) {
-          window.location.href = "/setup";
-          return;
-        }
-      } catch (err) {
-        // Setup-state check is best-effort: a failure shouldn't block the
-        // existing dashboard flow.
-        console.warn("[setup-state] check failed:", err.message);
-      }
+    // Per-resource service hub. /api/setup/services lists every App
+    // Insights resource tagged with its config status (ready /
+    // incomplete / unconfigured). This replaces the tenant-global
+    // needsSetup redirect, which silently mixed up multi-resource state.
+    const servicesResp = await apiFetch("/api/setup/services");
+    const services = servicesResp.services || [];
+    lastDiscoveredResources = services;
+
+    if (services.length === 0) {
+      setStatus(
+        "No Application Insights resources found in this tenant. Create one in Azure, then come back.",
+        "error"
+      );
+      return;
     }
 
-    const discovery = await apiFetch("/azure/discover");
-    lastDiscoveredResources = discovery.resources || [];
-
-    // Route-driven initialization: try to restore state from URL
+    // Deep link to a specific service dashboard — restore it directly.
     if (route.page === "dashboard" && route.service) {
-      const target = lastDiscoveredResources.find(
-        (r) => r.appInsightsName === route.service
-      );
+      const target = services.find((r) => r.appInsightsName === route.service);
       if (target) {
-        // Select the resource from the URL if not already selected
-        if (discovery.selectedResource !== route.service) {
-          await apiFetch("/azure/select", {
-            method: "POST",
-            body: JSON.stringify({
-              resourceId: target.resourceId,
-              workspaceId: target.workspaceId,
-              subscriptionId: target.subscriptionId,
-              resourceGroup: target.resourceGroup,
-              appInsightsName: target.appInsightsName,
-            }),
-          });
+        if (servicesResp.selectedResourceId !== target.resourceId) {
+          await selectResourceApi(target);
         }
         showSelectedResource(route.service);
         activateTab(route.tab, { updateUrl: false });
         router.replace({ page: "dashboard", service: route.service, tab: route.tab });
         await loadDashboard(rangeSelect.value);
-        try {
-          if (!localStorage.getItem("ea_onboarding_seen")) {
-            onboardingBanner.classList.remove("hidden");
-          }
-        } catch {}
+        maybeShowOnboarding();
         return;
       }
-      // Service from URL not found — fall through to normal discovery flow
+      // Service from the URL not found — fall through to the hub.
     }
 
-    if (route.page === "services" || (!discovery.autoSelected && discovery.resources?.length > 1)) {
+    // Explicit /services route — always show the hub.
+    if (route.page === "services") {
       router.replace({ page: "services" });
-      renderResources(discovery.resources);
-    } else {
-      const serviceName = discovery.autoSelected
-        ? discovery.resources[0]?.appInsightsName
-        : discovery.selectedResource;
-      if (serviceName) {
-        showSelectedResource(serviceName);
-        router.replace({ page: "dashboard", service: serviceName, tab: "marketing" });
-      }
-      await loadDashboard(rangeSelect.value);
-
-      try {
-        if (!localStorage.getItem("ea_onboarding_seen")) {
-          onboardingBanner.classList.remove("hidden");
-        }
-      } catch {}
+      renderResources(services);
+      return;
     }
+
+    // Single resource — skip the hub: straight to its dashboard when
+    // configured, straight to the setup wizard otherwise.
+    if (services.length === 1) {
+      const only = services[0];
+      await selectResourceApi(only);
+      if (only.status === "ready") {
+        showSelectedResource(only.appInsightsName);
+        router.replace({ page: "dashboard", service: only.appInsightsName, tab: "marketing" });
+        await loadDashboard(rangeSelect.value);
+        maybeShowOnboarding();
+      } else {
+        window.location.href = "/setup";
+      }
+      return;
+    }
+
+    // Multiple resources — the service hub with per-resource status.
+    router.replace({ page: "services" });
+    renderResources(services);
   } catch (error) {
     setStatus(error.message || "Unable to initialize.", "error");
   }

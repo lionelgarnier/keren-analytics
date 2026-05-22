@@ -2,6 +2,22 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import supertest from "supertest";
 import { app } from "../src/server.js";
+import { buildOverviewDashboard } from "../src/core/dashboard.js";
+import { buildMapping } from "../src/core/mapping.js";
+import { resolveTimeRange } from "../src/core/timeRange.js";
+
+/** superagent parser: buffer an application/x-ndjson body into a raw string. */
+function ndjsonParser(res, cb) {
+  let data = "";
+  res.setEncoding("utf8");
+  res.on("data", (chunk) => { data += chunk; });
+  res.on("end", () => cb(null, data));
+}
+
+/** Parse a buffered NDJSON body into an array of message objects. */
+function parseNdjson(body) {
+  return String(body).trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+}
 
 test("landing page (A5): tagline, comparison table, FAQ, footer present", async () => {
   const request = supertest(app);
@@ -35,6 +51,10 @@ test("mock auth and dashboard overview flow", async () => {
   const discovery = await request.get("/azure/discover").expect(200);
   assert.ok(discovery.body.resources.length >= 1);
 
+  // CONFIG phase (the setup wizard's job) must run before the dashboard
+  // can RENDER — dashboard loads never configure.
+  await request.post("/api/setup/scan").expect(200);
+
   const dashboard = await request.get("/dashboard/overview?range=7d").expect(200);
   assert.ok(dashboard.body.dashboard);
   assert.ok(dashboard.body.readiness);
@@ -59,4 +79,97 @@ test("mock auth and dashboard overview flow", async () => {
     assert.ok(Number.isFinite(entry.previous));
     assert.ok(["up", "down", "neutral"].includes(entry.direction));
   }
+});
+
+test("dashboard overview stream emits per-card messages then one done", async () => {
+  const request = supertest.agent(app);
+  await request.get("/auth/login").redirects(2).expect(200);
+  await request.get("/azure/discover").expect(200);
+  await request.post("/api/setup/scan").expect(200);
+
+  const res = await request
+    .get("/dashboard/overview?range=7d&stream=1")
+    .buffer(true)
+    .parse(ndjsonParser)
+    .expect(200);
+  const messages = parseNdjson(res.body);
+
+  const cards = messages.filter((m) => m.type === "card");
+  const done = messages.filter((m) => m.type === "done");
+  assert.ok(cards.length > 0, "stream should emit card messages");
+  assert.equal(done.length, 1, "stream should end with exactly one done message");
+
+  // Every card name resolves; mock mode never fails a query.
+  const cardNames = new Set(cards.map((c) => c.name));
+  for (const expected of ["marketingKpis", "technicalKpis", "dailyTrend", "topPages", "geo"]) {
+    assert.ok(cardNames.has(expected), `expected a '${expected}' card`);
+  }
+  assert.ok(!cards.some((c) => c.data && c.data.error), "no card should carry an error in mock mode");
+
+  // Card coverage: a streamed card carries the same data as the final payload.
+  const dailyTrendCard = cards.find((c) => c.name === "dailyTrend");
+  assert.deepEqual(
+    dailyTrendCard.data.dailyTrend,
+    done[0].dashboard.charts.dailyTrend,
+    "dailyTrend card data should match the done payload"
+  );
+});
+
+test("preview dashboard stream also emits per-card messages", async () => {
+  const res = await supertest(app)
+    .get("/preview/dashboard?range=7d&stream=1")
+    .buffer(true)
+    .parse(ndjsonParser)
+    .expect(200);
+  const messages = parseNdjson(res.body);
+  assert.ok(messages.some((m) => m.type === "card"), "preview should emit card messages");
+  assert.equal(messages.filter((m) => m.type === "done").length, 1);
+});
+
+test("dashboard: a failed query is isolated to its own card", async () => {
+  const schemaProfile = {
+    tables: { pageViews: {}, requests: {}, browserTimings: {} },
+    customDimensionsKeys: {},
+  };
+  const readinessReport = {
+    probeCounts: { userAnonCount: 10, sessionCount: 10 },
+    availableSignals: { geo: true, requests: true, browserTimings: true, pageViews: true },
+    latestTimestamp: null,
+  };
+  const mapping = buildMapping({ schemaProfile, readinessReport });
+  const timeRange = resolveTimeRange("7d");
+  const emptyTable = { tables: [{ columns: [], rows: [] }] };
+
+  // Fake client: every query succeeds with empty data except geoDistribution.
+  const azureClient = {
+    async queryWorkspace({ queryName }) {
+      if (queryName === "geoDistribution") throw new Error("simulated KQL failure");
+      return emptyTable;
+    },
+  };
+
+  const cards = {};
+  const dashboard = await buildOverviewDashboard({
+    tenantId: "isolation-test-tenant",
+    resourceId: "isolation-test-resource",
+    workspaceId: "isolation-test-workspace",
+    mapping,
+    schemaProfile,
+    readinessReport,
+    timeRange,
+    cacheTtlMs: 60000,
+    azureClient,
+    azureMode: "mock",
+    onCard: (name, data) => { cards[name] = data; },
+  });
+
+  // The dashboard still builds — one failed query no longer takes it down.
+  assert.ok(dashboard && dashboard.charts, "dashboard builds despite a failed query");
+  assert.deepEqual(dashboard.charts.geoDistribution, [], "failed query degrades to empty data");
+
+  // The geo card is flagged; unrelated cards are unaffected.
+  assert.equal(cards.geo?.error, true, "geo card carries an error flag");
+  assert.equal(cards.topPages?.error, undefined, "topPages card has no error");
+  assert.ok(Array.isArray(cards.topPages?.topPages), "topPages card still carries data");
+  assert.equal(cards.marketingKpis?.error, undefined, "marketingKpis card has no error");
 });

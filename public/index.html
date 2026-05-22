@@ -252,17 +252,6 @@
       <!-- Status messages -->
       <section id="statusPanel" class="status-bar"></section>
 
-      <!-- Loading progress (shown during pipeline execution) -->
-      <div id="progressPanel" class="progress-panel hidden">
-        <div class="progress-header">
-          <span id="progressLabel" class="progress-label">Loading dashboard...</span>
-          <span id="progressPct" class="progress-pct">0%</span>
-        </div>
-        <div class="progress-track">
-          <div id="progressBar" class="progress-fill" style="width: 0%"></div>
-        </div>
-      </div>
-
       <!-- Resource selection -->
       <section id="resourcePanel" class="resource-panel hidden">
         <div class="resource-panel-header">
@@ -338,7 +327,7 @@
           </section>
 
           <!-- KPI row with sparklines -->
-          <div class="kpi-grid kpi-grid-4">
+          <div class="kpi-grid kpi-grid-4" data-card="marketingKpis">
             <div class="kpi-card">
               <span class="kpi-label">Unique Visitors</span>
               <div class="kpi-value-row">
@@ -383,7 +372,7 @@
           </div>
 
           <!-- Traffic trend (full width) -->
-          <div class="panel">
+          <div class="panel" data-card="dailyTrend">
             <h3>Traffic Trend</h3>
             <div class="chart-container chart-wide">
               <canvas id="dailyTrendChart"></canvas>
@@ -394,7 +383,7 @@
           </div>
 
           <!-- Top Pages (full width) -->
-          <div class="panel">
+          <div class="panel" data-card="topPages">
             <div class="panel-header">
               <h3>Top Pages</h3>
               <div class="panel-header-right">
@@ -422,7 +411,7 @@
           </div>
 
           <!-- Geo Distribution (map + chart toggle) -->
-          <div class="panel">
+          <div class="panel" data-card="geo">
             <div class="panel-header">
               <h3>Geo Distribution</h3>
               <div class="view-toggle" data-toggle-group="geo">
@@ -446,14 +435,14 @@
 
           <!-- Peak Hours + Content Performance -->
           <div class="grid-2">
-            <div class="panel">
+            <div class="panel" data-card="peakHours">
               <h3>Peak Hours</h3>
               <div id="peakHoursGrid" class="peak-hours-grid"></div>
               <div id="peakHoursEmpty" class="empty-state hidden">
                 <p>No hourly data available.</p>
               </div>
             </div>
-            <div class="panel">
+            <div class="panel" data-card="contentScoring">
               <div class="panel-header">
                 <h3>Content Performance</h3>
                 <span class="badge-count">conversion contribution</span>
@@ -466,7 +455,7 @@
           </div>
 
           <!-- Campaigns & URL Parameters -->
-          <div class="panel">
+          <div class="panel" data-card="campaigns">
             <div class="panel-header">
               <h3>Campaigns & URL Parameters</h3>
               <div class="panel-header-right">
@@ -531,14 +520,14 @@
 
           <!-- Conversion Funnel + Traffic Sources -->
           <div class="grid-2">
-            <div class="panel">
+            <div class="panel" data-card="funnel">
               <h3>Conversion Funnel</h3>
               <div id="funnelContainer" class="funnel-container"></div>
               <div id="funnelEmpty" class="empty-state hidden">
                 <p>No navigation data to build funnel.</p>
               </div>
             </div>
-            <div class="panel">
+            <div class="panel" data-card="referrers">
               <h3>Traffic Sources</h3>
               <div class="chart-container chart-medium">
                 <canvas id="referrerChart"></canvas>
@@ -550,7 +539,7 @@
           </div>
 
           <!-- User Flow (sankey + table toggle) -->
-          <div class="panel">
+          <div class="panel" data-card="userFlow">
             <div class="panel-header">
               <h3>User Flow</h3>
               <div class="panel-header-right">
@@ -583,21 +572,21 @@
 
           <!-- Browser / OS / Device row -->
           <div class="grid-3">
-            <div class="panel">
+            <div class="panel" data-card="browsers">
               <h3>Browser</h3>
               <div class="chart-container chart-small">
                 <canvas id="browserChart"></canvas>
               </div>
               <div id="browserEmpty" class="empty-state hidden"><p>No browser data.</p></div>
             </div>
-            <div class="panel">
+            <div class="panel" data-card="os">
               <h3>OS</h3>
               <div class="chart-container chart-small">
                 <canvas id="osChart"></canvas>
               </div>
               <div id="osEmpty" class="empty-state hidden"><p>No OS data.</p></div>
             </div>
-            <div class="panel">
+            <div class="panel" data-card="devices">
               <h3>Device</h3>
               <div class="chart-container chart-small">
                 <canvas id="deviceChart"></canvas>
@@ -611,7 +600,7 @@
         <div id="tab-technical" class="tab-content">
 
           <!-- Tech KPIs with sparklines -->
-          <div class="kpi-grid kpi-grid-4">
+          <div class="kpi-grid kpi-grid-4" data-card="technicalKpis">
             <div class="kpi-card kpi-card-neutral">
               <span class="kpi-label">Avg Response</span>
               <div class="kpi-value-row">
@@ -643,7 +632,7 @@
 
           <!-- Browser timings + Slow endpoints -->
           <div class="grid-2">
-            <div class="panel">
+            <div class="panel" data-card="browserTimings">
               <h3>Frontend Performance</h3>
               <div class="chart-container chart-medium">
                 <canvas id="browserTimingsChart"></canvas>
@@ -657,7 +646,7 @@
                 <p>No browser timing data. Enable the JS SDK.</p>
               </div>
             </div>
-            <div class="panel">
+            <div class="panel" data-card="slowEndpoints">
               <div class="panel-header">
                 <h3>Slow Endpoints</h3>
                 <div class="panel-header-right">
@@ -688,7 +677,7 @@
             </div>
           </div>
           <!-- Session Replay Timelines -->
-          <div class="panel">
+          <div class="panel" data-card="sessionReplays">
             <div class="panel-header">
               <h3>Session Timelines</h3>
               <span class="badge-count">recent sessions</span>

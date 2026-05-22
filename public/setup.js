@@ -57,9 +57,10 @@
   }
 
   // ── Scanning log helpers ──────────────────────────────────────
-  // The log starts as a fixed list of "pending" steps. The narration ticker
-  // marks the active one, and once /api/setup/scan returns we mark them all
-  // done and wire each row to its renderStepDetails() debug panel.
+  // The log starts as a fixed list of "pending" steps. /api/setup/scan/stream
+  // then pushes one SSE event per pipeline stage; each event marks its step
+  // done and reveals a live preview of the real numbers it collected. Once
+  // the stream ends we wire each row to its renderStepDetails() debug panel.
 
   function initScanningLog() {
     const ul = $("scanningLog");
@@ -71,7 +72,10 @@
       li.innerHTML = `
         <button type="button" class="setup-log-toggle" aria-expanded="false" aria-disabled="true">
           <span class="setup-log-marker" aria-hidden="true"></span>
-          <span class="setup-log-text"></span>
+          <span class="setup-log-body">
+            <span class="setup-log-text"></span>
+            <span class="setup-log-preview"></span>
+          </span>
           <span class="setup-log-chevron" aria-hidden="true">▸</span>
         </button>
         <div class="setup-log-details" role="region" hidden></div>
@@ -81,11 +85,146 @@
     }
   }
 
-  function markStepActive(idx) {
-    const items = $("scanningLog").children;
-    for (let i = 0; i < items.length; i++) {
-      items[i].classList.toggle("setup-log-active", i === idx);
+  // ── Live scan preview (Track F4 streaming) ────────────────────
+  // SSE "step" events arrive in bursts (the scan yields three at once).
+  // A reveal queue staggers them so the log still reads as sequential
+  // progress instead of three rows flipping in the same frame.
+
+  let revealQueue = [];
+  let revealing = false;
+
+  function resetRevealQueue() {
+    revealQueue = [];
+    revealing = false;
+  }
+
+  function enqueueReveal(fn) {
+    revealQueue.push(fn);
+    if (!revealing) drainRevealQueue();
+  }
+
+  function drainRevealQueue() {
+    const next = revealQueue.shift();
+    if (!next) { revealing = false; return; }
+    revealing = true;
+    next();
+    setTimeout(drainRevealQueue, 320);
+  }
+
+  const prefersReducedMotion =
+    !!(window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+  function formatCount(n) {
+    return Number(n || 0).toLocaleString("en-US");
+  }
+
+  // Animate an integer from 0 to `to` on an easeOutCubic curve. The
+  // numbers are real — only the ramp is cosmetic.
+  function countUp(el, to) {
+    const target = Number(to) || 0;
+    if (prefersReducedMotion || target <= 0) {
+      el.textContent = formatCount(target);
+      return;
     }
+    const duration = 650;
+    const start = performance.now();
+    function frame(now) {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      el.textContent = formatCount(Math.round(target * eased));
+      if (t < 1) requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  // Mark a step done, reveal its preview, and light up the next one.
+  function applyStepEvent(stepKey, payload) {
+    const items = Array.from($("scanningLog").children);
+    const idx = items.findIndex((li) => li.dataset.step === stepKey);
+    if (idx === -1) return;
+    const li = items[idx];
+    li.classList.remove("setup-log-pending", "setup-log-active");
+    li.classList.add("setup-log-done");
+    const preview = li.querySelector(".setup-log-preview");
+    if (preview) {
+      preview.innerHTML = previewHtml(stepKey, payload || {});
+      preview.classList.add("is-shown");
+      preview.querySelectorAll("[data-count]").forEach((node) => {
+        countUp(node, node.dataset.count);
+      });
+    }
+    const next = items[idx + 1];
+    if (next) {
+      next.classList.remove("setup-log-pending");
+      next.classList.add("setup-log-active");
+      $("scanningNarration").textContent = SCANNING_STEPS[idx + 1].label;
+    }
+  }
+
+  const IDENTITY_FIELD_LABELS = {
+    canonicalUserId: "user",
+    canonicalSessionId: "session",
+    canonicalPagePath: "page",
+    canonicalReferrer: "referrer",
+  };
+
+  // Collapsed one-line preview for a finished step. Mirrors the keys
+  // emitted by emitScanSteps() / the "connect" + "ai" emits in the
+  // orchestrator — keep the two in sync.
+  function previewHtml(key, p) {
+    if (key === "connect") {
+      const name = p.resourceName || "your resource";
+      return `<span class="setup-preview-text">Connected to <code>${escapeHtml(name)}</code> · workspace linked</span>`;
+    }
+    if (key === "customDimensions") {
+      const keys = (p.sampleKeys || []).slice(0, 6);
+      const chips = keys.map((k, i) =>
+        `<span class="setup-preview-chip" style="animation-delay:${i * 70}ms">${escapeHtml(k)}</span>`
+      ).join("");
+      const extra = (p.keyCount || 0) - keys.length;
+      const more = extra > 0
+        ? `<span class="setup-preview-chip setup-preview-chip-more">+${extra}</span>`
+        : "";
+      return `
+        <span class="setup-preview-num" data-count="${p.keyCount || 0}">0</span>
+        <span class="setup-preview-label">custom dimensions · ${p.tableCount || 0} table(s)</span>
+        ${chips}${more}
+      `;
+    }
+    if (key === "eventVolumes") {
+      return `
+        <span class="setup-preview-num" data-count="${p.totalEvents || 0}">0</span>
+        <span class="setup-preview-label">events · ${p.eventTypeCount || 0} type(s) · ${p.tableCount || 0} table(s)</span>
+      `;
+    }
+    if (key === "identity") {
+      const pills = (p.fields || []).map((f) => {
+        const cls = f.resolved ? "setup-preview-pill-yes" : "setup-preview-pill-no";
+        const mark = f.resolved ? "✓" : "—";
+        const label = IDENTITY_FIELD_LABELS[f.canonical] || f.canonical;
+        return `<span class="setup-preview-pill ${cls}">${mark} ${escapeHtml(label)}</span>`;
+      }).join("");
+      const gaps = (p.gapCount || 0) > 0
+        ? `<span class="setup-preview-label">${p.gapCount} gap(s) flagged</span>`
+        : `<span class="setup-preview-label">no gaps</span>`;
+      return `
+        <span class="setup-preview-label"><strong>${p.resolved || 0}/${p.total || 4}</strong> identity fields</span>
+        ${pills}${gaps}
+      `;
+    }
+    if (key === "ai") {
+      if (p.degraded) {
+        return `<span class="setup-preview-label">Deterministic heuristic — no LLM call</span>`;
+      }
+      const summary = (p.summary || "").trim();
+      const truncated = summary.length > 90 ? summary.slice(0, 89) + "…" : summary;
+      const verdict = `<span class="setup-preview-label">${p.ready || 0} panel(s) ready · ${p.needsInstrumentation || 0} to instrument</span>`;
+      return truncated
+        ? `<span class="setup-preview-text">${escapeHtml(truncated)}</span> ${verdict}`
+        : verdict;
+    }
+    return "";
   }
 
   function markStepsComplete(findings) {
@@ -261,44 +400,31 @@
     return payload;
   }
 
-  // ── Step 1 — Resource selection + Scanning ────────────────────
+  // ── Step 1 — Scanning ─────────────────────────────────────────
   //
-  // Sub-views inside #step-scanning: a resource picker (only when the
-  // tenant has >1 App Insights and none is selected) and the scanning
-  // animation. We pre-flight /azure/discover so the picker is offered
-  // *before* /api/setup/scan ever runs — without that, the orchestrator
-  // returned RESOURCE_SELECTION_REQUIRED and the wizard had no UI to
-  // resolve it.
-  function showPickerView() {
-    $("resourcePicker").classList.remove("hidden");
-    $("scanningPanel").classList.add("hidden");
-  }
+  // Resource selection lives on the /services hub, not here. By the
+  // time the wizard loads, a resource is normally already selected; if
+  // none is and the tenant has several, we bounce back to the hub so
+  // there is a single place to pick a resource.
   function showScanningView() {
-    $("resourcePicker").classList.add("hidden");
     $("scanningPanel").classList.remove("hidden");
   }
 
   async function startStep1() {
     show("scanning");
-    const pickerErrorEl = $("resourcePickerError");
-    pickerErrorEl.classList.add("hidden");
-    pickerErrorEl.textContent = "";
+    showScanningView();
 
     let discovery;
     try {
       discovery = await api("GET", "/azure/discover");
     } catch (err) {
-      // No picker yet → render the error in the scanning panel so the user
-      // still sees something actionable. 401 falls through to runScan which
-      // handles auth redirect.
-      showScanningView();
+      // 401 falls through to runScan, which handles the auth redirect.
       await runScan({ skipApiCall: true, prefetchError: err });
       return;
     }
 
     const resources = discovery.resources || [];
     if (resources.length === 0) {
-      showScanningView();
       const errorEl = $("scanningError");
       errorEl.innerHTML = "";
       const msg = document.createElement("p");
@@ -312,76 +438,22 @@
     }
 
     if (discovery.selectedResource || discovery.autoSelected || resources.length === 1) {
-      // Single resource → orchestrator already wrote selectedResource, or a
-      // prior selection survives. Skip the picker.
-      showScanningView();
+      // A resource is already selected (hub pre-selected it, or only one
+      // exists / the orchestrator auto-selected it). Scan it.
       await runScan();
       return;
     }
 
-    renderResourcePicker(resources);
-    showPickerView();
+    // Several resources, none selected — the /services hub is the picker.
+    window.location.href = "/services";
   }
 
-  function renderResourcePicker(resources) {
-    const list = $("resourcePickerList");
-    list.innerHTML = "";
+  let activeEventSource = null;
 
-    // Same env detection / sort order as /services so users see the same
-    // grouping in both surfaces.
-    const sorted = [...resources].sort((a, b) =>
-      (a.appInsightsName || "").localeCompare(b.appInsightsName || "")
-    );
-
-    for (const resource of sorted) {
-      const card = document.createElement("button");
-      card.type = "button";
-      card.className = "setup-resource-card";
-
-      const name = document.createElement("div");
-      name.className = "setup-resource-card-name";
-      name.textContent = resource.appInsightsName || "(unnamed)";
-      card.appendChild(name);
-
-      const meta = document.createElement("div");
-      meta.className = "setup-resource-card-meta";
-      const parts = [];
-      if (resource.resourceGroup) parts.push(resource.resourceGroup);
-      if (resource.subscriptionId) parts.push(resource.subscriptionId.slice(0, 8) + "…");
-      meta.textContent = parts.join(" · ");
-      card.appendChild(meta);
-
-      card.addEventListener("click", () => selectResource(resource, card));
-      list.appendChild(card);
-    }
-  }
-
-  async function selectResource(resource, cardEl) {
-    const list = $("resourcePickerList");
-    const errorEl = $("resourcePickerError");
-    errorEl.classList.add("hidden");
-    for (const c of list.children) c.disabled = true;
-    if (cardEl) cardEl.classList.add("loading");
-
-    try {
-      await api("POST", "/azure/select", {
-        resourceId: resource.resourceId,
-        workspaceId: resource.workspaceId,
-        subscriptionId: resource.subscriptionId,
-        resourceGroup: resource.resourceGroup,
-        appInsightsName: resource.appInsightsName,
-      });
-      showScanningView();
-      await runScan();
-    } catch (err) {
-      for (const c of list.children) c.disabled = false;
-      if (cardEl) cardEl.classList.remove("loading");
-      errorEl.textContent = err.message || "Could not select that resource.";
-      errorEl.classList.remove("hidden");
-    }
-  }
-
-  async function runScan(opts = {}) {
+  // Drives step 1 over /api/setup/scan/stream. Each SSE "step" event
+  // reveals real numbers under its log row; "done" loads the findings
+  // and wires up the click-to-inspect detail panels.
+  function runScan(opts = {}) {
     const narrationEl = $("scanningNarration");
     const headingEl = $("scanningHeading");
     const spinnerEl = $("scanningSpinner");
@@ -389,6 +461,8 @@
     const errorEl = $("scanningError");
 
     // Reset scanning view for a fresh run (including Re-scan from findings).
+    if (activeEventSource) { activeEventSource.close(); activeEventSource = null; }
+    resetRevealQueue();
     errorEl.classList.add("hidden");
     errorEl.innerHTML = "";
     footerEl.classList.add("hidden");
@@ -396,17 +470,16 @@
     headingEl.textContent = "Scanning your telemetry…";
     initScanningLog();
 
-    let i = 0;
-    const tick = () => {
-      if (i >= SCANNING_STEPS.length) return;
-      narrationEl.textContent = SCANNING_STEPS[i].label;
-      markStepActive(i);
-      i += 1;
-    };
-    tick();
-    const interval = setInterval(tick, 1100);
+    // Light up the first step; the rest advance as SSE events arrive.
+    const firstStep = $("scanningLog").children[0];
+    if (firstStep) {
+      firstStep.classList.remove("setup-log-pending");
+      firstStep.classList.add("setup-log-active");
+    }
+    narrationEl.textContent = SCANNING_STEPS[0].label;
 
     const handleFailure = (err) => {
+      resetRevealQueue();
       narrationEl.textContent = "Scan failed.";
       headingEl.textContent = "Scan failed.";
       spinnerEl.classList.add("hidden");
@@ -420,11 +493,14 @@
         // Session expired — bounce to "/" so the OAuth flow takes over.
         msgEl.textContent = "You're not signed in. Redirecting…";
         setTimeout(() => { window.location.href = "/"; }, 1200);
-      } else if (err.status === 409 && err.payload?.error === "RESOURCE_SELECTION_REQUIRED") {
-        // Should not happen now that startStep1() pre-flights, but stay safe:
-        // re-run the pre-flight, which will surface the picker.
-        msgEl.textContent = "A resource selection is required. Loading picker…";
-        setTimeout(() => startStep1(), 600);
+      } else if (
+        err.status === 409 &&
+        (err.payload?.error === "RESOURCE_SELECTION_REQUIRED" ||
+          err.payload?.error === "RESOURCE_NOT_SELECTED")
+      ) {
+        // No resource selected — the /services hub is where you pick one.
+        msgEl.textContent = "Choose a resource first. Redirecting…";
+        setTimeout(() => { window.location.href = "/services"; }, 800);
       } else {
         msgEl.textContent = err.message || "Unknown error";
         const retryBtn = document.createElement("button");
@@ -441,26 +517,67 @@
     };
 
     if (opts.skipApiCall) {
-      clearInterval(interval);
       handleFailure(opts.prefetchError || new Error("Scan unavailable"));
       return;
     }
 
-    try {
-      await api("POST", "/api/setup/scan");
-      clearInterval(interval);
-      await loadFindings();
-      // Don't auto-advance: stay on the scanning panel so the user can inspect
-      // what was retrieved at each step. They click "Continue" to move on.
+    // Don't auto-advance: stay on the scanning panel so the user can
+    // inspect each step. They click "Continue" to move on.
+    const finishScan = () => {
       spinnerEl.classList.add("hidden");
       headingEl.textContent = "Scan complete.";
       narrationEl.textContent = "Click any step to inspect what we collected.";
       markStepsComplete(state.findings);
       footerEl.classList.remove("hidden");
-    } catch (err) {
-      clearInterval(interval);
+    };
+
+    let settled = false;
+    const es = new EventSource("/api/setup/scan/stream");
+    activeEventSource = es;
+
+    es.addEventListener("step", (e) => {
+      let msg;
+      try { msg = JSON.parse(e.data); } catch { return; }
+      enqueueReveal(() => applyStepEvent(msg.step, msg.payload));
+    });
+
+    es.addEventListener("done", async () => {
+      settled = true;
+      es.close();
+      if (activeEventSource === es) activeEventSource = null;
+      try {
+        await loadFindings();
+      } catch (err) {
+        handleFailure(err);
+        return;
+      }
+      // Queued so the finish lands after the last step's reveal.
+      enqueueReveal(finishScan);
+    });
+
+    es.addEventListener("fail", (e) => {
+      settled = true;
+      es.close();
+      if (activeEventSource === es) activeEventSource = null;
+      let msg = {};
+      try { msg = JSON.parse(e.data); } catch { /* keep {} */ }
+      const err = new Error(msg.message || msg.error || "Scan failed.");
+      if (msg.error === "NO_ACCESS") err.status = 403;
+      else if (msg.error === "RESOURCE_SELECTION_REQUIRED") err.status = 409;
+      else err.status = 500;
+      err.payload = msg;
       handleFailure(err);
-    }
+    });
+
+    es.onerror = () => {
+      if (settled) return; // expected close right after done/fail
+      settled = true;
+      es.close();
+      if (activeEventSource === es) activeEventSource = null;
+      handleFailure(new Error(
+        "Lost the connection to the scan. Your session may have expired — retry, or sign in again.",
+      ));
+    };
   }
 
   // ── Step 2 — Findings ─────────────────────────────────────────
@@ -698,7 +815,13 @@
     try {
       await api("POST", "/api/setup/validate", body);
       show("complete");
-      setTimeout(() => { window.location.href = "/"; }, 1200);
+      // Land straight on this resource's dashboard — no second resource
+      // picker, no detour through the hub.
+      const resName =
+        state.findings?.selectedResource?.appInsightsName ||
+        state.findings?.selectedResource?.name;
+      const dest = resName ? `/service/${encodeURIComponent(resName)}` : "/";
+      setTimeout(() => { window.location.href = dest; }, 1200);
     } catch (err) {
       alert(`Could not save: ${err.message}`);
     }

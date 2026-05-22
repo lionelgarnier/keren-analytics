@@ -292,55 +292,69 @@ body {
   color: var(--success);
 }
 
-/* ========== Progress bar ========== */
-.progress-panel {
-  padding: 12px 16px;
-  background: var(--surface);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
-  margin-bottom: 4px;
+/* ========== Skeleton loaders ========== */
+/* Each card carries a [data-card] attribute. While it loads, an absolutely
+   positioned overlay shows a shimmering placeholder; the real content is
+   kept in the layout (visibility:hidden) so the card holds its size. */
+@keyframes eaa-shimmer {
+  0%   { background-position: -480px 0; }
+  100% { background-position:  480px 0; }
 }
 
-.progress-panel.hidden {
-  display: none;
+[data-card].is-loading {
+  position: relative;
+  min-height: 140px;
 }
 
-.progress-header {
+[data-card].is-loading > :not(.card-overlay) {
+  visibility: hidden;
+}
+
+.card-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+}
+
+.skeleton {
+  background: var(--border-light);
+  background-image: linear-gradient(
+    90deg,
+    var(--border-light) 0%,
+    var(--border) 40%,
+    var(--border-light) 80%
+  );
+  background-size: 480px 100%;
+  background-repeat: no-repeat;
+  animation: eaa-shimmer 1.3s linear infinite;
+  border-radius: var(--radius-sm);
+}
+
+.skeleton-line { height: 14px; }
+.skeleton-line.sk-40 { width: 40%; }
+.skeleton-line.sk-60 { width: 60%; }
+.skeleton-fill { flex: 1; min-height: 80px; }
+
+/* Per-card error state — one failed query never takes the whole page down. */
+.card-error {
   align-items: center;
-  margin-bottom: 8px;
+  justify-content: center;
+  text-align: center;
+  gap: 10px;
 }
 
-.progress-label {
+.card-error-msg {
+  margin: 0;
   font-size: 13px;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 80%;
+  color: var(--danger);
 }
 
-.progress-pct {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--primary);
-  font-variant-numeric: tabular-nums;
-}
-
-.progress-track {
-  width: 100%;
-  height: 6px;
-  background: var(--border);
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  background: var(--primary);
-  border-radius: 3px;
-  transition: width 0.3s ease;
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
 }
 
 .text-muted {
@@ -926,6 +940,53 @@ body {
 
 .resource-card-v2:hover .resource-card-select-arrow {
   transform: translateX(3px);
+}
+
+/* Per-resource setup status (service hub) */
+.resource-card-statusrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.resource-status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--text-muted);
+}
+
+.resource-status-label { color: var(--text-secondary); }
+
+.resource-card-status-ready .resource-status-dot       { background: var(--success); }
+.resource-card-status-ready .resource-status-label     { color: var(--success); }
+.resource-card-status-incomplete .resource-status-dot  { background: var(--warning); }
+.resource-card-status-incomplete .resource-status-label { color: var(--warning); }
+.resource-card-status-unconfigured .resource-status-dot { background: var(--text-muted); }
+.resource-card-status-unconfigured .resource-status-label { color: var(--text-muted); }
+
+/* Secondary "Reconfigure" action — left of the primary action text */
+.resource-card-reconfigure {
+  order: -1;
+  margin-right: auto;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.resource-card-reconfigure:hover {
+  border-color: var(--accent-border);
+  color: var(--accent);
 }
 
 /* Empty search state */
@@ -3160,8 +3221,77 @@ body {
   50% { opacity: 0.3; }
 }
 
-.setup-log-text { flex: 1; min-width: 0; }
+.setup-log-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.setup-log-text { min-width: 0; }
 .setup-log-done .setup-log-text { color: var(--text-primary); }
+
+/* Live preview (Track F4 streaming) — revealed under a finished step
+   row as its SSE event lands, so the user sees real numbers, not a
+   fake ticker. */
+.setup-log-preview {
+  display: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 7px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.setup-log-preview.is-shown {
+  display: flex;
+  animation: setup-preview-in 0.35s ease both;
+}
+@keyframes setup-preview-in {
+  from { opacity: 0; transform: translateY(-3px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.setup-preview-num {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.setup-preview-label { color: var(--text-secondary); }
+.setup-preview-label strong { color: var(--text-primary); }
+.setup-preview-text { color: var(--text-secondary); }
+.setup-preview-text code { font-size: 11px; }
+.setup-preview-chip {
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: var(--border-light);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: nowrap;
+  animation: setup-preview-in 0.3s ease both;
+}
+.setup-preview-chip-more {
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+}
+.setup-preview-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.setup-preview-pill-yes { background: var(--success-bg); color: var(--success); }
+.setup-preview-pill-no  { background: var(--border-light); color: var(--text-muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  .setup-log-preview.is-shown,
+  .setup-preview-chip { animation: none; }
+}
 
 .setup-log-chevron {
   color: var(--text-muted);

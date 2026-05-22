@@ -1,8 +1,9 @@
 import { buildReadinessReport } from "./readiness.js";
 import { buildSchemaProfile } from "./schemaProfile.js";
 import { buildSchemaScan } from "./schemaScan.js";
-import { persistScan } from "./scanStore.js";
+import { persistScan, getLatestScan } from "./scanStore.js";
 import { getOrComputeMapping } from "./aiMappingService.js";
+import { getMappingForScan } from "./mappingStore.js";
 import { buildMapping, mergeWithValidation } from "./mapping.js";
 import { getActiveValidation } from "./validationStore.js";
 import { buildOverviewDashboard } from "./dashboard.js";
@@ -11,153 +12,155 @@ import { loadKqlTemplate, renderTemplate } from "./kql.js";
 import { logStateTransition, getTenant, updateTenant } from "./metadataStore.js";
 import { PipelineStates } from "./stateMachine.js";
 
-export async function runOverviewPipeline({
-  tenantId,
-  rangeKey,
-  azureClient,
-  cacheTtlMs,
-  customStart,
-  customEnd,
-  onProgress,
-  azureMode,
-}) {
+/*
+ * Two distinct phases — keep them separate, never run config twice.
+ *
+ *   runSetupScan()       CONFIG — done once (setup wizard + "Re-scan").
+ *                        Discovers, probes readiness, profiles the schema,
+ *                        scans, calls the LLM. Persists a `scans` row that
+ *                        is a complete config snapshot (schemaProfile +
+ *                        readinessReport live inside the scan payload).
+ *
+ *   runOverviewPipeline() RENDER — done on every dashboard load.
+ *                        Reuses the latest config snapshot, runs ONLY the
+ *                        dashboard KQL queries. No scan, no LLM call, no
+ *                        readiness/schema probing. Lazily triggers
+ *                        runSetupScan() exactly once if no snapshot exists.
+ */
+
+/**
+ * Resolve the resource the pipeline should target. Auto-selects when the
+ * tenant holds exactly one App Insights; returns `requiresSelection` when
+ * a choice is needed. Shared by both phases.
+ */
+async function resolveSelectedResource(tenantId, azureClient) {
+  const tenant = getTenant(tenantId);
+  if (tenant.selectedResource) return { selectedResource: tenant.selectedResource };
+
+  const discovered = await azureClient.discoverResources(tenantId);
+  if (discovered.length === 1) {
+    const selectedResource = { ...discovered[0], selectedAt: new Date().toISOString() };
+    updateTenant(tenantId, { selectedResource });
+    logStateTransition(tenantId, {
+      state: PipelineStates.SELECTING_RESOURCE,
+      detail: "auto-selected",
+    });
+    return { selectedResource };
+  }
+  logStateTransition(tenantId, {
+    state: PipelineStates.SELECTING_RESOURCE,
+    detail: "requires-selection",
+  });
+  return { requiresSelection: true, resources: discovered };
+}
+
+/**
+ * CONFIG phase. Runs the expensive one-time work — readiness probes,
+ * schema profiling, the schema scan, and the LLM mapping call — and
+ * persists a `scans` row carrying the full config snapshot. Never builds
+ * the dashboard. Called by the setup wizard (`/api/setup/scan*`) and,
+ * lazily, by runOverviewPipeline when no snapshot exists yet.
+ */
+export async function runSetupScan({ tenantId, azureClient, onProgress, onStep }) {
   const progress = typeof onProgress === "function" ? onProgress : () => {};
-  const timeRange = resolveTimeRange(rangeKey, customStart, customEnd);
+  // F4 streaming: structured per-stage events the setup wizard renders as
+  // live previews. No-op when the caller doesn't pass one.
+  const emitStep = typeof onStep === "function" ? onStep : () => {};
   const now = new Date();
-  let readinessWindow = {
-    start: new Date(now.getTime() - 24 * 60 * 60 * 1000),
-    end: now,
-  };
+
   logStateTransition(tenantId, { state: PipelineStates.DISCOVERING_RESOURCES });
   progress("Discovering resources", 0);
-
-  const tenant = getTenant(tenantId);
-  let selectedResource = tenant.selectedResource;
-
-  if (!selectedResource) {
-    const discovered = await azureClient.discoverResources(tenantId);
-    if (discovered.length === 1) {
-      selectedResource = { ...discovered[0], selectedAt: new Date().toISOString() };
-      updateTenant(tenantId, { selectedResource });
-      logStateTransition(tenantId, {
-        state: PipelineStates.SELECTING_RESOURCE,
-        detail: "auto-selected",
-      });
-    } else {
-      logStateTransition(tenantId, {
-        state: PipelineStates.SELECTING_RESOURCE,
-        detail: "requires-selection",
-      });
-      return {
-        requiresSelection: true,
-        resources: discovered,
-      };
-    }
+  const resolved = await resolveSelectedResource(tenantId, azureClient);
+  if (resolved.requiresSelection) {
+    return { requiresSelection: true, resources: resolved.resources };
   }
+  const selectedResource = resolved.selectedResource;
 
   logStateTransition(tenantId, { state: PipelineStates.CHECKING_ACCESS });
   progress("Checking workspace access", 0.05);
   const access = await azureClient.checkAccess(selectedResource.workspaceId);
   if (!access.ok) {
     logStateTransition(tenantId, { state: PipelineStates.NO_ACCESS, detail: access.reason });
-    return {
-      error: "NO_ACCESS",
-      message: access.reason || "Missing permissions for workspace.",
-    };
+    return { error: "NO_ACCESS", message: access.reason || "Missing permissions for workspace." };
   }
 
-  const timeParams = {
-    timeStart: toKqlDatetime(timeRange.start),
-    timeEnd: toKqlDatetime(timeRange.end),
-  };
-  const readinessParams = {
-    timeStart: toKqlDatetime(readinessWindow.start),
-    timeEnd: toKqlDatetime(readinessWindow.end),
-  };
+  emitStep("connect", {
+    resourceName: selectedResource.appInsightsName || selectedResource.name || null,
+    subscriptionId: selectedResource.subscriptionId || null,
+    resourceGroup: selectedResource.resourceGroup || null,
+    workspaceId: selectedResource.workspaceId || null,
+  });
 
+  // ── Readiness probes (24h window, widen to 7d if empty / low-confidence) ──
+  let readinessWindow = { start: new Date(now.getTime() - 24 * 60 * 60 * 1000), end: now };
   logStateTransition(tenantId, { state: PipelineStates.READINESS_PROBES });
-  progress("Running readiness probes", 0.08);
+  progress("Running readiness probes", 0.1);
   const readinessTemplate = loadKqlTemplate("readiness-probes");
-  const readinessKql = renderTemplate(readinessTemplate, readinessParams);
   const readinessResult = await azureClient.queryWorkspace({
     resourceId: selectedResource.resourceId,
     workspaceId: selectedResource.workspaceId,
-    kql: readinessKql,
+    kql: renderTemplate(readinessTemplate, {
+      timeStart: toKqlDatetime(readinessWindow.start),
+      timeEnd: toKqlDatetime(readinessWindow.end),
+    }),
     queryName: "readiness",
     timeRangeKey: "24h",
   });
-  const readinessRows = extractRows(readinessResult);
   let readinessReport = buildReadinessReport({
-    probeResult: readinessRows[0] || {},
+    probeResult: extractRows(readinessResult)[0] || {},
     window: readinessWindow,
   });
 
   if (readinessReport.overallStatus === "EMPTY" || readinessReport.confidence < 0.4) {
-    readinessWindow = {
-      start: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
-      end: now,
-    };
-    const fallbackParams = {
-      timeStart: toKqlDatetime(readinessWindow.start),
-      timeEnd: toKqlDatetime(readinessWindow.end),
-    };
-    const fallbackKql = renderTemplate(readinessTemplate, fallbackParams);
+    readinessWindow = { start: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000), end: now };
     const fallbackResult = await azureClient.queryWorkspace({
       resourceId: selectedResource.resourceId,
       workspaceId: selectedResource.workspaceId,
-      kql: fallbackKql,
+      kql: renderTemplate(readinessTemplate, {
+        timeStart: toKqlDatetime(readinessWindow.start),
+        timeEnd: toKqlDatetime(readinessWindow.end),
+      }),
       queryName: "readinessFallback",
       timeRangeKey: "7d",
     });
-    const fallbackRows = extractRows(fallbackResult);
     const fallbackReport = buildReadinessReport({
-      probeResult: fallbackRows[0] || {},
+      probeResult: extractRows(fallbackResult)[0] || {},
       window: readinessWindow,
     });
-    if (fallbackReport.overallStatus !== "EMPTY") {
-      readinessReport = fallbackReport;
-    }
+    if (fallbackReport.overallStatus !== "EMPTY") readinessReport = fallbackReport;
   }
   updateTenant(tenantId, { readinessReport });
 
+  // ── Schema profiling (fixed 30-day window) ──
   logStateTransition(tenantId, { state: PipelineStates.SCHEMA_PROFILING });
-  progress("Profiling schema", 0.15);
-  const schemaStart = new Date(Math.min(
-    timeRange.start.getTime(),
-    now.getTime() - 30 * 24 * 60 * 60 * 1000,
-  ));
+  progress("Profiling schema", 0.2);
   const schemaTimeParams = {
-    timeStart: toKqlDatetime(schemaStart),
+    timeStart: toKqlDatetime(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)),
     timeEnd: toKqlDatetime(now),
   };
-  const schemaTablesTemplate = loadKqlTemplate("schema-tables");
-  const schemaTablesKql = renderTemplate(schemaTablesTemplate, schemaTimeParams);
   const tablesResult = await azureClient.queryWorkspace({
     resourceId: selectedResource.resourceId,
     workspaceId: selectedResource.workspaceId,
-    kql: schemaTablesKql,
+    kql: renderTemplate(loadKqlTemplate("schema-tables"), schemaTimeParams),
     queryName: "schemaTables",
     timeRangeKey: "30d",
   });
-
-  const schemaCustomTemplate = loadKqlTemplate("schema-custom-dimensions");
-  const schemaCustomKql = renderTemplate(schemaCustomTemplate, schemaTimeParams);
   const customResult = await azureClient.queryWorkspace({
     resourceId: selectedResource.resourceId,
     workspaceId: selectedResource.workspaceId,
-    kql: schemaCustomKql,
+    kql: renderTemplate(loadKqlTemplate("schema-custom-dimensions"), schemaTimeParams),
     queryName: "schemaCustomDimensions",
     timeRangeKey: "30d",
   });
-
   const schemaProfile = buildSchemaProfile({
     tablesResult: extractRows(tablesResult),
     customDimensionsResult: extractRows(customResult),
   });
   updateTenant(tenantId, { schemaProfile });
 
+  // ── Schema scan — persisted as the config snapshot ──
   logStateTransition(tenantId, { state: PipelineStates.SCHEMA_SCAN });
-  progress("Scanning schema enrichment", 0.18);
+  progress("Scanning schema enrichment", 0.35);
   const scan = await runSchemaScan({
     azureClient,
     selectedResource,
@@ -165,9 +168,10 @@ export async function runOverviewPipeline({
     schemaProfile,
     readinessReport,
   });
+  let scanId = null;
   if (scan) {
     try {
-      persistScan(tenantId, scan);
+      scanId = persistScan(tenantId, selectedResource.resourceId, scan).id;
     } catch (error) {
       logStateTransition(tenantId, {
         state: PipelineStates.SCHEMA_SCAN,
@@ -176,14 +180,18 @@ export async function runOverviewPipeline({
     }
   }
 
-  // F3: optional AI mapping enrichment. Cached per scan_id so re-runs
-  // don't re-spend tokens. Never blocks the pipeline — degraded fallback
-  // returns the empty proposal shape so the wizard can still render.
+  // The scan's headline numbers are final here — stream them before the
+  // (slower) AI call so the wizard fills in three steps at once.
+  const deterministicMapping = buildMapping({ schemaProfile, readinessReport });
+  if (scan) emitScanSteps(emitStep, scan, deterministicMapping);
+
+  // ── AI mapping — cached per scan_id, so this is the only place the LLM
+  //    is ever called. A dashboard render reuses this row, never re-calls. ──
   logStateTransition(tenantId, { state: PipelineStates.AI_ANALYSIS });
-  progress("AI mapping analysis", 0.20);
+  progress("AI mapping analysis", 0.55);
   let aiMapping = null;
   try {
-    aiMapping = await getOrComputeMapping(tenantId, { readinessReport });
+    aiMapping = await getOrComputeMapping(tenantId, selectedResource.resourceId, { readinessReport });
     if (aiMapping?.degraded) {
       logStateTransition(tenantId, {
         state: PipelineStates.AI_ANALYSIS,
@@ -197,15 +205,101 @@ export async function runOverviewPipeline({
     });
   }
 
+  const aiRecs = aiMapping?.proposals?.dashboard_recommendations || {};
+  emitStep("ai", {
+    degraded: !aiMapping || !!aiMapping.degraded,
+    summary: aiMapping?.proposals?.summary || null,
+    ready: (aiRecs.feature || []).length,
+    needsInstrumentation: (aiRecs.hide || []).length,
+  });
+
   logStateTransition(tenantId, { state: PipelineStates.MAPPING_BUILD });
-  progress("Building data mapping", 0.22);
+  progress("Building data mapping", 0.9);
+  const validation = getActiveValidation(tenantId, selectedResource.resourceId);
+  const mapping = mergeWithValidation(deterministicMapping, validation);
+  updateTenant(tenantId, { mapping });
+
+  logStateTransition(tenantId, { state: PipelineStates.READY });
+  progress("Done", 1);
+
+  return {
+    resources: [selectedResource],
+    scanId,
+    mappingId: aiMapping?.id || null,
+    readinessReport,
+    schemaProfile,
+    mapping,
+    aiMapping,
+  };
+}
+
+/**
+ * RENDER phase. Runs on every dashboard load. Reuses the persisted config
+ * snapshot (latest `scans` row for the resource) and runs ONLY the
+ * dashboard KQL queries via buildOverviewDashboard. No new scan, no LLM
+ * call, no readiness/schema re-probe — and crucially, no config: this
+ * phase never runs setup work.
+ *
+ * If no config snapshot exists, the resource simply isn't set up yet —
+ * we return `SETUP_REQUIRED` so the caller routes the user to the setup
+ * wizard. Config belongs to the wizard, never to a dashboard load.
+ */
+export async function runOverviewPipeline({
+  tenantId,
+  rangeKey,
+  azureClient,
+  cacheTtlMs,
+  customStart,
+  customEnd,
+  onProgress,
+  onCard,
+  azureMode,
+}) {
+  const progress = typeof onProgress === "function" ? onProgress : () => {};
+  const emitCard = typeof onCard === "function" ? onCard : () => {};
+  const timeRange = resolveTimeRange(rangeKey, customStart, customEnd);
+
+  logStateTransition(tenantId, { state: PipelineStates.DISCOVERING_RESOURCES });
+  progress("Loading dashboard", 0);
+  const resolved = await resolveSelectedResource(tenantId, azureClient);
+  if (resolved.requiresSelection) {
+    return { requiresSelection: true, resources: resolved.resources };
+  }
+  const selectedResource = resolved.selectedResource;
+
+  logStateTransition(tenantId, { state: PipelineStates.CHECKING_ACCESS });
+  const access = await azureClient.checkAccess(selectedResource.workspaceId);
+  if (!access.ok) {
+    logStateTransition(tenantId, { state: PipelineStates.NO_ACCESS, detail: access.reason });
+    return { error: "NO_ACCESS", message: access.reason || "Missing permissions for workspace." };
+  }
+
+  // RENDER only — never configures. The config snapshot is produced once
+  // by the setup wizard (runSetupScan). If it's missing, the resource
+  // isn't set up: return SETUP_REQUIRED so the caller sends the user to
+  // the wizard, rather than silently doing config work on a page load.
+  const scan = getLatestScan(tenantId, selectedResource.resourceId);
+  if (!scan?.payload?.schemaProfile || !scan?.payload?.readinessReport) {
+    return { error: "SETUP_REQUIRED", message: "This resource has not been configured yet." };
+  }
+
+  const schemaProfile = scan.payload.schemaProfile;
+  const readinessReport = scan.payload.readinessReport;
+  // Keep the tenant scratch (read by /readiness, /recommendations, /prompts)
+  // in sync with the resource currently being rendered.
+  updateTenant(tenantId, { readinessReport, schemaProfile });
+
+  // Persisted AI mapping for this scan — a DB read, never an LLM call.
+  const aiMapping = getMappingForScan(tenantId, scan.id);
+
+  logStateTransition(tenantId, { state: PipelineStates.MAPPING_BUILD });
   const deterministicMapping = buildMapping({ schemaProfile, readinessReport });
-  const validation = getActiveValidation(tenantId);
+  const validation = getActiveValidation(tenantId, selectedResource.resourceId);
   const mapping = mergeWithValidation(deterministicMapping, validation);
   updateTenant(tenantId, { mapping });
 
   logStateTransition(tenantId, { state: PipelineStates.DASHBOARD_BUILD });
-  progress("Building dashboard", 0.25);
+  progress("Building dashboard", 0);
   const dashboard = await buildOverviewDashboard({
     tenantId,
     resourceId: selectedResource.resourceId,
@@ -217,12 +311,12 @@ export async function runOverviewPipeline({
     cacheTtlMs,
     azureClient,
     readinessReport,
-    onProgress: (label, pct) => progress(label, 0.25 + pct * 0.7),
+    onProgress: (label, pct) => progress(label, pct),
+    onCard: (name, data) => emitCard(name, data),
     azureMode,
   });
 
   logStateTransition(tenantId, { state: PipelineStates.CACHING_RESULTS });
-  progress("Finalizing", 0.98);
   logStateTransition(tenantId, { state: PipelineStates.READY });
   progress("Done", 1);
 
@@ -290,5 +384,52 @@ function extractRows(result) {
       obj[name] = row[index];
     });
     return obj;
+  });
+}
+
+/**
+ * F4 streaming — push the three "scan landed" wizard steps with their
+ * headline numbers. Pure transform over the assembled scan; the wizard
+ * renders each as a live preview under its scanning-log row. Identity
+ * coverage uses the deterministic mapping (the AI merge happens later,
+ * but the per-field "resolved?" verdict is stable enough for a preview).
+ */
+const CANONICAL_IDENTITY_FIELDS = [
+  "canonicalUserId",
+  "canonicalSessionId",
+  "canonicalPagePath",
+  "canonicalReferrer",
+];
+
+function emitScanSteps(emitStep, scan, deterministicMapping) {
+  const cds = scan.customDimensions || [];
+  const cdTables = new Set(cds.map((c) => c.tableName).filter(Boolean));
+  emitStep("customDimensions", {
+    keyCount: cds.length,
+    tableCount: cdTables.size,
+    sampleKeys: cds.slice(0, 8).map((c) => c.keyName).filter(Boolean),
+  });
+
+  const events = scan.eventNames || [];
+  const totalEvents = events.reduce((sum, e) => sum + (Number(e.count) || 0), 0);
+  emitStep("eventVolumes", {
+    totalEvents,
+    eventTypeCount: events.length,
+    tableCount: Object.values(scan.tables || {}).filter(Boolean).length,
+    topEvents: [...events]
+      .sort((a, b) => (b.count || 0) - (a.count || 0))
+      .slice(0, 3)
+      .map((e) => ({ name: e.name, count: e.count || 0 })),
+  });
+
+  const fields = CANONICAL_IDENTITY_FIELDS.map((canonical) => ({
+    canonical,
+    resolved: !!deterministicMapping?.[canonical]?.expr,
+  }));
+  emitStep("identity", {
+    fields,
+    resolved: fields.filter((f) => f.resolved).length,
+    total: fields.length,
+    gapCount: (scan.gaps || []).length,
   });
 }

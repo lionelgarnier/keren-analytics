@@ -255,3 +255,25 @@ du Container App** est `Azure AI User` (lecture + inférence) ou
 `Azure AI Developer` (idem + édition projet) assigné sur le **Project**
 Foundry, pas `Cognitive Services User` sur le Hub. Action manuelle
 mainteneur tracée dans `maintainer-todo.md`.
+
+## Addendum 2026-05-22 — état de setup scopé par ressource
+
+Le schéma F2-F4 keyait `scans` / `validations` sur `tenant_id` seul, et
+`tenants` n'a qu'une colonne `selected_resource`. Implicitement : un
+tenant = une ressource App Insights. Faux en pratique — un tenant Azure
+d'entreprise a couramment plusieurs App Insights (une par app/env).
+Conséquence : configurer la ressource A faisait passer `needsSetup` à
+`false` pour tout le tenant, et `getActiveValidation(tenantId)`
+appliquait le mapping de A au dashboard de B.
+
+Correctif : `scans` et `validations` gagnent une colonne `resource_id`
+(nullable). `mappings` reste inchangée — scopée transitivement via
+`scan_id`. Pas de mécanisme de versioning de schéma : une migration
+in-place idempotente (`PRAGMA table_info` → `ALTER TABLE ADD COLUMN`)
+ajoute la colonne sur les DB existantes et backfill les lignes depuis le
+`selected_resource` du tenant, donc les utilisateurs mono-ressource ne
+perdent pas leur configuration. L'écran post-login devient un **hub de
+services** (`GET /api/setup/services`) avec un statut par ressource
+(`ready` / `incomplete` / `unconfigured`). Postgres multi-tenant reste
+différé en Phase 3 ; ce correctif reste dans le périmètre SQLite
+single-replica.

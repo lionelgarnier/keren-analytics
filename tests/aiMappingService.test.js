@@ -11,6 +11,8 @@ function freshTenant(label) {
   return `${label}-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+const RES = "/subscriptions/s/resourceGroups/rg/providers/microsoft.insights/components/app-a";
+
 function setup() {
   __resetForTests();
   __resetQuotaForTests();
@@ -84,16 +86,16 @@ function noopProvider() {
 
 test("returns null when no scan exists for the tenant", async () => {
   setup();
-  const result = await getOrComputeMapping(freshTenant("no-scan"));
+  const result = await getOrComputeMapping(freshTenant("no-scan"), RES);
   assert.equal(result, null);
 });
 
 test("happy path: persists provider proposals and source = provider.name", async () => {
   setup();
   const tenantId = freshTenant("happy");
-  const { id: scanId } = persistScan(tenantId, tinyScan);
+  const { id: scanId } = persistScan(tenantId, RES, tinyScan);
 
-  const result = await getOrComputeMapping(tenantId, { provider: happyProvider() });
+  const result = await getOrComputeMapping(tenantId, RES, { provider: happyProvider() });
   assert.equal(result.degraded, false);
   assert.equal(result.source, "azure-foundry");
   assert.equal(result.scanId, scanId);
@@ -109,7 +111,7 @@ test("happy path: persists provider proposals and source = provider.name", async
 test("cache hit on second call: provider is NOT invoked again", async () => {
   setup();
   const tenantId = freshTenant("cache");
-  const { id: scanId } = persistScan(tenantId, tinyScan);
+  const { id: scanId } = persistScan(tenantId, RES, tinyScan);
 
   let calls = 0;
   const countingProvider = {
@@ -125,9 +127,9 @@ test("cache hit on second call: provider is NOT invoked again", async () => {
     },
   };
 
-  await getOrComputeMapping(tenantId, { provider: countingProvider });
-  await getOrComputeMapping(tenantId, { provider: countingProvider });
-  await getOrComputeMapping(tenantId, { provider: countingProvider });
+  await getOrComputeMapping(tenantId, RES, { provider: countingProvider });
+  await getOrComputeMapping(tenantId, RES, { provider: countingProvider });
+  await getOrComputeMapping(tenantId, RES, { provider: countingProvider });
   assert.equal(calls, 1, "provider should only be called once for the same scan_id");
 
   const cached = getMappingForScan(tenantId, scanId);
@@ -138,7 +140,7 @@ test("re-scan invalidates cache: new scan_id triggers a fresh provider call", as
   setup();
   const tenantId = freshTenant("rescan");
 
-  persistScan(tenantId, { ...tinyScan, scannedAt: "2026-05-01T00:00:00Z" });
+  persistScan(tenantId, RES, { ...tinyScan, scannedAt: "2026-05-01T00:00:00Z" });
   let calls = 0;
   const countingProvider = {
     ...happyProvider(),
@@ -151,20 +153,20 @@ test("re-scan invalidates cache: new scan_id triggers a fresh provider call", as
       };
     },
   };
-  await getOrComputeMapping(tenantId, { provider: countingProvider });
+  await getOrComputeMapping(tenantId, RES, { provider: countingProvider });
   assert.equal(calls, 1);
 
   // New scan
-  persistScan(tenantId, { ...tinyScan, scannedAt: "2026-05-10T00:00:00Z" });
-  await getOrComputeMapping(tenantId, { provider: countingProvider });
+  persistScan(tenantId, RES, { ...tinyScan, scannedAt: "2026-05-10T00:00:00Z" });
+  await getOrComputeMapping(tenantId, RES, { provider: countingProvider });
   assert.equal(calls, 2, "new scan should trigger a new provider call");
 });
 
 test("provider returns null → degraded fallback, not crash", async () => {
   setup();
   const tenantId = freshTenant("null");
-  const { id: scanId } = persistScan(tenantId, tinyScan);
-  const result = await getOrComputeMapping(tenantId, { provider: noopProvider() });
+  const { id: scanId } = persistScan(tenantId, RES, tinyScan);
+  const result = await getOrComputeMapping(tenantId, RES, { provider: noopProvider() });
   assert.equal(result.degraded, true);
   assert.equal(result.source, "deterministic");
   assert.deepEqual(result.proposals.mapping_proposals, []);
@@ -176,8 +178,8 @@ test("provider returns null → degraded fallback, not crash", async () => {
 test("provider response fails shape check → degraded", async () => {
   setup();
   const tenantId = freshTenant("malformed");
-  persistScan(tenantId, tinyScan);
-  const result = await getOrComputeMapping(tenantId, { provider: malformedProvider() });
+  persistScan(tenantId, RES, tinyScan);
+  const result = await getOrComputeMapping(tenantId, RES, { provider: malformedProvider() });
   assert.equal(result.degraded, true);
   assert.match(result.reason, /shape check/);
 });
@@ -185,8 +187,8 @@ test("provider response fails shape check → degraded", async () => {
 test("provider throws → degraded, dashboard pipeline not blocked", async () => {
   setup();
   const tenantId = freshTenant("throws");
-  persistScan(tenantId, tinyScan);
-  const result = await getOrComputeMapping(tenantId, { provider: throwingProvider() });
+  persistScan(tenantId, RES, tinyScan);
+  const result = await getOrComputeMapping(tenantId, RES, { provider: throwingProvider() });
   assert.equal(result.degraded, true);
   assert.match(result.reason, /provider error: network down/);
 });
@@ -194,7 +196,7 @@ test("provider throws → degraded, dashboard pipeline not blocked", async () =>
 test("over quota → skips provider entirely and returns degraded", async () => {
   setup();
   const tenantId = freshTenant("quota");
-  persistScan(tenantId, tinyScan);
+  persistScan(tenantId, RES, tinyScan);
 
   // Push spend past the cap.
   const { config } = await import("../src/config.js");
@@ -204,7 +206,7 @@ test("over quota → skips provider entirely and returns degraded", async () => 
 
   let calls = 0;
   const countingProvider = { ...happyProvider(), generate: async () => { calls += 1; return null; } };
-  const result = await getOrComputeMapping(tenantId, { provider: countingProvider });
+  const result = await getOrComputeMapping(tenantId, RES, { provider: countingProvider });
   assert.equal(result.degraded, true);
   assert.match(result.reason, /spend cap/);
   assert.equal(calls, 0, "provider must not be called when over cap");
@@ -213,13 +215,13 @@ test("over quota → skips provider entirely and returns degraded", async () => 
 test("mappingStore: getLatestMapping returns most recent across scans", () => {
   setup();
   const tenantId = freshTenant("latest");
-  const { id: scan1 } = persistScan(tenantId, { ...tinyScan, scannedAt: "2026-05-01T00:00:00Z" });
-  const { id: scan2 } = persistScan(tenantId, { ...tinyScan, scannedAt: "2026-05-10T00:00:00Z" });
+  const { id: scan1 } = persistScan(tenantId, RES, { ...tinyScan, scannedAt: "2026-05-01T00:00:00Z" });
+  const { id: scan2 } = persistScan(tenantId, RES, { ...tinyScan, scannedAt: "2026-05-10T00:00:00Z" });
 
   persistMapping(tenantId, scan1, { source: "azure-foundry", proposals: { mapping_proposals: ["old"] } });
   persistMapping(tenantId, scan2, { source: "azure-foundry", proposals: { mapping_proposals: ["new"] } });
 
-  const latest = getLatestMapping(tenantId);
+  const latest = getLatestMapping(tenantId, RES);
   assert.equal(latest.scanId, scan2);
   assert.deepEqual(latest.proposals.mapping_proposals, ["new"]);
 });

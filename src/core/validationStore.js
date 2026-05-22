@@ -20,7 +20,7 @@ import { getTenant } from "./metadataStore.js";
 
 const ALLOWED_DECISIONS = new Set(["accept_all", "override", "reject"]);
 
-export function persistValidation(tenantId, { mappingId = null, decision, overrides = null }) {
+export function persistValidation(tenantId, resourceId, { mappingId = null, decision, overrides = null }) {
   if (!ALLOWED_DECISIONS.has(decision)) {
     throw new Error(`validationStore: invalid decision "${decision}"`);
   }
@@ -30,11 +30,12 @@ export function persistValidation(tenantId, { mappingId = null, decision, overri
   const validatedAt = new Date().toISOString();
   const { lastInsertRowid } = db
     .prepare(
-      `INSERT INTO validations (tenant_id, mapping_id, decision, overrides, validated_at)
-       VALUES (?, ?, ?, ?, ?)`
+      `INSERT INTO validations (tenant_id, resource_id, mapping_id, decision, overrides, validated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`
     )
     .run(
       tenantId,
+      resourceId,
       mappingId,
       decision,
       overrides ? JSON.stringify(overrides) : null,
@@ -53,18 +54,32 @@ function rowToValidation(row) {
   };
 }
 
-export function getActiveValidation(tenantId) {
+export function getActiveValidation(tenantId, resourceId) {
   const db = getDb();
   const row = db
     .prepare(
       `SELECT id, mapping_id, decision, overrides, validated_at
          FROM validations
-        WHERE tenant_id = ?
+        WHERE tenant_id = ? AND resource_id IS ?
         ORDER BY id DESC
         LIMIT 1`
     )
-    .get(tenantId);
+    .get(tenantId, resourceId);
   return row ? rowToValidation(row) : null;
+}
+
+/** Distinct resource IDs with at least one validation — drives the
+ *  hub's "ready" status (a resource is configured once validated). */
+export function getConfiguredResourceIds(tenantId) {
+  const db = getDb();
+  return db
+    .prepare(
+      `SELECT DISTINCT resource_id
+         FROM validations
+        WHERE tenant_id = ? AND resource_id IS NOT NULL`
+    )
+    .all(tenantId)
+    .map((r) => r.resource_id);
 }
 
 export function listValidations(tenantId, { limit = 20 } = {}) {
