@@ -61,6 +61,7 @@ async function runQuery({
 }) {
   const cacheKey = buildCacheKey({
     tenantId,
+    resourceId,
     workspaceId,
     queryName,
     timeRangeKey,
@@ -233,6 +234,60 @@ function buildUrlParamsData(rows) {
   };
 }
 
+/**
+ * Max concurrent KQL queries against a single Log Analytics workspace.
+ * Kept conservative — the Azure Monitor query API throttles per-workspace
+ * concurrency, and the 18 dashboard queries are independent so a small
+ * pool already collapses the cold-cache wait from ~18 serial round-trips
+ * to ~3 waves.
+ */
+const QUERY_CONCURRENCY = 6;
+
+/**
+ * Bounded-concurrency scheduler. Returns a `schedule(thunk)` function that
+ * resolves with the thunk's result, never running more than `limit` thunks
+ * at once. Rejections propagate to the caller of `schedule`.
+ */
+function createLimiter(limit) {
+  let active = 0;
+  const queue = [];
+  const pump = () => {
+    if (active >= limit || queue.length === 0) return;
+    active++;
+    const { thunk, resolve, reject } = queue.shift();
+    Promise.resolve()
+      .then(thunk)
+      .then(resolve, reject)
+      .finally(() => {
+        active--;
+        pump();
+      });
+  };
+  return (thunk) =>
+    new Promise((resolve, reject) => {
+      queue.push({ thunk, resolve, reject });
+      pump();
+    });
+}
+
+/**
+ * Build the overview dashboard.
+ *
+ * The 18 KQL queries are fired concurrently through a bounded pool — each
+ * query is independent (it only needs the mapping / schema / time window
+ * computed up front). A failed query is isolated: it degrades to an empty
+ * result and its card is flagged `error`, instead of taking the whole
+ * dashboard down.
+ *
+ * Two callbacks drive progressive rendering:
+ *  - `onProgress(label, pct)` — fires as each query settles.
+ *  - `onCard(name, data)` — fires once per card the instant its dependency
+ *    queries resolve, so the client can fill that card while others load.
+ *    `data` is either the card payload or `{ error: true, message }`.
+ *
+ * The fully-assembled `dashboard` object is still returned for the
+ * non-streaming JSON path and for `buildNarration`.
+ */
 export async function buildOverviewDashboard({
   tenantId,
   resourceId,
@@ -244,16 +299,13 @@ export async function buildOverviewDashboard({
   azureClient,
   readinessReport,
   onProgress,
+  onCard,
   azureMode,
   aiMapping,
 }) {
-  const TOTAL_QUERIES = 19;
-  let queryIndex = 0;
   const progress = typeof onProgress === "function" ? onProgress : () => {};
-  function queryProgress(label) {
-    progress(label, queryIndex / TOTAL_QUERIES);
-    queryIndex++;
-  }
+  const emitCard = typeof onCard === "function" ? onCard : () => {};
+
   const allowedExpr = allowedKqlExpressions(mapping);
   const pageTable = mapping.pageTable || (schemaProfile?.tables?.requests ? "requests" : "pageViews");
   const tableName = schemaProfile?.tables?.[pageTable] ? pageTable : "requests";
@@ -266,6 +318,7 @@ export async function buildOverviewDashboard({
     (schemaProfile?.tables?.requests ? mappingExpressions.sessionId.operation : mappingExpressions.sessionId.session);
   const pagePathExpr = mapping.canonicalPagePath?.expr || mappingExpressions.pagePath.urlPath;
   const userIdExpr = mapping.canonicalUserId?.expr || "";
+  const referrerExpr = mapping.canonicalReferrer?.expr || mappingExpressions.referrer.referrer;
 
   const timeParams = {
     timeStart: toKqlDatetime(timeRange.start),
@@ -275,548 +328,647 @@ export async function buildOverviewDashboard({
   const uniqueTemplate = userIdExpr ? "unique-visitors-user" : "unique-visitors-session";
   const binSize = binSizeForRange(timeRange.key);
 
+  // Period-over-period KPIs (B4) — only today / 7d / 30d define a
+  // predecessor; anything else returns null and the UI hides the chips.
+  const prevRange = previousTimeRange(timeRange);
+
   const emptyResult = { tables: [{ columns: [], rows: [] }] };
 
-  // --- Core queries (same as Phase 1) ---
+  const tableNameAllowed = ["pageViews", "requests"];
 
-  queryProgress("Counting visitors");
-  const uniqueVisitorsResult = hasPageTable
-    ? await runQuery({
-        tenantId,
-        resourceId,
-        workspaceId,
-        queryName: "uniqueVisitors",
-        templateName: uniqueTemplate,
-        params: {
-          ...timeParams,
-          tableName,
-          userIdExpr: userIdExpr || mappingExpressions.userId.anonymous,
-          sessionIdExpr: sessionExpr,
-        },
-        allowedValues: {
-          tableName: ["pageViews", "requests"],
-          ...allowedExpr,
-        },
-        timeRangeKey: timeRange.key,
-        mappingVersion: mapping.version,
-        ttlMs: cacheTtlMs,
-        azureClient,
-      })
-    : emptyResult;
+  // --- Query specs --------------------------------------------------------
+  // Each spec's `run` is a thunk so the param object is built lazily, only
+  // when the query is actually scheduled. Disabled queries (missing schema
+  // signal) never run — they resolve to `emptyResult`, exactly as before.
+  const querySpecs = [
+    {
+      name: "uniqueVisitors",
+      label: "Counting visitors",
+      enabled: Boolean(hasPageTable),
+      run: () =>
+        runQuery({
+          tenantId, resourceId, workspaceId,
+          queryName: "uniqueVisitors",
+          templateName: uniqueTemplate,
+          params: {
+            ...timeParams,
+            tableName,
+            userIdExpr: userIdExpr || mappingExpressions.userId.anonymous,
+            sessionIdExpr: sessionExpr,
+          },
+          allowedValues: { tableName: tableNameAllowed, ...allowedExpr },
+          timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
+        }),
+    },
+    {
+      name: "sessions",
+      label: "Counting sessions",
+      enabled: Boolean(hasPageTable),
+      run: () =>
+        runQuery({
+          tenantId, resourceId, workspaceId,
+          queryName: "sessions",
+          templateName: "sessions",
+          params: { ...timeParams, tableName, sessionIdExpr: sessionExpr },
+          allowedValues: { tableName: tableNameAllowed, sessionIdExpr: allowedExpr.sessionIdExpr },
+          timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
+        }),
+    },
+    {
+      name: "topPages",
+      label: "Loading top pages",
+      enabled: Boolean(hasPageTable),
+      run: () =>
+        runQuery({
+          tenantId, resourceId, workspaceId,
+          queryName: "topPages",
+          templateName: "top-pages",
+          params: { ...timeParams, tableName, pagePathExpr },
+          allowedValues: { tableName: tableNameAllowed, pagePathExpr: allowedExpr.pagePathExpr },
+          timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
+        }),
+    },
+    {
+      name: "topNavigation",
+      label: "Analyzing navigation paths",
+      enabled: Boolean(hasPageTable),
+      run: () =>
+        runQuery({
+          tenantId, resourceId, workspaceId,
+          queryName: "topNavigation",
+          templateName: "top-navigation",
+          params: { ...timeParams, tableName, pagePathExpr, sessionIdExpr: sessionExpr },
+          allowedValues: {
+            tableName: tableNameAllowed,
+            pagePathExpr: allowedExpr.pagePathExpr,
+            sessionIdExpr: allowedExpr.sessionIdExpr,
+          },
+          timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
+        }),
+    },
+    {
+      name: "techBrowser",
+      label: "Detecting browsers",
+      enabled: Boolean(hasPageTable),
+      run: () =>
+        runQuery({
+          tenantId, resourceId, workspaceId,
+          queryName: "techBrowser",
+          templateName: "tech-browser",
+          params: { ...timeParams, tableName },
+          allowedValues: { tableName: tableNameAllowed },
+          timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
+        }),
+    },
+    {
+      name: "techOs",
+      label: "Detecting operating systems",
+      enabled: Boolean(hasPageTable),
+      run: () =>
+        runQuery({
+          tenantId, resourceId, workspaceId,
+          queryName: "techOs",
+          templateName: "tech-os",
+          params: { ...timeParams, tableName },
+          allowedValues: { tableName: tableNameAllowed },
+          timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
+        }),
+    },
+    {
+      name: "techDevice",
+      label: "Detecting devices",
+      enabled: Boolean(hasPageTable),
+      run: () =>
+        runQuery({
+          tenantId, resourceId, workspaceId,
+          queryName: "techDevice",
+          templateName: "tech-device",
+          params: { ...timeParams, tableName },
+          allowedValues: { tableName: tableNameAllowed },
+          timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
+        }),
+    },
+    {
+      name: "performance",
+      label: "Measuring performance",
+      enabled: Boolean(hasRequests),
+      run: () =>
+        runQuery({
+          tenantId, resourceId, workspaceId,
+          queryName: "performance",
+          templateName: "performance",
+          params: { ...timeParams },
+          allowedValues: {},
+          timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
+        }),
+    },
+    {
+      name: "slowEndpoints",
+      label: "Finding slow endpoints",
+      enabled: Boolean(hasRequests),
+      run: () =>
+        runQuery({
+          tenantId, resourceId, workspaceId,
+          queryName: "slowEndpoints",
+          templateName: "slow-endpoints",
+          params: { ...timeParams },
+          allowedValues: {},
+          timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
+        }),
+    },
+    {
+      name: "dailyTrend",
+      label: "Computing daily trend",
+      enabled: Boolean(hasPageTable),
+      run: () =>
+        runQuery({
+          tenantId, resourceId, workspaceId,
+          queryName: "dailyTrend",
+          templateName: "daily-trend",
+          params: { ...timeParams, tableName, pagePathExpr, sessionIdExpr: sessionExpr, binSize },
+          allowedValues: {
+            tableName: tableNameAllowed,
+            pagePathExpr: allowedExpr.pagePathExpr,
+            sessionIdExpr: allowedExpr.sessionIdExpr,
+            binSize: ["1h", "1d"],
+          },
+          timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
+        }),
+    },
+    {
+      name: "geoDistribution",
+      label: "Loading geo distribution",
+      enabled: Boolean(hasGeo),
+      run: () =>
+        runQuery({
+          tenantId, resourceId, workspaceId,
+          queryName: "geoDistribution",
+          templateName: "geo-distribution",
+          params: { ...timeParams, tableName },
+          allowedValues: { tableName: tableNameAllowed },
+          timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
+        }),
+    },
+    {
+      name: "peakHours",
+      label: "Analyzing peak hours",
+      enabled: Boolean(hasPageTable),
+      run: () =>
+        runQuery({
+          tenantId, resourceId, workspaceId,
+          queryName: "peakHours",
+          templateName: "peak-hours",
+          params: { ...timeParams, tableName, sessionIdExpr: sessionExpr },
+          allowedValues: { tableName: tableNameAllowed, sessionIdExpr: allowedExpr.sessionIdExpr },
+          timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
+        }),
+    },
+    {
+      name: "urlParams",
+      label: "Scanning URL parameters",
+      enabled: Boolean(hasPageTable),
+      run: () =>
+        runQuery({
+          tenantId, resourceId, workspaceId,
+          queryName: "urlParams",
+          templateName: "url-parameters",
+          params: { ...timeParams, tableName },
+          allowedValues: { tableName: tableNameAllowed },
+          timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
+        }),
+    },
+    {
+      name: "campaignBreakdown",
+      label: "Loading campaign data",
+      enabled: Boolean(hasPageTable),
+      run: () =>
+        runQuery({
+          tenantId, resourceId, workspaceId,
+          queryName: "campaignBreakdown",
+          templateName: "campaign-breakdown",
+          params: {
+            ...timeParams,
+            tableName,
+            userIdExpr: userIdExpr || mappingExpressions.userId.anonymous,
+            sessionIdExpr: sessionExpr,
+          },
+          allowedValues: {
+            tableName: tableNameAllowed,
+            userIdExpr: allowedExpr.userIdExpr,
+            sessionIdExpr: allowedExpr.sessionIdExpr,
+          },
+          timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
+        }),
+    },
+    {
+      name: "sessionTimelines",
+      label: "Reconstructing sessions",
+      enabled: Boolean(hasPageTable),
+      run: () =>
+        runQuery({
+          tenantId, resourceId, workspaceId,
+          queryName: "sessionTimelines",
+          templateName: "session-timelines",
+          params: { ...timeParams, tableName, sessionIdExpr: sessionExpr, pagePathExpr },
+          allowedValues: {
+            tableName: tableNameAllowed,
+            sessionIdExpr: allowedExpr.sessionIdExpr,
+            pagePathExpr: allowedExpr.pagePathExpr,
+          },
+          timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
+        }),
+    },
+    {
+      name: "referrerSources",
+      label: "Analyzing referrers",
+      enabled: Boolean(hasPageTable),
+      run: () =>
+        runQuery({
+          tenantId, resourceId, workspaceId,
+          queryName: "referrerSources",
+          templateName: "referrer-sources",
+          params: { ...timeParams, tableName, referrerExpr },
+          allowedValues: { tableName: tableNameAllowed, referrerExpr: allowedExpr.referrerExpr },
+          timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
+        }),
+    },
+    {
+      name: "browserTimings",
+      label: "Measuring frontend timings",
+      enabled: Boolean(hasBrowserTimings),
+      run: () =>
+        runQuery({
+          tenantId, resourceId, workspaceId,
+          queryName: "browserTimings",
+          templateName: "browser-timings",
+          params: { ...timeParams },
+          allowedValues: {},
+          timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
+        }),
+    },
+    {
+      name: "previousKpis",
+      label: "Comparing to previous period",
+      enabled: Boolean(prevRange && hasPageTable),
+      run: () =>
+        runQuery({
+          tenantId, resourceId, workspaceId,
+          queryName: "previousKpis",
+          templateName: "previous-kpis",
+          params: {
+            timeStart: toKqlDatetime(prevRange.start),
+            timeEnd: toKqlDatetime(prevRange.end),
+            tableName,
+            userIdExpr: userIdExpr || mappingExpressions.userId.anonymous,
+            sessionIdExpr: sessionExpr,
+          },
+          allowedValues: { tableName: tableNameAllowed, ...allowedExpr },
+          timeRangeKey: prevRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
+        }),
+    },
+  ];
 
-  queryProgress("Counting sessions");
-  const sessionsResult = hasPageTable
-    ? await runQuery({
-        tenantId,
-        resourceId,
-        workspaceId,
-        queryName: "sessions",
-        templateName: "sessions",
-        params: {
-          ...timeParams,
-          tableName,
-          sessionIdExpr: sessionExpr,
-        },
-        allowedValues: {
-          tableName: ["pageViews", "requests"],
-          sessionIdExpr: allowedExpr.sessionIdExpr,
-        },
-        timeRangeKey: timeRange.key,
-        mappingVersion: mapping.version,
-        ttlMs: cacheTtlMs,
-        azureClient,
-      })
-    : emptyResult;
-
-  queryProgress("Loading top pages");
-  const topPagesResult = hasPageTable
-    ? await runQuery({
-        tenantId,
-        resourceId,
-        workspaceId,
-        queryName: "topPages",
-        templateName: "top-pages",
-        params: {
-          ...timeParams,
-          tableName,
-          pagePathExpr,
-        },
-        allowedValues: {
-          tableName: ["pageViews", "requests"],
-          pagePathExpr: allowedExpr.pagePathExpr,
-        },
-        timeRangeKey: timeRange.key,
-        mappingVersion: mapping.version,
-        ttlMs: cacheTtlMs,
-        azureClient,
-      })
-    : emptyResult;
-
-  queryProgress("Analyzing navigation paths");
-  const topNavResult = hasPageTable
-    ? await runQuery({
-        tenantId,
-        resourceId,
-        workspaceId,
-        queryName: "topNavigation",
-        templateName: "top-navigation",
-        params: {
-          ...timeParams,
-          tableName,
-          pagePathExpr,
-          sessionIdExpr: sessionExpr,
-        },
-        allowedValues: {
-          tableName: ["pageViews", "requests"],
-          pagePathExpr: allowedExpr.pagePathExpr,
-          sessionIdExpr: allowedExpr.sessionIdExpr,
-        },
-        timeRangeKey: timeRange.key,
-        mappingVersion: mapping.version,
-        ttlMs: cacheTtlMs,
-        azureClient,
-      })
-    : emptyResult;
-
-  queryProgress("Detecting browsers");
-  const browsersResult = hasPageTable
-    ? await runQuery({
-        tenantId,
-        resourceId,
-        workspaceId,
-        queryName: "techBrowser",
-        templateName: "tech-browser",
-        params: { ...timeParams, tableName },
-        allowedValues: { tableName: ["pageViews", "requests"] },
-        timeRangeKey: timeRange.key,
-        mappingVersion: mapping.version,
-        ttlMs: cacheTtlMs,
-        azureClient,
-      })
-    : emptyResult;
-
-  queryProgress("Detecting operating systems");
-  const osResult = hasPageTable
-    ? await runQuery({
-        tenantId,
-        resourceId,
-        workspaceId,
-        queryName: "techOs",
-        templateName: "tech-os",
-        params: { ...timeParams, tableName },
-        allowedValues: { tableName: ["pageViews", "requests"] },
-        timeRangeKey: timeRange.key,
-        mappingVersion: mapping.version,
-        ttlMs: cacheTtlMs,
-        azureClient,
-      })
-    : emptyResult;
-
-  queryProgress("Detecting devices");
-  const deviceResult = hasPageTable
-    ? await runQuery({
-        tenantId,
-        resourceId,
-        workspaceId,
-        queryName: "techDevice",
-        templateName: "tech-device",
-        params: { ...timeParams, tableName },
-        allowedValues: { tableName: ["pageViews", "requests"] },
-        timeRangeKey: timeRange.key,
-        mappingVersion: mapping.version,
-        ttlMs: cacheTtlMs,
-        azureClient,
-      })
-    : emptyResult;
-
-  queryProgress("Measuring performance");
-  const performanceResult = hasRequests
-    ? await runQuery({
-        tenantId,
-        resourceId,
-        workspaceId,
-        queryName: "performance",
-        templateName: "performance",
-        params: { ...timeParams },
-        allowedValues: {},
-        timeRangeKey: timeRange.key,
-        mappingVersion: mapping.version,
-        ttlMs: cacheTtlMs,
-        azureClient,
-      })
-    : emptyResult;
-
-  queryProgress("Finding slow endpoints");
-  const slowEndpointsResult = hasRequests
-    ? await runQuery({
-        tenantId,
-        resourceId,
-        workspaceId,
-        queryName: "slowEndpoints",
-        templateName: "slow-endpoints",
-        params: { ...timeParams },
-        allowedValues: {},
-        timeRangeKey: timeRange.key,
-        mappingVersion: mapping.version,
-        ttlMs: cacheTtlMs,
-        azureClient,
-      })
-    : emptyResult;
-
-  // --- Phase 2 new queries ---
-
-  queryProgress("Computing daily trend");
-  const dailyTrendResult = hasPageTable
-    ? await runQuery({
-        tenantId,
-        resourceId,
-        workspaceId,
-        queryName: "dailyTrend",
-        templateName: "daily-trend",
-        params: {
-          ...timeParams,
-          tableName,
-          pagePathExpr,
-          sessionIdExpr: sessionExpr,
-          binSize,
-        },
-        allowedValues: {
-          tableName: ["pageViews", "requests"],
-          pagePathExpr: allowedExpr.pagePathExpr,
-          sessionIdExpr: allowedExpr.sessionIdExpr,
-          binSize: ["1h", "1d"],
-        },
-        timeRangeKey: timeRange.key,
-        mappingVersion: mapping.version,
-        ttlMs: cacheTtlMs,
-        azureClient,
-      })
-    : emptyResult;
-
-  queryProgress("Loading geo distribution");
-  const geoResult = hasGeo
-    ? await runQuery({
-        tenantId,
-        resourceId,
-        workspaceId,
-        queryName: "geoDistribution",
-        templateName: "geo-distribution",
-        params: { ...timeParams, tableName },
-        allowedValues: { tableName: ["pageViews", "requests"] },
-        timeRangeKey: timeRange.key,
-        mappingVersion: mapping.version,
-        ttlMs: cacheTtlMs,
-        azureClient,
-      })
-    : emptyResult;
-
-  queryProgress("Analyzing peak hours");
-  const peakHoursResult = hasPageTable
-    ? await runQuery({
-        tenantId, resourceId, workspaceId,
-        queryName: "peakHours",
-        templateName: "peak-hours",
-        params: { ...timeParams, tableName, sessionIdExpr: sessionExpr },
-        allowedValues: {
-          tableName: ["pageViews", "requests"],
-          sessionIdExpr: allowedExpr.sessionIdExpr,
-        },
-        timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
-      })
-    : emptyResult;
-
-  queryProgress("Scanning URL parameters");
-  const urlParamsResult = hasPageTable
-    ? await runQuery({
-        tenantId, resourceId, workspaceId,
-        queryName: "urlParams",
-        templateName: "url-parameters",
-        params: { ...timeParams, tableName },
-        allowedValues: { tableName: ["pageViews", "requests"] },
-        timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
-      })
-    : emptyResult;
-
-  queryProgress("Loading campaign data");
-  const campaignResult = hasPageTable
-    ? await runQuery({
-        tenantId, resourceId, workspaceId,
-        queryName: "campaignBreakdown",
-        templateName: "campaign-breakdown",
-        params: {
-          ...timeParams,
-          tableName,
-          userIdExpr: userIdExpr || mappingExpressions.userId.anonymous,
-          sessionIdExpr: sessionExpr,
-        },
-        allowedValues: {
-          tableName: ["pageViews", "requests"],
-          userIdExpr: allowedExpr.userIdExpr,
-          sessionIdExpr: allowedExpr.sessionIdExpr,
-        },
-        timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
-      })
-    : emptyResult;
-
-  queryProgress("Reconstructing sessions");
-  const sessionTimelinesResult = hasPageTable
-    ? await runQuery({
-        tenantId, resourceId, workspaceId,
-        queryName: "sessionTimelines",
-        templateName: "session-timelines",
-        params: {
-          ...timeParams,
-          tableName,
-          sessionIdExpr: sessionExpr,
-          pagePathExpr,
-        },
-        allowedValues: {
-          tableName: ["pageViews", "requests"],
-          sessionIdExpr: allowedExpr.sessionIdExpr,
-          pagePathExpr: allowedExpr.pagePathExpr,
-        },
-        timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
-      })
-    : emptyResult;
-
-  const referrerExpr =
-    mapping.canonicalReferrer?.expr || mappingExpressions.referrer.referrer;
-
-  queryProgress("Analyzing referrers");
-  const referrerResult = hasPageTable
-    ? await runQuery({
-        tenantId,
-        resourceId,
-        workspaceId,
-        queryName: "referrerSources",
-        templateName: "referrer-sources",
-        params: { ...timeParams, tableName, referrerExpr },
-        allowedValues: {
-          tableName: ["pageViews", "requests"],
-          referrerExpr: allowedExpr.referrerExpr,
-        },
-        timeRangeKey: timeRange.key,
-        mappingVersion: mapping.version,
-        ttlMs: cacheTtlMs,
-        azureClient,
-      })
-    : emptyResult;
-
-  queryProgress("Measuring frontend timings");
-  const browserTimingsResult = hasBrowserTimings
-    ? await runQuery({
-        tenantId,
-        resourceId,
-        workspaceId,
-        queryName: "browserTimings",
-        templateName: "browser-timings",
-        params: { ...timeParams },
-        allowedValues: {},
-        timeRangeKey: timeRange.key,
-        mappingVersion: mapping.version,
-        ttlMs: cacheTtlMs,
-        azureClient,
-      })
-    : emptyResult;
-
-  // Period-over-period KPIs (B4) — only the launch ranges (today / 7d /
-  // 30d) define a predecessor; anything else returns null and the UI
-  // hides the delta chips. One query covers all 3 KPIs for the prior
-  // window so we don't triple the query count.
-  const prevRange = previousTimeRange(timeRange);
-  const previousKpisResult = (prevRange && hasPageTable)
-    ? await runQuery({
-        tenantId,
-        resourceId,
-        workspaceId,
-        queryName: "previousKpis",
-        templateName: "previous-kpis",
-        params: {
-          timeStart: toKqlDatetime(prevRange.start),
-          timeEnd: toKqlDatetime(prevRange.end),
-          tableName,
-          userIdExpr: userIdExpr || mappingExpressions.userId.anonymous,
-          sessionIdExpr: sessionExpr,
-        },
-        allowedValues: {
-          tableName: ["pageViews", "requests"],
-          ...allowedExpr,
-        },
-        timeRangeKey: prevRange.key,
-        mappingVersion: mapping.version,
-        ttlMs: cacheTtlMs,
-        azureClient,
-      })
-    : emptyResult;
-  if (prevRange) queryProgress("Comparing to previous period");
-
-  // --- Process results ---
-
-  const uniqueRows = toRows(uniqueVisitorsResult);
-  const sessionRows = toRows(sessionsResult);
-  const topPagesRows = toRows(topPagesResult);
-  const topNavRows = toRows(topNavResult);
-  const browsersRows = toRows(browsersResult);
-  const osRows = toRows(osResult);
-  const devicesRows = toRows(deviceResult);
-  const perfRows = toRows(performanceResult);
-  const slowRows = toRows(slowEndpointsResult);
-  const dailyTrendRows = toRows(dailyTrendResult);
-  const geoRows = toRows(geoResult);
-  const referrerRows = toRows(referrerResult);
-  const browserTimingsRows = toRows(browserTimingsResult);
-  const peakHoursRows = toRows(peakHoursResult);
-  const urlParamRows = toRows(urlParamsResult);
-  const campaignRows = toRows(campaignResult);
-  const sessionTimelineRows = toRows(sessionTimelinesResult);
-
-  const totalBrowser =
-    Number(browsersRows[0]?.total) || browsersRows.reduce((sum, row) => sum + (row.count || 0), 0);
-  const totalOs = Number(osRows[0]?.total) || osRows.reduce((sum, row) => sum + (row.count || 0), 0);
-  const totalDevices =
-    Number(devicesRows[0]?.total) || devicesRows.reduce((sum, row) => sum + (row.count || 0), 0);
-
-  const browserListedSum = browsersRows.reduce((sum, row) => sum + (row.count || 0), 0);
-  const osListedSum = osRows.reduce((sum, row) => sum + (row.count || 0), 0);
-  const devicesListedSum = devicesRows.reduce((sum, row) => sum + (row.count || 0), 0);
-
-  const totalGeo = geoRows.reduce((sum, row) => sum + (row.count || 0), 0);
-
-  const prevRows = toRows(previousKpisResult);
-  const prevUniqueVisitors = toSingleValue(prevRows, "uniqueVisitors");
-  const prevSessions = toSingleValue(prevRows, "sessions");
-  const prevPageViews = toSingleValue(prevRows, "pageViews");
-  const currentPageViews = dailyTrendRows.reduce((sum, r) => sum + (Number(r.pageViews) || 0), 0);
-  const currentVisitors = toSingleValue(uniqueRows, "uniqueVisitors");
-  const currentSessions = toSingleValue(sessionRows, "sessions");
-
-  const comparison = prevRange
-    ? {
-        previousRangeKey: prevRange.key,
-        label: comparisonLabel(timeRange.key),
-        uniqueVisitors: deltaEntry(currentVisitors, prevUniqueVisitors),
-        sessions: deltaEntry(currentSessions, prevSessions),
-        pageViews: deltaEntry(currentPageViews, prevPageViews),
+  // --- Fire every query through the bounded pool --------------------------
+  // Each entry of `queryPromises` resolves to a query result and NEVER
+  // rejects — a failed query is recorded in `failed` and degrades to an
+  // empty result so the rest of the dashboard still builds.
+  const schedule = createLimiter(QUERY_CONCURRENCY);
+  const failed = new Set();
+  const total = querySpecs.length;
+  let settled = 0;
+  const queryPromises = {};
+  for (const spec of querySpecs) {
+    queryPromises[spec.name] = (async () => {
+      if (!spec.enabled) {
+        settled++;
+        progress(spec.label, settled / total);
+        return emptyResult;
       }
-    : null;
+      try {
+        return await schedule(spec.run);
+      } catch (error) {
+        failed.add(spec.name);
+        console.error(`[dashboard] query '${spec.name}' failed: ${error.message}`);
+        return emptyResult;
+      } finally {
+        settled++;
+        progress(spec.label, settled / total);
+      }
+    })();
+  }
 
-  const result = {
-    kpis: {
+  const q = (name) => queryPromises[name];
+  const anyFailed = (...names) => names.some((name) => failed.has(name));
+  const failMessage = (names) =>
+    `${names.filter((name) => failed.has(name)).join(", ")} query failed`;
+
+  // Card payload accumulators — each assembler owns a disjoint set of keys,
+  // so concurrent writes never collide. Pre-seeded with safe defaults so
+  // that, even if an assembler throws before writing its slice, the
+  // composed `result` still has a well-formed value for every field.
+  const kpis = {
+    uniqueVisitors: 0,
+    sessions: 0,
+    avgResponseTimeMs: 0,
+    p95ResponseTimeMs: 0,
+    errorRate: 0,
+    comparison: null,
+  };
+  const charts = {
+    dailyTrend: [],
+    topPages: [],
+    topNavigationPaths: [],
+    browsers: [],
+    os: [],
+    devices: [],
+    geoDistribution: [],
+    userFlow: null,
+    abTests: null,
+    kpiSparklines: null,
+    sessionReplays: null,
+    peakHours: [],
+    urlParams: null,
+    campaignBreakdown: [],
+    referrerSources: [],
+    browserTimings: null,
+  };
+  const tables = { slowEndpoints: [] };
+
+  /** Emit a card: the data payload, or an error stub if any dep failed. */
+  function publish(name, deps, data) {
+    if (anyFailed(...deps)) {
+      emitCard(name, { error: true, message: failMessage(deps) });
+    } else {
+      emitCard(name, data);
+    }
+  }
+
+  /**
+   * Run a card assembler in isolation. A thrown transform error degrades
+   * to an error stub for that assembler's card(s) instead of rejecting the
+   * whole `Promise.all` and taking the entire dashboard build down.
+   */
+  async function runAssembler(cardNames, fn) {
+    try {
+      await fn();
+    } catch (error) {
+      console.error(`[dashboard] assembler for '${cardNames.join(", ")}' threw: ${error.message}`);
+      for (const name of cardNames) {
+        emitCard(name, { error: true, message: "card data could not be built" });
+      }
+    }
+  }
+
+  // --- Card assemblers ----------------------------------------------------
+  // Each awaits only the queries it needs, transforms the rows, writes its
+  // slice of the result, and publishes the card the instant its data lands.
+
+  async function assembleMarketingKpis() {
+    const deps = ["uniqueVisitors", "sessions", "dailyTrend", "previousKpis"];
+    const [uvR, sR, dtR, pkR] = await Promise.all(deps.map(q));
+    const currentVisitors = toSingleValue(toRows(uvR), "uniqueVisitors");
+    const currentSessions = toSingleValue(toRows(sR), "sessions");
+    const currentPageViews = toRows(dtR).reduce((sum, r) => sum + (Number(r.pageViews) || 0), 0);
+    const prevRows = toRows(pkR);
+    const comparison = prevRange
+      ? {
+          previousRangeKey: prevRange.key,
+          label: comparisonLabel(timeRange.key),
+          uniqueVisitors: deltaEntry(currentVisitors, toSingleValue(prevRows, "uniqueVisitors")),
+          sessions: deltaEntry(currentSessions, toSingleValue(prevRows, "sessions")),
+          pageViews: deltaEntry(currentPageViews, toSingleValue(prevRows, "pageViews")),
+        }
+      : null;
+    kpis.uniqueVisitors = currentVisitors;
+    kpis.sessions = currentSessions;
+    kpis.comparison = comparison;
+    // Visitors + sessions are the heart of this card; a trend or
+    // period-comparison query failure only costs the page-views tile or
+    // the delta chips, so it must not blank the whole KPI row.
+    publish("marketingKpis", ["uniqueVisitors", "sessions"], {
       uniqueVisitors: currentVisitors,
       sessions: currentSessions,
-      avgResponseTimeMs: Number(toSingleValue(perfRows, "avgDuration")) || 0,
-      p95ResponseTimeMs: Number(toSingleValue(perfRows, "p95Duration")) || 0,
-      errorRate: Number(toSingleValue(perfRows, "errorRate")) || 0,
+      pageViews: currentPageViews,
+      pagesPerSession: currentSessions > 0 ? currentPageViews / currentSessions : null,
       comparison,
+    });
+  }
+
+  async function assembleTechnicalKpis() {
+    const perfRows = toRows(await q("performance"));
+    kpis.avgResponseTimeMs = Number(toSingleValue(perfRows, "avgDuration")) || 0;
+    kpis.p95ResponseTimeMs = Number(toSingleValue(perfRows, "p95Duration")) || 0;
+    kpis.errorRate = Number(toSingleValue(perfRows, "errorRate")) || 0;
+    publish("technicalKpis", ["performance"], {
+      avgResponseTimeMs: kpis.avgResponseTimeMs,
+      p95ResponseTimeMs: kpis.p95ResponseTimeMs,
+      errorRate: kpis.errorRate,
+    });
+  }
+
+  async function assembleDailyTrend() {
+    const dailyTrendRows = toRows(await q("dailyTrend"));
+    charts.dailyTrend = dailyTrendRows.map((row) => ({
+      period: row.period,
+      visitors: row.visitors || 0,
+      pageViews: row.pageViews || 0,
+    }));
+    charts.kpiSparklines = buildSparklines(dailyTrendRows);
+    publish("dailyTrend", ["dailyTrend"], {
+      dailyTrend: charts.dailyTrend,
+      kpiSparklines: charts.kpiSparklines,
+    });
+  }
+
+  async function assembleTopPages() {
+    charts.topPages = toRows(await q("topPages")).map((row) => ({
+      path: row.pagePath,
+      views: row.viewCount ?? row.views,
+      share: row.share,
+    }));
+    publish("topPages", ["topPages"], { topPages: charts.topPages });
+  }
+
+  async function assembleUserFlow() {
+    const topNavRows = toRows(await q("topNavigation"));
+    charts.topNavigationPaths = topNavRows.map((row) => ({
+      from: row.from,
+      to: row.to,
+      count: row.transitions,
+    }));
+    charts.userFlow = buildSankeyFromNav(topNavRows);
+    publish("userFlow", ["topNavigation"], {
+      userFlow: charts.userFlow,
+      topNavigationPaths: charts.topNavigationPaths,
+    });
+  }
+
+  function shareList(rows, labelKey, total, listedSum) {
+    return [
+      ...rows.map((row) => ({
+        name: row[labelKey],
+        count: row.count,
+        share: safeDivide(row.count, total),
+      })),
+      total > listedSum
+        ? { name: "Other", count: total - listedSum, share: safeDivide(total - listedSum, total) }
+        : null,
+    ].filter(Boolean);
+  }
+
+  async function assembleTechMix(name, queryName, labelKey) {
+    const rows = toRows(await q(queryName));
+    const total = Number(rows[0]?.total) || rows.reduce((sum, row) => sum + (row.count || 0), 0);
+    const listedSum = rows.reduce((sum, row) => sum + (row.count || 0), 0);
+    const list = shareList(rows, labelKey, total, listedSum);
+    charts[name] = list;
+    publish(name, [queryName], { [name]: list });
+  }
+
+  async function assembleGeo() {
+    const geoRows = toRows(await q("geoDistribution"));
+    const totalGeo = geoRows.reduce((sum, row) => sum + (row.count || 0), 0);
+    charts.geoDistribution = geoRows.map((row) => ({
+      country: row.country,
+      count: row.count,
+      share: row.share || safeDivide(row.count, totalGeo),
+    }));
+    publish("geo", ["geoDistribution"], { geoDistribution: charts.geoDistribution });
+  }
+
+  async function assemblePeakHours() {
+    charts.peakHours = toRows(await q("peakHours")).map((row) => ({
+      dayIndex: Number(row.dayIndex),
+      hour: Number(row.hour),
+      count: Number(row.count) || 0,
+    }));
+    publish("peakHours", ["peakHours"], { peakHours: charts.peakHours });
+  }
+
+  async function assembleCampaigns() {
+    const deps = ["campaignBreakdown", "urlParams"];
+    const [cR, uR] = await Promise.all(deps.map(q));
+    charts.campaignBreakdown = toRows(cR).map((row) => ({
+      source: row.source,
+      medium: row.medium,
+      campaign: row.campaign,
+      visitors: Number(row.visitors) || 0,
+      sessions: Number(row.sessions) || 0,
+      signups: 0,
+      convRate: 0,
+    }));
+    charts.urlParams = buildUrlParamsData(toRows(uR));
+    publish("campaigns", deps, {
+      campaignBreakdown: charts.campaignBreakdown,
+      urlParams: charts.urlParams,
+    });
+  }
+
+  async function assembleReferrers() {
+    charts.referrerSources = toRows(await q("referrerSources")).map((row) => ({
+      source: row.source,
+      count: row.count,
+    }));
+    publish("referrers", ["referrerSources"], { referrerSources: charts.referrerSources });
+  }
+
+  async function assembleSlowEndpoints() {
+    tables.slowEndpoints = toRows(await q("slowEndpoints")).map((row) => ({
+      path: row.path,
+      p50: row.p50 || 0,
+      p95: row.p95,
+      p99: row.p99 || 0,
+      avgDuration: row.avgDuration || 0,
+      count: row.count,
+      errorRate: row.errorRate || 0,
+    }));
+    publish("slowEndpoints", ["slowEndpoints"], { slowEndpoints: tables.slowEndpoints });
+  }
+
+  async function assembleBrowserTimings() {
+    const rows = toRows(await q("browserTimings"));
+    charts.browserTimings = rows.length > 0
+      ? {
+          avgNetwork: Number(rows[0].avgNetworkDuration) || 0,
+          avgSend: Number(rows[0].avgSendDuration) || 0,
+          avgReceive: Number(rows[0].avgReceiveDuration) || 0,
+          avgProcessing: Number(rows[0].avgProcessingDuration) || 0,
+          avgTotal: Number(rows[0].avgTotalDuration) || 0,
+          p95Total: Number(rows[0].p95TotalDuration) || 0,
+          sampleCount: Number(rows[0].sampleCount) || 0,
+        }
+      : null;
+    publish("browserTimings", ["browserTimings"], { browserTimings: charts.browserTimings });
+  }
+
+  async function assembleSessionReplays() {
+    charts.sessionReplays = buildSessionTimelines(toRows(await q("sessionTimelines")));
+    publish("sessionReplays", ["sessionTimelines"], { sessionReplays: charts.sessionReplays });
+  }
+
+  // Content scoring + funnel are derived entirely on the client from the
+  // navigation + top-pages data. They produce no slice of `result`; they
+  // just need both arrays once both queries land.
+  async function assembleNavDerived() {
+    const deps = ["topNavigation", "topPages"];
+    const [tnR, tpR] = await Promise.all(deps.map(q));
+    const payload = {
+      topNavigationPaths: toRows(tnR).map((row) => ({ from: row.from, to: row.to, count: row.transitions })),
+      topPages: toRows(tpR).map((row) => ({ path: row.pagePath, views: row.viewCount ?? row.views, share: row.share })),
+    };
+    publish("contentScoring", deps, payload);
+    publish("funnel", deps, payload);
+  }
+
+  await Promise.all([
+    runAssembler(["marketingKpis"], assembleMarketingKpis),
+    runAssembler(["technicalKpis"], assembleTechnicalKpis),
+    runAssembler(["dailyTrend"], assembleDailyTrend),
+    runAssembler(["topPages"], assembleTopPages),
+    runAssembler(["userFlow"], assembleUserFlow),
+    runAssembler(["browsers"], () => assembleTechMix("browsers", "techBrowser", "browser")),
+    runAssembler(["os"], () => assembleTechMix("os", "techOs", "os")),
+    runAssembler(["devices"], () => assembleTechMix("devices", "techDevice", "device")),
+    runAssembler(["geo"], assembleGeo),
+    runAssembler(["peakHours"], assemblePeakHours),
+    runAssembler(["campaigns"], assembleCampaigns),
+    runAssembler(["referrers"], assembleReferrers),
+    runAssembler(["slowEndpoints"], assembleSlowEndpoints),
+    runAssembler(["browserTimings"], assembleBrowserTimings),
+    runAssembler(["sessionReplays"], assembleSessionReplays),
+    runAssembler(["contentScoring", "funnel"], assembleNavDerived),
+  ]);
+
+  // --- Compose the full dashboard object ----------------------------------
+  const result = {
+    kpis: {
+      uniqueVisitors: kpis.uniqueVisitors,
+      sessions: kpis.sessions,
+      avgResponseTimeMs: kpis.avgResponseTimeMs,
+      p95ResponseTimeMs: kpis.p95ResponseTimeMs,
+      errorRate: kpis.errorRate,
+      comparison: kpis.comparison,
     },
     charts: {
-      dailyTrend: dailyTrendRows.map((row) => ({
-        period: row.period,
-        visitors: row.visitors || 0,
-        pageViews: row.pageViews || 0,
-      })),
-      topPages: topPagesRows.map((row) => ({
-        path: row.pagePath,
-        views: row.viewCount ?? row.views,
-        share: row.share,
-      })),
-      topNavigationPaths: topNavRows.map((row) => ({
-        from: row.from,
-        to: row.to,
-        count: row.transitions,
-      })),
-      browsers: [
-        ...browsersRows.map((row) => ({
-          name: row.browser,
-          count: row.count,
-          share: safeDivide(row.count, totalBrowser),
-        })),
-        totalBrowser > browserListedSum
-          ? {
-              name: "Other",
-              count: totalBrowser - browserListedSum,
-              share: safeDivide(totalBrowser - browserListedSum, totalBrowser),
-            }
-          : null,
-      ].filter(Boolean),
-      os: [
-        ...osRows.map((row) => ({
-          name: row.os,
-          count: row.count,
-          share: safeDivide(row.count, totalOs),
-        })),
-        totalOs > osListedSum
-          ? {
-              name: "Other",
-              count: totalOs - osListedSum,
-              share: safeDivide(totalOs - osListedSum, totalOs),
-            }
-          : null,
-      ].filter(Boolean),
-      devices: [
-        ...devicesRows.map((row) => ({
-          name: row.device,
-          count: row.count,
-          share: safeDivide(row.count, totalDevices),
-        })),
-        totalDevices > devicesListedSum
-          ? {
-              name: "Other",
-              count: totalDevices - devicesListedSum,
-              share: safeDivide(totalDevices - devicesListedSum, totalDevices),
-            }
-          : null,
-      ].filter(Boolean),
-      geoDistribution: geoRows.map((row) => ({
-        country: row.country,
-        count: row.count,
-        share: row.share || safeDivide(row.count, totalGeo),
-      })),
-      userFlow: buildSankeyFromNav(topNavRows),
+      dailyTrend: charts.dailyTrend,
+      topPages: charts.topPages,
+      topNavigationPaths: charts.topNavigationPaths,
+      browsers: charts.browsers,
+      os: charts.os,
+      devices: charts.devices,
+      geoDistribution: charts.geoDistribution,
+      userFlow: charts.userFlow,
       abTests: null,
-      kpiSparklines: buildSparklines(dailyTrendRows),
-      sessionReplays: buildSessionTimelines(sessionTimelineRows),
-      peakHours: peakHoursRows.map((row) => ({
-        dayIndex: Number(row.dayIndex),
-        hour: Number(row.hour),
-        count: Number(row.count) || 0,
-      })),
-      urlParams: buildUrlParamsData(urlParamRows),
-      campaignBreakdown: campaignRows.map((row) => ({
-        source: row.source,
-        medium: row.medium,
-        campaign: row.campaign,
-        visitors: Number(row.visitors) || 0,
-        sessions: Number(row.sessions) || 0,
-        signups: 0,
-        convRate: 0,
-      })),
-      referrerSources: referrerRows.map((row) => ({
-        source: row.source,
-        count: row.count,
-      })),
-      browserTimings: browserTimingsRows.length > 0
-        ? {
-            avgNetwork: Number(browserTimingsRows[0].avgNetworkDuration) || 0,
-            avgSend: Number(browserTimingsRows[0].avgSendDuration) || 0,
-            avgReceive: Number(browserTimingsRows[0].avgReceiveDuration) || 0,
-            avgProcessing: Number(browserTimingsRows[0].avgProcessingDuration) || 0,
-            avgTotal: Number(browserTimingsRows[0].avgTotalDuration) || 0,
-            p95Total: Number(browserTimingsRows[0].p95TotalDuration) || 0,
-            sampleCount: Number(browserTimingsRows[0].sampleCount) || 0,
-          }
-        : null,
+      kpiSparklines: charts.kpiSparklines,
+      sessionReplays: charts.sessionReplays,
+      peakHours: charts.peakHours,
+      urlParams: charts.urlParams,
+      campaignBreakdown: charts.campaignBreakdown,
+      referrerSources: charts.referrerSources,
+      browserTimings: charts.browserTimings,
     },
     tables: {
-      slowEndpoints: slowRows.map((row) => ({
-        path: row.path,
-        p50: row.p50 || 0,
-        p95: row.p95,
-        p99: row.p99 || 0,
-        avgDuration: row.avgDuration || 0,
-        count: row.count,
-        errorRate: row.errorRate || 0,
-      })),
+      slowEndpoints: tables.slowEndpoints,
     },
     availability: {
       hasPageTable: Boolean(hasPageTable),
@@ -837,13 +989,20 @@ export async function buildOverviewDashboard({
     },
   };
 
-  result.narration = buildNarration({
-    azureMode,
-    dashboard: result,
-    mapping,
-    range: timeRange.key,
-    aiMapping,
-  });
+  // Narration is non-critical framing text — never let it sink a dashboard
+  // whose cards have already streamed and rendered.
+  try {
+    result.narration = buildNarration({
+      azureMode,
+      dashboard: result,
+      mapping,
+      range: timeRange.key,
+      aiMapping,
+    });
+  } catch (error) {
+    console.error(`[dashboard] buildNarration failed: ${error.message}`);
+    result.narration = null;
+  }
 
   return result;
 }

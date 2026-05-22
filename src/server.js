@@ -8,16 +8,17 @@ import { fileURLToPath } from "url";
 import { config } from "./config.js";
 import { getAzureClient } from "./providers/factory.js";
 import { createMockClient } from "./providers/azure/mockClient.js";
-import { runOverviewPipeline } from "./core/orchestrator.js";
+import { runOverviewPipeline, runSetupScan } from "./core/orchestrator.js";
 import { buildRecommendations } from "./core/recommendations.js";
 import { computeReadinessScore } from "./core/readinessScore.js";
 import { generatePrompts } from "./core/promptGenerator.js";
 import { getTenant, updateTenant } from "./core/metadataStore.js";
-import { getLatestScan } from "./core/scanStore.js";
+import { getLatestScan, getScannedResourceIds } from "./core/scanStore.js";
 import { getLatestMapping } from "./core/mappingStore.js";
 import {
   persistValidation,
   getActiveValidation,
+  getConfiguredResourceIds,
 } from "./core/validationStore.js";
 import { runWithToken } from "./providers/azure/tokenStore.js";
 import { createRateLimiter } from "./core/rateLimit.js";
@@ -270,6 +271,8 @@ function ensureAuth(req, res, next) {
 function errorStatusCode(result) {
   if (result.errorCode === "ACCESS_DENIED" || result.errorCode === "FORBIDDEN") return 403;
   if (result.errorCode === "NOT_FOUND") return 404;
+  // Resource not configured yet — the client redirects to the setup wizard.
+  if (result.error === "SETUP_REQUIRED") return 409;
   return 500;
 }
 
@@ -556,6 +559,7 @@ app.get("/dashboard/overview", ensureAuth, async (req, res) => {
         cacheTtlMs: config.cacheTtlMs[rangeKey] || config.cacheTtlMs["7d"],
         azureMode: config.azureMode,
         onProgress(label, pct) { send({ type: "progress", label, pct: Math.round(pct * 100) }); },
+        onCard(name, data) { send({ type: "card", name, data }); },
       });
       console.log("[stream] pipeline done, requiresSelection:", !!result.requiresSelection, "error:", !!result.error);
       if (result.requiresSelection) {
@@ -650,15 +654,71 @@ app.get("/setup", (_req, res) => {
   res.sendFile(path.resolve(__dirname, "..", "public", "setup.html"));
 });
 
-// State check: tells the frontend whether to enter the wizard or skip
-// straight to the dashboard. Called on /setup load AND from index.html
-// to drive the first-run redirect.
+/**
+ * Discover the tenant's App Insights resources, honouring the discovery
+ * cache. Shared by /api/setup/services so the hub sees the same list as
+ * /azure/discover without double-billing the ARM API.
+ */
+async function loadResourcesCached(tenantId) {
+  const tenant = getTenant(tenantId);
+  const cached = tenant.discoveryCache;
+  if (cached && Date.now() - cached.cachedAt < config.discoveryCacheMs) {
+    return cached.resources;
+  }
+  const resources = await azureClient.discoverResources(tenantId);
+  updateTenant(tenantId, { discoveryCache: { cachedAt: Date.now(), resources } });
+  return resources;
+}
+
+/**
+ * Setup hub data source: the tenant's resources, each tagged with its
+ * per-resource configuration status. Drives the post-login service
+ * picker — replaces the tenant-global needsSetup redirect.
+ *   - ready        : a validation exists for this resource
+ *   - incomplete   : scanned but never validated (wizard abandoned)
+ *   - unconfigured : neither
+ */
+app.get("/api/setup/services", ensureAuth, async (req, res) => {
+  const tenantId = req.session.tenantId;
+  try {
+    const resources = await loadResourcesCached(tenantId);
+    const tenant = getTenant(tenantId);
+    const configured = new Set(getConfiguredResourceIds(tenantId));
+    const scanned = new Set(getScannedResourceIds(tenantId));
+    const services = resources.map((r) => {
+      let status = "unconfigured";
+      if (configured.has(r.resourceId)) status = "ready";
+      else if (scanned.has(r.resourceId)) status = "incomplete";
+      return { ...r, status };
+    });
+    res.set("Cache-Control", "no-store");
+    res.json({
+      services,
+      autoSelected: resources.length === 1,
+      selectedResourceId: tenant.selectedResource?.resourceId || null,
+    });
+  } catch (error) {
+    console.error("Setup services error:", error.message);
+    const status = error.status || error.cause?.status || 500;
+    const isExpired = status === 401;
+    res.status(status).json({
+      error: "DISCOVERY_FAILED",
+      message: isExpired
+        ? "Azure access token expired. Please sign in again."
+        : error.message,
+    });
+  }
+});
+
+// State check for one resource: tells the wizard whether setup is still
+// needed for the currently-selected resource.
 app.get("/api/setup/state", ensureAuth, (req, res) => {
   const tenantId = req.session.tenantId;
   const tenant = getTenant(tenantId);
-  const validation = getActiveValidation(tenantId);
-  const scan = getLatestScan(tenantId);
-  const mapping = getLatestMapping(tenantId);
+  const resourceId = tenant.selectedResource?.resourceId || null;
+  const validation = resourceId ? getActiveValidation(tenantId, resourceId) : null;
+  const scan = resourceId ? getLatestScan(tenantId, resourceId) : null;
+  const mapping = resourceId ? getLatestMapping(tenantId, resourceId) : null;
   res.set("Cache-Control", "no-store");
   res.json({
     needsSetup: !validation,
@@ -673,32 +733,24 @@ app.get("/api/setup/state", ensureAuth, (req, res) => {
   });
 });
 
-// Trigger a fresh scan + AI analysis. Reuses the dashboard pipeline
-// (which produces scan + mapping as side effects); the dashboard data
-// is computed too, so "Save & Continue" lands on a hot dashboard.
+// Trigger the CONFIG phase: a fresh scan + AI analysis for the selected
+// resource. This is the only entry point that re-runs the scan/LLM —
+// dashboard loads reuse its snapshot and never re-config.
 app.post("/api/setup/scan", ensureAuth, async (req, res) => {
   const tenantId = req.session.tenantId;
   try {
-    const result = await runOverviewPipeline({
-      tenantId,
-      rangeKey: "7d",
-      azureClient,
-      cacheTtlMs: config.cacheTtlMs["7d"],
-      azureMode: config.azureMode,
-    });
+    const result = await runSetupScan({ tenantId, azureClient });
     if (result.requiresSelection) {
       return res.status(409).json({ error: "RESOURCE_SELECTION_REQUIRED", resources: result.resources });
     }
     if (result.error === "NO_ACCESS") {
       return res.status(403).json({ error: "NO_ACCESS", message: result.message });
     }
-    const scan = getLatestScan(tenantId);
-    const mapping = getLatestMapping(tenantId);
     res.set("Cache-Control", "no-store");
     res.json({
       ok: true,
-      scanId: scan?.id || null,
-      mappingId: mapping?.id || null,
+      scanId: result.scanId || null,
+      mappingId: result.mappingId || null,
       readiness: result.readinessReport
         ? {
             overallStatus: result.readinessReport.overallStatus,
@@ -708,6 +760,65 @@ app.post("/api/setup/scan", ensureAuth, async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ error: "SCAN_FAILED", message: error.message });
+  }
+});
+
+// Streaming variant of /api/setup/scan: same CONFIG phase, but the
+// wizard gets a Server-Sent Event per stage so it can render real
+// numbers as they land instead of a fake ticker. Plain POST /scan above
+// is kept as a non-streaming fallback (and is what the API tests use).
+//
+// Event protocol:
+//   event: step  data: { step, payload }   — one per pipeline stage
+//   event: done  data: { ok, scanId, mappingId }
+//   event: fail  data: { error, message }  — app-level failure
+// The client closes the EventSource on done/fail; "fail" is named (not
+// "error") so it can't collide with EventSource's native error event.
+app.get("/api/setup/scan/stream", ensureAuth, async (req, res) => {
+  const tenantId = req.session.tenantId;
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+
+  let closed = false;
+  req.on("close", () => { closed = true; });
+
+  const send = (event, data) => {
+    if (closed) return;
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  // Keep idle-timeout proxies from dropping the connection while the
+  // (potentially slow) AI call runs between the scan and "ai" events.
+  const heartbeat = setInterval(() => {
+    if (!closed) res.write(": keep-alive\n\n");
+  }, 15000);
+
+  try {
+    const result = await runSetupScan({
+      tenantId,
+      azureClient,
+      onStep: (step, payload) => send("step", { step, payload }),
+    });
+    if (result.requiresSelection) {
+      send("fail", { error: "RESOURCE_SELECTION_REQUIRED" });
+    } else if (result.error === "NO_ACCESS") {
+      send("fail", { error: "NO_ACCESS", message: result.message });
+    } else {
+      send("done", {
+        ok: true,
+        scanId: result.scanId || null,
+        mappingId: result.mappingId || null,
+      });
+    }
+  } catch (error) {
+    send("fail", { error: "SCAN_FAILED", message: error.message });
+  } finally {
+    clearInterval(heartbeat);
+    if (!closed) res.end();
   }
 });
 
@@ -767,9 +878,16 @@ function buildEffectiveMapping(deterministicMapping, aiMapping) {
 app.get("/api/setup/findings", ensureAuth, (req, res) => {
   const tenantId = req.session.tenantId;
   const tenant = getTenant(tenantId);
-  const scan = getLatestScan(tenantId);
-  const mapping = getLatestMapping(tenantId);
-  const validation = getActiveValidation(tenantId);
+  const resourceId = tenant.selectedResource?.resourceId || null;
+  if (!resourceId) {
+    return res.status(409).json({
+      error: "RESOURCE_NOT_SELECTED",
+      message: "Select a resource before loading findings.",
+    });
+  }
+  const scan = getLatestScan(tenantId, resourceId);
+  const mapping = getLatestMapping(tenantId, resourceId);
+  const validation = getActiveValidation(tenantId, resourceId);
   if (!scan) {
     return res.status(409).json({
       error: "NO_SCAN",
@@ -805,8 +923,16 @@ const VALID_DECISIONS = new Set(["accept_all", "override", "reject"]);
 app.post("/api/setup/validate", ensureAuth, (req, res) => {
   const tenantId = req.session.tenantId;
   const { decision, overrides } = req.body || {};
+  // Validate the request body (400) before checking tenant state (409).
   if (!VALID_DECISIONS.has(decision)) {
     return res.status(400).json({ error: "INVALID_DECISION", message: "decision must be accept_all|override|reject" });
+  }
+  const resourceId = getTenant(tenantId).selectedResource?.resourceId || null;
+  if (!resourceId) {
+    return res.status(409).json({
+      error: "RESOURCE_NOT_SELECTED",
+      message: "Select a resource before validating.",
+    });
   }
   let cleanedOverrides = null;
   if (decision === "override") {
@@ -828,7 +954,7 @@ app.post("/api/setup/validate", ensureAuth, (req, res) => {
       return res.status(400).json({ error: "MISSING_OVERRIDES", message: "no valid override fields provided" });
     }
   }
-  const mapping = getLatestMapping(tenantId);
+  const mapping = getLatestMapping(tenantId, resourceId);
   // accept_all: snapshot the effective mapping (AI proposals + deterministic
   // fallback) into `overrides`. Without this, the dashboard pipeline would
   // re-derive the deterministic mapping on every load and silently discard
@@ -844,7 +970,7 @@ app.post("/api/setup/validate", ensureAuth, (req, res) => {
     }
     cleanedOverrides = Object.keys(snapshot).length > 0 ? snapshot : null;
   }
-  const persisted = persistValidation(tenantId, {
+  const persisted = persistValidation(tenantId, resourceId, {
     mappingId: mapping?.id || null,
     decision,
     overrides: cleanedOverrides,
@@ -853,6 +979,29 @@ app.post("/api/setup/validate", ensureAuth, (req, res) => {
 });
 
 /* ========== Preview mode (no auth required) ========== */
+
+/**
+ * Preview has no setup wizard, so the demo tenant owns its config: run
+ * the CONFIG phase once when no snapshot exists yet, then RENDER. Real
+ * tenants always configure through the wizard (/api/setup/scan).
+ */
+async function runPreviewPipeline(rangeKey, onProgress, onCard) {
+  const opts = {
+    tenantId: "preview-tenant",
+    rangeKey,
+    azureClient: previewClient,
+    cacheTtlMs: config.cacheTtlMs[rangeKey] || config.cacheTtlMs["7d"],
+    azureMode: "mock",
+    onProgress,
+    onCard,
+  };
+  let result = await runOverviewPipeline(opts);
+  if (result.error === "SETUP_REQUIRED") {
+    await runSetupScan({ tenantId: "preview-tenant", azureClient: previewClient });
+    result = await runOverviewPipeline(opts);
+  }
+  return result;
+}
 
 app.get("/preview/dashboard", async (req, res) => {
   const requestedRange = req.query.range || "7d";
@@ -879,12 +1028,11 @@ app.get("/preview/dashboard", async (req, res) => {
     function send(obj) { if (!closed) res.write(JSON.stringify(obj) + "\n"); }
 
     try {
-      const result = await runOverviewPipeline({
-        tenantId: "preview-tenant", rangeKey, azureClient: previewClient,
-        cacheTtlMs: config.cacheTtlMs[rangeKey] || config.cacheTtlMs["7d"],
-        azureMode: "mock",
-        onProgress(label, pct) { send({ type: "progress", label, pct: Math.round(pct * 100) }); },
-      });
+      const result = await runPreviewPipeline(
+        rangeKey,
+        (label, pct) => { send({ type: "progress", label, pct: Math.round(pct * 100) }); },
+        (name, data) => { send({ type: "card", name, data }); }
+      );
       if (result.error) {
         send({ type: "error", ...result });
       } else {
@@ -899,13 +1047,7 @@ app.get("/preview/dashboard", async (req, res) => {
   }
 
   try {
-    const result = await runOverviewPipeline({
-      tenantId: "preview-tenant",
-      rangeKey,
-      azureClient: previewClient,
-      cacheTtlMs: config.cacheTtlMs[rangeKey] || config.cacheTtlMs["7d"],
-      azureMode: "mock",
-    });
+    const result = await runPreviewPipeline(rangeKey);
     if (result.error) {
       return res.status(500).json(result);
     }

@@ -55,6 +55,7 @@ export const cacheStore = new CacheStore();
 
 export function buildCacheKey({
   tenantId,
+  resourceId,
   workspaceId,
   queryName,
   timeRangeKey,
@@ -62,6 +63,7 @@ export function buildCacheKey({
 }) {
   const raw = [
     tenantId,
+    resourceId || "r0",
     workspaceId,
     queryName,
     timeRangeKey,

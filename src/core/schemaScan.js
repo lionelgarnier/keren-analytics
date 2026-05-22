@@ -168,6 +168,11 @@ function normalizeSpan(rows) {
 /**
  * Assemble a scan payload from pre-fetched results. Pure function — no
  * I/O, no state. Caller is responsible for persisting via scanStore.
+ *
+ * The payload is the **config snapshot**: it embeds `schemaProfile` and
+ * `readinessReport` verbatim so a dashboard render can rebuild the
+ * mapping from the persisted scan alone — without re-probing readiness
+ * or re-profiling the schema. See orchestrator.runOverviewPipeline.
  */
 export function buildSchemaScan({
   schemaProfile,
@@ -189,5 +194,8 @@ export function buildSchemaScan({
     eventNames,
     timestampSpan: span,
     gaps,
+    // Config snapshot — consumed by the render phase, not shown in the UI.
+    schemaProfile: schemaProfile || null,
+    readinessReport: readinessReport || null,
   };
 }

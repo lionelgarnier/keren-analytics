@@ -40,6 +40,52 @@ resolution chain, or the `/api/setup/*` route contracts — they're additive
 on the schema (`code_prompt`) and a corrected default on
 `mergeWithValidation`.
 
+### Per-resource setup state + service hub (2026-05-22)
+
+Dogfooding a tenant with several App Insights resources exposed a deeper
+flaw than the visible "double resource picker" on first run: **all setup
+state was keyed by `tenant_id` alone.** `getActiveValidation(tenantId)`,
+`getLatestScan(tenantId)` and the single `tenants.selected_resource`
+column meant configuring resource A flipped the whole tenant to
+"configured" — switching to resource B then rendered B's dashboard with
+A's column mapping, and B never got its own wizard pass.
+
+The fix makes setup state **resource-scoped**:
+
+| Area | Change |
+|------|--------|
+| Schema | `scans` and `validations` gain a nullable `resource_id` column ([`db.js`](../../src/core/db.js)). `mappings` inherits scope transitively via `scan_id`. A one-shot in-place migration (`migrateResourceIdColumns`) adds the column on existing DBs and backfills rows from each tenant's `selected_resource`, so single-resource users keep their setup. |
+| Stores | `persistScan` / `getLatestScan` / `listScans`, `persistValidation` / `getActiveValidation`, `getLatestMapping` all take a `resourceId`. New `getScannedResourceIds` / `getConfiguredResourceIds` drive the hub. |
+| Cache | `buildCacheKey` includes `resourceId` — two App Insights sharing one Log Analytics workspace no longer collide. |
+| Hub | New `GET /api/setup/services` returns every resource tagged `ready` / `incomplete` / `unconfigured`. The post-login screen is now a per-service hub; the wizard's own resource picker is gone (the hub is the single picker). Single-resource tenants skip the hub. |
+| Flow | After validation the wizard lands directly on `/service/<name>` — no second picker, no detour. The tenant-global `needsSetup` redirect in [`app.js`](../../public/app.js) is removed. |
+
+#### Config / render split
+
+The same pass separated the orchestrator's two responsibilities, which
+were conflated in a single `runOverviewPipeline` — so every dashboard
+load re-ran the scan + LLM call:
+
+- **`runSetupScan` — CONFIG, once.** Discovery, readiness probes, schema
+  profiling, schema scan, LLM mapping. Persists a `scans` row whose
+  payload now embeds `schemaProfile` + `readinessReport` verbatim — a
+  complete config snapshot. Sole entry point: `/api/setup/scan` +
+  `/api/setup/scan/stream` (wizard and "Re-scan").
+- **`runOverviewPipeline` — RENDER, every load.** Reuses the latest
+  snapshot, rebuilds the mapping with the pure `buildMapping` /
+  `mergeWithValidation`, and runs only the ~20 dashboard KQL queries
+  (cached by `mappingVersion`). No new scan, no LLM call, no re-probe —
+  and **never any config work**. If no snapshot exists it returns
+  `SETUP_REQUIRED`; the client routes the user to the wizard. The only
+  exception is `/preview/dashboard`, whose demo tenant has no wizard —
+  the route owns its config explicitly (`runPreviewPipeline`).
+
+Net effect: configuration is a one-time step that lives only in the
+setup wizard; opening the dashboard is pure data fetching. Regression
+coverage in [`tests/setupApi.test.js`](../../tests/setupApi.test.js) —
+"dashboard render reuses the config snapshot — no re-scan per load" and
+"dashboard load with no config returns SETUP_REQUIRED".
+
 ### Design intent vs. what shipped
 
 The original narrative below describes the **end-state** experience —
@@ -49,9 +95,9 @@ intent but is leaner:
 
 - **Step 3 (resource triage LLM call) is not wired yet.** Discovery
   still auto-selects when there's a single resource; multi-resource is
-  surfaced as a 409 from `/api/setup/scan` and routes the user to the
-  legacy "pick a resource" UI on `/`. The LLM ranking is a clear
-  follow-up.
+  surfaced as the per-service hub (`GET /api/setup/services`, see the
+  2026-05-22 iteration above) where each resource shows its config
+  status. The LLM *ranking* of resources is the remaining follow-up.
 - **Step 6 (narration LLM call) is also not wired yet.** The narration
   panel keeps the deterministic generator from `core/narration.js`;
   what changed is that the "Preview — real LLM coming soon" badge now

@@ -17,7 +17,7 @@ async function createTestApp(mockClientOverrides = {}) {
   // The simplest approach: import the app factory pieces and wire them.
   const { default: express } = await import("express");
   const { default: session } = await import("express-session");
-  const { runOverviewPipeline } = await import("../src/core/orchestrator.js");
+  const { runOverviewPipeline, runSetupScan } = await import("../src/core/orchestrator.js");
   const { buildRecommendations } = await import("../src/core/recommendations.js");
   const { getTenant, updateTenant } = await import("../src/core/metadataStore.js");
 
@@ -72,15 +72,20 @@ async function createTestApp(mockClientOverrides = {}) {
     const rangeKey = req.query.range || "7d";
     const tenantId = req.session.tenantId;
     try {
+      // CONFIG once, then RENDER — same split as the real server.
+      const setup = await runSetupScan({ tenantId, azureClient: fakeClient });
+      if (setup.requiresSelection) {
+        return res.status(409).json({ error: "RESOURCE_SELECTION_REQUIRED", resources: setup.resources });
+      }
+      if (setup.error) {
+        return res.status(setup.error === "NO_ACCESS" ? 403 : 500).json(setup);
+      }
       const result = await runOverviewPipeline({
         tenantId,
         rangeKey,
         azureClient: fakeClient,
         cacheTtlMs: 60000,
       });
-      if (result.requiresSelection) {
-        return res.status(409).json({ error: "RESOURCE_SELECTION_REQUIRED", resources: result.resources });
-      }
       if (result.error) {
         const code = result.error === "NO_ACCESS" ? 403 : 500;
         return res.status(code).json(result);

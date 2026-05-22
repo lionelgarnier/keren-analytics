@@ -102,13 +102,108 @@ test("/api/setup/scan can be re-run to refresh the scan (covers re-scan flow)", 
   } finally { restore(); }
 });
 
+test("/api/setup/scan/stream emits a step event per stage then done", async () => {
+  const restore = withFreshDb();
+  try {
+    const { agent } = await authedAgent("stream");
+    const res = await agent
+      .get("/api/setup/scan/stream")
+      .buffer(true)
+      .expect(200);
+    assert.match(res.headers["content-type"], /text\/event-stream/);
+
+    // One "step" event per pipeline stage, each carrying real numbers.
+    for (const step of ["connect", "customDimensions", "eventVolumes", "identity", "ai"]) {
+      assert.match(res.text, new RegExp(`"step":"${step}"`), `missing step: ${step}`);
+    }
+
+    // Terminal "done" event carries the persisted scan + mapping ids.
+    const doneBlock = res.text
+      .split("\n\n")
+      .find((b) => b.startsWith("event: done"));
+    assert.ok(doneBlock, "stream must end with a done event");
+    const donePayload = JSON.parse(doneBlock.split("\ndata: ")[1]);
+    assert.equal(donePayload.ok, true);
+    assert.ok(donePayload.scanId > 0);
+    assert.ok(donePayload.mappingId > 0);
+
+    // The stream is a real scan — /findings now exposes it like POST /scan.
+    const findings = await agent.get("/api/setup/findings").expect(200);
+    assert.equal(findings.body.scan.id, donePayload.scanId);
+  } finally { restore(); }
+});
+
 test("/api/setup/findings returns 409 NO_SCAN before a scan exists", async () => {
   const restore = withFreshDb();
   try {
     const { agent } = await authedAgent("noscan");
+    // Discovery auto-selects the single mock resource, so we exercise the
+    // "resource selected, no scan yet" path rather than RESOURCE_NOT_SELECTED.
+    await agent.get("/azure/discover").expect(200);
     const res = await agent.get("/api/setup/findings");
     assert.equal(res.status, 409);
     assert.equal(res.body.error, "NO_SCAN");
+  } finally { restore(); }
+});
+
+test("/api/setup/services tags resources with their per-resource status", async () => {
+  const restore = withFreshDb();
+  try {
+    const { agent } = await authedAgent("services");
+    // Before any setup → unconfigured.
+    const before = await agent.get("/api/setup/services").expect(200);
+    assert.ok(Array.isArray(before.body.services));
+    assert.ok(before.body.services.length >= 1);
+    assert.equal(before.body.services[0].status, "unconfigured");
+
+    // Scanned but not validated → incomplete.
+    await agent.post("/api/setup/scan").expect(200);
+    const mid = await agent.get("/api/setup/services").expect(200);
+    assert.equal(mid.body.services[0].status, "incomplete");
+
+    // Validated → ready.
+    await agent.post("/api/setup/validate").send({ decision: "accept_all" }).expect(200);
+    const after = await agent.get("/api/setup/services").expect(200);
+    assert.equal(after.body.services[0].status, "ready");
+  } finally { restore(); }
+});
+
+test("dashboard render reuses the config snapshot — no re-scan per load", async () => {
+  // The core config/render split: setup scan is the CONFIG phase (runs
+  // once); every /dashboard/overview is the RENDER phase and must never
+  // create a new scan or re-run the pipeline's config stages.
+  const restore = withFreshDb();
+  try {
+    const { agent } = await authedAgent("reuse");
+    const scanRes = await agent.post("/api/setup/scan").expect(200);
+    const scanId = scanRes.body.scanId;
+    assert.ok(scanId > 0);
+    await agent.post("/api/setup/validate").send({ decision: "accept_all" }).expect(200);
+
+    // Several dashboard loads across ranges.
+    await agent.get("/dashboard/overview?range=7d").expect(200);
+    await agent.get("/dashboard/overview?range=30d").expect(200);
+    await agent.get("/dashboard/overview?range=today").expect(200);
+
+    // Still the same scan — the render phase never re-scanned.
+    const state = await agent.get("/api/setup/state").expect(200);
+    assert.equal(state.body.latestScanId, scanId, "render must not create a new scan");
+  } finally { restore(); }
+});
+
+test("dashboard load with no config returns SETUP_REQUIRED — never configures inline", async () => {
+  const restore = withFreshDb();
+  try {
+    const { agent } = await authedAgent("nocfg");
+    // No /api/setup/scan first — the render phase must refuse, not
+    // silently run config work on a dashboard load.
+    const res = await agent.get("/dashboard/overview?range=7d");
+    assert.equal(res.status, 409);
+    assert.equal(res.body.error, "SETUP_REQUIRED");
+
+    // And it must not have created a scan as a side effect.
+    const state = await agent.get("/api/setup/state").expect(200);
+    assert.equal(state.body.latestScanId, null);
   } finally { restore(); }
 });
 

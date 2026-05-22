@@ -27,8 +27,15 @@ Status: **Phase 1 + Phase 2 + Phase A + Track F DONE**.
   reused by the readiness "How to fix" rows). The `accept_all` validation
   branch now snapshots the effective mapping into `overrides` — before
   this fix, AI-only proposals were silently discarded on the next
-  pipeline run. See [`docs/backlog/ai-setup-wizard.md`](docs/backlog/ai-setup-wizard.md)
-  § "Post-shipment iterations (2026-05-12)" for the change ledger and
+  pipeline run. A further 2026-05-22 iteration made setup state
+  **resource-scoped** (`scans` / `validations` keyed by
+  `(tenant_id, resource_id)`) and replaced the post-login resource
+  picker with a **service hub** showing a per-resource config status —
+  before this, configuring one App Insights silently marked the whole
+  tenant configured. See
+  [`docs/backlog/ai-setup-wizard.md`](docs/backlog/ai-setup-wizard.md)
+  § "Post-shipment iterations (2026-05-12)" + "Per-resource setup state
+  + service hub (2026-05-22)" for the change ledger and
   [`docs/architecture-ai.md`](docs/architecture-ai.md) divergences 4 & 5
   for the schema + merge contract evolution.
 
@@ -92,16 +99,19 @@ src/
       realClient.js      # Azure ARM + Log Analytics calls, error categorization
       tokenStore.js      # per-tenant access/refresh token storage
   core/
-    orchestrator.js      # main pipeline (auth -> discover -> profile -> render)
+    orchestrator.js      # two phases: runSetupScan (CONFIG — scan/profile/
+                         # AI, once) + runOverviewPipeline (RENDER — dashboard
+                         # KQL, every load, reuses the config snapshot)
     stateMachine.js      # named pipeline states + transitions
     db.js                # node:sqlite connection + schema bootstrap (data/keren.db)
     metadataStore.js     # tenant metadata over SQLite; legacy data/store.json
                          # auto-migrated on boot (renamed to .legacy)
     schemaScan.js        # F2: PII scrub + gap detection + scan assembly (pure)
-    scanStore.js         # F2: persist/read scans table (history capped at 50)
+    scanStore.js         # F2: scans table, scoped per (tenant, resourceId)
     aiMappingService.js  # F3: orchestrates scan -> AI -> mappings table cache
-    mappingStore.js      # F3: persist/read mappings table (cache key = scan_id)
-    validationStore.js   # F4: persist user accept/override decisions
+    mappingStore.js      # F3: mappings table (cache key = scan_id; resource
+                         #     scope inherited via the scan it references)
+    validationStore.js   # F4: validations, scoped per (tenant, resourceId)
   ai/
     interface.js         # F3: AI provider contract + runtime assert
     factory.js           # F3: AI_PROVIDER env -> provider instance (cached)
@@ -152,8 +162,13 @@ docs/                    # product, technical, multicloud, backlog/, adr/
   don't mutate tenant state directly.
 - **KQL templates** are rendered with mapping substitution (`{{userIdColumn}}`
   etc.). Never inline tenant identifiers; always go through `core/kql.js`.
-- **Cache keys** include `tenant + workspace + mappingVersion + range`. If you
-  change mapping detection, bump `mappingVersion` so caches invalidate.
+- **Cache keys** include `tenant + resource + workspace + mappingVersion +
+  range`. If you change mapping detection, bump `mappingVersion` so caches
+  invalidate.
+- **Setup state is per-resource**: `scans` and `validations` are keyed by
+  `(tenant_id, resource_id)`. Never query them by `tenant_id` alone — a tenant
+  can hold several App Insights resources. `mappings` inherits the scope from
+  its `scan_id`.
 - **Range whitelist**: routes accept only `today | 7d | 30d`. Validate in the
   route handler before hitting cache or KQL.
 - **OAuth**: PKCE flow lives in `src/server.js` (`/auth/login`, `/auth/callback`).

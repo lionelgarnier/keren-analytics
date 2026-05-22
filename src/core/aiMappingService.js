@@ -44,18 +44,36 @@ function fallback(reason) {
 }
 
 /**
+ * The degraded fallback is silent by contract (it must not break the
+ * pipeline), but a silent fallback is undebuggable. Surface every
+ * degrade on the server console — with the full error + stack for the
+ * provider-error path, since that's where auth / HTTP failures land.
+ * Muted under NODE_ENV=test so the suite (which runs with AI off) stays
+ * quiet.
+ */
+function noteDegraded(scanId, reason, err) {
+  if (process.env.NODE_ENV === "test") return;
+  if (err) {
+    console.error(`[ai] scan ${scanId} degraded — ${reason}\n`, err);
+  } else {
+    console.warn(`[ai] scan ${scanId} degraded — ${reason} (deterministic fallback)`);
+  }
+}
+
+/**
  * Compute (or fetch from cache) the AI mapping proposals for the tenant's
  * latest scan. Returns null if no scan exists yet (caller should run the
  * pipeline first).
  *
  * @param {string} tenantId
+ * @param {string} resourceId - App Insights resource the scan belongs to
  * @param {object} [opts]
  * @param {object} [opts.readinessReport] - readiness payload to attach to the prompt
  * @param {AbortSignal} [opts.abortSignal]
  * @returns {Promise<null | { id, scanId, source, proposals, degraded, createdAt, reason? }>}
  */
-export async function getOrComputeMapping(tenantId, { readinessReport, abortSignal, provider } = {}) {
-  const scan = getLatestScan(tenantId);
+export async function getOrComputeMapping(tenantId, resourceId, { readinessReport, abortSignal, provider } = {}) {
+  const scan = getLatestScan(tenantId, resourceId);
   if (!scan) return null;
 
   const cached = getMappingForScan(tenantId, scan.id);
@@ -64,7 +82,8 @@ export async function getOrComputeMapping(tenantId, { readinessReport, abortSign
   const aiProvider = provider || getAiProvider();
   const supportsMapping = aiProvider.capabilities().mappingAnalysis;
   if (!supportsMapping) {
-    const fb = fallback("provider does not support mappingAnalysis");
+    const fb = fallback(`provider "${aiProvider.name}" does not support mappingAnalysis`);
+    noteDegraded(scan.id, fb.reason);
     const persisted = persistMapping(tenantId, scan.id, {
       source: fb.source,
       proposals: fb.proposals,
@@ -75,6 +94,7 @@ export async function getOrComputeMapping(tenantId, { readinessReport, abortSign
 
   if (!isUnderCap()) {
     const fb = fallback("daily LLM spend cap reached");
+    noteDegraded(scan.id, fb.reason);
     const persisted = persistMapping(tenantId, scan.id, {
       source: fb.source,
       proposals: fb.proposals,
@@ -100,6 +120,7 @@ export async function getOrComputeMapping(tenantId, { readinessReport, abortSign
     });
   } catch (err) {
     const fb = fallback(`provider error: ${err.message}`);
+    noteDegraded(scan.id, fb.reason, err);
     const persisted = persistMapping(tenantId, scan.id, {
       source: fb.source,
       proposals: fb.proposals,
@@ -110,6 +131,7 @@ export async function getOrComputeMapping(tenantId, { readinessReport, abortSign
 
   if (!result || !isWellFormed(result.output)) {
     const fb = fallback(result ? "provider response failed shape check" : "provider returned null");
+    noteDegraded(scan.id, fb.reason);
     const persisted = persistMapping(tenantId, scan.id, {
       source: fb.source,
       proposals: fb.proposals,

@@ -45,22 +45,9 @@
       </ol>
 
       <!-- Step 1: Scanning -->
-      <!-- The panel has two sub-views: a resource picker (shown only when
-           the tenant has >1 App Insights and none is selected yet) and the
-           scanning animation. The picker prevents the orchestrator's
-           RESOURCE_SELECTION_REQUIRED 409 by ensuring a selection exists
-           before /api/setup/scan is called. -->
+      <!-- Resource selection lives on the /services hub, not here — by the
+           time the wizard loads a resource is already selected. -->
       <section id="step-scanning" class="setup-panel">
-        <div id="resourcePicker" class="setup-resource-picker hidden">
-          <h2 class="setup-h2">Choose a resource to scan</h2>
-          <p class="setup-narration">
-            Multiple Application Insights resources detected in this tenant. Pick
-            the one you want to analyze — you can switch later from the dashboard.
-          </p>
-          <div id="resourcePickerList" class="setup-resource-list"></div>
-          <div class="setup-error hidden" id="resourcePickerError"></div>
-        </div>
-
         <div id="scanningPanel" class="setup-scanning hidden">
           <div class="setup-spinner" id="scanningSpinner" aria-hidden="true"></div>
           <h2 class="setup-h2" id="scanningHeading">Scanning your telemetry…</h2>

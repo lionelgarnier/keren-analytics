@@ -53,10 +53,14 @@ const SCHEMA_STATEMENTS = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_state_transitions_tenant
      ON state_transitions(tenant_id, id)`,
-  // Track F2 — schema scans (latest = active, history retained)
+  // Track F2 — schema scans (latest = active, history retained).
+  // `resource_id` scopes a scan to one App Insights resource — a tenant
+  // can have several. Nullable: pre-migration rows are backfilled from
+  // the tenant's selected resource, the rest stay orphaned.
   `CREATE TABLE IF NOT EXISTS scans (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     tenant_id   TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    resource_id TEXT,
     scanned_at  TEXT NOT NULL,
     payload     TEXT NOT NULL
   )`,
@@ -86,10 +90,12 @@ const SCHEMA_STATEMENTS = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_signals_tenant_scan
      ON signals(tenant_id, scan_id)`,
-  // Track F4 — user validations on AI proposals
+  // Track F4 — user validations on AI proposals. `resource_id` scopes
+  // the validation to one App Insights resource (see scans above).
   `CREATE TABLE IF NOT EXISTS validations (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     tenant_id     TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    resource_id   TEXT,
     mapping_id    INTEGER REFERENCES mappings(id) ON DELETE CASCADE,
     decision      TEXT NOT NULL,
     overrides     TEXT,
@@ -99,6 +105,52 @@ const SCHEMA_STATEMENTS = [
      ON validations(tenant_id, validated_at DESC)`,
 ];
 
+/**
+ * Indexes that reference `resource_id` — created only after
+ * migrateResourceIdColumns() has guaranteed the column exists, so an
+ * upgraded DB doesn't fail the index DDL before the ALTER TABLE runs.
+ */
+const RESOURCE_SCOPED_INDEXES = [
+  `CREATE INDEX IF NOT EXISTS idx_scans_tenant_resource
+     ON scans(tenant_id, resource_id, id DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_validations_tenant_resource
+     ON validations(tenant_id, resource_id, validated_at DESC)`,
+];
+
+/**
+ * Track-F-era DBs created `scans` / `validations` without `resource_id`
+ * (setup state was tenant-scoped, mono-resource). Add the column in
+ * place and backfill existing rows from each tenant's currently
+ * selected resource, so single-resource users keep their setup across
+ * the upgrade. Idempotent: the column check makes re-runs a no-op.
+ */
+function migrateResourceIdColumns(db) {
+  for (const table of ["scans", "validations"]) {
+    const columns = db.prepare(`PRAGMA table_info(${table})`).all();
+    if (columns.some((c) => c.name === "resource_id")) continue;
+    db.exec(`ALTER TABLE ${table} ADD COLUMN resource_id TEXT`);
+    backfillResourceId(db, table);
+  }
+}
+
+function backfillResourceId(db, table) {
+  const tenants = db
+    .prepare("SELECT id, selected_resource FROM tenants WHERE selected_resource IS NOT NULL")
+    .all();
+  const update = db.prepare(
+    `UPDATE ${table} SET resource_id = ? WHERE tenant_id = ? AND resource_id IS NULL`
+  );
+  for (const row of tenants) {
+    let resourceId = null;
+    try {
+      resourceId = JSON.parse(row.selected_resource)?.resourceId || null;
+    } catch {
+      resourceId = null;
+    }
+    if (resourceId) update.run(resourceId, row.id);
+  }
+}
+
 function applySchema(db) {
   db.exec("PRAGMA foreign_keys = ON");
   // WAL gives concurrent readers without blocking writers; safe on a
@@ -107,6 +159,12 @@ function applySchema(db) {
     db.exec("PRAGMA journal_mode = WAL");
   }
   for (const stmt of SCHEMA_STATEMENTS) {
+    db.exec(stmt);
+  }
+  // Must run after the CREATE TABLE pass (so the tables exist) and
+  // before the resource-scoped indexes (which reference the column).
+  migrateResourceIdColumns(db);
+  for (const stmt of RESOURCE_SCOPED_INDEXES) {
     db.exec(stmt);
   }
 }

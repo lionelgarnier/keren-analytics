@@ -50,17 +50,23 @@ export function getMappingForScan(tenantId, scanId) {
   };
 }
 
-export function getLatestMapping(tenantId) {
+/**
+ * Latest mapping for one resource. `mappings` has no `resource_id` of
+ * its own — it inherits scope from the scan it references, so we join
+ * through `scans` to filter by the resource.
+ */
+export function getLatestMapping(tenantId, resourceId) {
   const db = getDb();
   const row = db
     .prepare(
-      `SELECT id, scan_id, source, proposals, degraded, created_at
-         FROM mappings
-        WHERE tenant_id = ?
-        ORDER BY id DESC
+      `SELECT m.id, m.scan_id, m.source, m.proposals, m.degraded, m.created_at
+         FROM mappings m
+         JOIN scans s ON m.scan_id = s.id
+        WHERE m.tenant_id = ? AND s.resource_id IS ?
+        ORDER BY m.id DESC
         LIMIT 1`
     )
-    .get(tenantId);
+    .get(tenantId, resourceId);
   if (!row) return null;
   return {
     id: row.id,
