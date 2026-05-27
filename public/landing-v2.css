@@ -433,3 +433,14 @@ body.landing-active .navbar { display: none; }
   .lv2-kpi + .lv2-kpi { padding-left: 0; border-left: none; padding-top: 20px; margin-top: 20px; border-top: 1px solid var(--lv2-border); }
   .lv2-ring-widget { flex-direction: column; }
 }
+
+/* ── Nav: collapse secondary items on narrow viewports ───────────────── */
+@media (max-width: 768px) {
+  .lv2-nav { padding: 16px 20px; gap: 12px; }
+  .lv2-nav-left { gap: 10px; min-width: 0; }
+  .lv2-nav-links { display: none; }
+  .lv2-nav-right { gap: 8px; flex-shrink: 0; }
+  .lv2-nav-right #lv2Stars,
+  .lv2-nav-right a.lv2-nav-muted[href="/auth/login"] { display: none; }
+  #landingPreviewBtn { padding: 8px 14px; font-size: 12.5px; }
+}
