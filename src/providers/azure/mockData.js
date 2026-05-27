@@ -671,6 +671,7 @@ function generateBaseline() {
         avgDuration: vary(248, 15, rng),
         p95Duration: vary(810, 12, rng),
         errorRate: Math.round((0.015 + seededRandom(sessionSeed()) * 0.02) * 1000) / 1000,
+        clientErrorRate: vary(12, 20, rng) / 1000,
       },
     ],
     // /api/checkout is intentionally the unmistakable outlier so the demo

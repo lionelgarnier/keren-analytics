@@ -5,7 +5,7 @@ const CLEANUP_INTERVAL_MS = 60 * 1000; // Run cleanup every 60 seconds
 // Bump when the *semantics* of a KQL template change (e.g. dcount -> dcountif).
 // mappingVersion only changes on mapping *detection* changes, so it would not
 // invalidate caches when a template is edited — this constant fills that gap.
-export const KQL_SEMANTICS_VERSION = "2";
+export const KQL_SEMANTICS_VERSION = "3";
 
 export class CacheStore {
   constructor() {

@@ -1400,9 +1400,11 @@ function renderInsights(dashboard) {
   if (topPages.length >= 2) {
     const topShare = topPages[0].share || 0;
     if (topShare > 0.25) {
+      const topPath = topPages[0].path;
+      const tail = topPath === "/" ? "high homepage concentration" : "traffic is concentrated on one route";
       insights.push({
         icon: "\uD83D\uDCCA",
-        text: `<strong>${topPages[0].path}</strong> captures <span class="insight-highlight">${fmtPct(topShare)}</span> of all page views — high homepage concentration`,
+        text: `<strong>${topPath}</strong> captures <span class="insight-highlight">${fmtPct(topShare)}</span> of all page views — ${tail}`,
       });
     }
   }
@@ -2214,14 +2216,14 @@ function renderFirstRunBanner(readinessScore) {
   const winsEl = document.getElementById("firstRunBannerWins");
   if (scoreEl) scoreEl.textContent = String(score);
   if (titleEl) {
-    const winCount = Math.min(wins.length, 2);
+    const winCount = wins.length;
     const plural = winCount === 1 ? "" : "s";
     titleEl.textContent = `Your environment scores ${score}/${maxScore}. ${winCount} quick win${plural} available:`;
   }
 
   if (winsEl) {
     winsEl.innerHTML = "";
-    for (const win of wins.slice(0, 2)) {
+    for (const win of wins) {
       const chip = document.createElement("button");
       chip.type = "button";
       chip.className = "first-run-banner-chip";
@@ -2562,6 +2564,14 @@ function renderTechnicalKpis(d) {
   document.getElementById("kpiAvg").textContent = fmtMs(d.avgResponseTimeMs);
   document.getElementById("kpiP95").textContent = fmtMs(d.p95ResponseTimeMs);
   document.getElementById("kpiErrors").textContent = fmtPct(d.errorRate);
+  // 4xx responses (mostly 404s) are tracked separately — they are not server
+  // failures and must not inflate the error rate.
+  const clientEl = document.getElementById("kpiClientErrors");
+  if (clientEl) {
+    clientEl.textContent = d.clientErrorRate > 0
+      ? `+ ${fmtPct(d.clientErrorRate)} client errors (4xx)`
+      : "";
+  }
   const errorCard = document.getElementById("kpiErrorCard");
   if (d.errorRate > 0.05) {
     errorCard.style.borderLeft = "3px solid var(--danger)";
@@ -2674,6 +2684,7 @@ function cardDataFromDashboard(name, dash) {
         avgResponseTimeMs: k.avgResponseTimeMs,
         p95ResponseTimeMs: k.p95ResponseTimeMs,
         errorRate: k.errorRate,
+        clientErrorRate: k.clientErrorRate,
       };
     case "dailyTrend": return { dailyTrend: c.dailyTrend, kpiSparklines: c.kpiSparklines };
     case "topPages": return { topPages: c.topPages };

@@ -42,3 +42,19 @@ test("identity-count templates use dcountif so empty columns yield 0", () => {
     assert.ok(!rendered.includes("dcount("), `${name} should have no bare dcount(`);
   }
 });
+
+test("error-rate templates separate server (5xx) from client (4xx) errors", () => {
+  clearTemplateCache();
+  const params = {
+    timeStart: 'datetime("2024-01-01T00:00:00Z")',
+    timeEnd: 'datetime("2024-01-08T00:00:00Z")',
+  };
+  const perf = renderTemplate(loadKqlTemplate("performance"), params);
+  assert.ok(perf.includes("clientErrorRate"), "performance exposes a separate clientErrorRate");
+  assert.ok(perf.includes("statusCode >= 500"), "performance counts 5xx as server errors");
+  // The old definition counted every failure (incl. 404s) as an error.
+  assert.ok(!/countif\(success == false\)/.test(perf), "performance no longer counts every failure as an error");
+
+  const slow = renderTemplate(loadKqlTemplate("slow-endpoints"), params);
+  assert.ok(slow.includes("statusCode >= 500"), "slow-endpoints counts 5xx as server errors");
+});

@@ -693,6 +693,7 @@ export async function buildOverviewDashboard({
     avgResponseTimeMs: 0,
     p95ResponseTimeMs: 0,
     errorRate: 0,
+    clientErrorRate: 0,
     comparison: null,
   };
   const charts = {
@@ -781,10 +782,12 @@ export async function buildOverviewDashboard({
     kpis.avgResponseTimeMs = Number(toSingleValue(perfRows, "avgDuration")) || 0;
     kpis.p95ResponseTimeMs = Number(toSingleValue(perfRows, "p95Duration")) || 0;
     kpis.errorRate = Number(toSingleValue(perfRows, "errorRate")) || 0;
+    kpis.clientErrorRate = Number(toSingleValue(perfRows, "clientErrorRate")) || 0;
     publish("technicalKpis", ["performance"], {
       avgResponseTimeMs: kpis.avgResponseTimeMs,
       p95ResponseTimeMs: kpis.p95ResponseTimeMs,
       errorRate: kpis.errorRate,
+      clientErrorRate: kpis.clientErrorRate,
     });
   }
 
@@ -972,6 +975,7 @@ export async function buildOverviewDashboard({
       avgResponseTimeMs: kpis.avgResponseTimeMs,
       p95ResponseTimeMs: kpis.p95ResponseTimeMs,
       errorRate: kpis.errorRate,
+      clientErrorRate: kpis.clientErrorRate,
       comparison: kpis.comparison,
     },
     charts: {

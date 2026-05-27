@@ -67,6 +67,12 @@ test("mock auth and dashboard overview flow", async () => {
   assert.equal(narration.badge, null);
   assert.ok(narration.paragraph && narration.paragraph.length > 0);
 
+  // Error rate is split: errorRate is server (5xx) failures only, with 4xx
+  // client errors surfaced separately so 404s no longer inflate the rate.
+  const kpis = dashboard.body.dashboard.kpis;
+  assert.ok(Number.isFinite(kpis.errorRate), "kpis.errorRate is numeric");
+  assert.ok(Number.isFinite(kpis.clientErrorRate), "kpis.clientErrorRate is numeric");
+
   // Period-over-period comparison (B4) — 7d range has prev7d as predecessor.
   const cmp = dashboard.body.dashboard.kpis.comparison;
   assert.ok(cmp, "dashboard.kpis.comparison should be present for 7d range");

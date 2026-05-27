@@ -625,6 +625,7 @@
                 <span id="kpiErrors" class="kpi-value">-</span>
                 <svg id="sparkErrorRate" class="sparkline" viewBox="0 0 60 20"></svg>
               </div>
+              <span id="kpiClientErrors" class="kpi-compare"></span>
               <span id="anomalyErrorRate" class="anomaly-badge hidden"></span>
             </div>
             <div class="kpi-card kpi-card-neutral">
@@ -655,7 +656,7 @@
                 <h3>Slow Endpoints</h3>
                 <div class="panel-header-right">
                   <label class="toggle-filter" title="Hide technical routes (API, auth, trpc, internal…)">
-                    <input type="checkbox" id="slowEndpointsFilterTechnical" checked />
+                    <input type="checkbox" id="slowEndpointsFilterTechnical" />
                     <span class="toggle-filter-slider"></span>
                     <span class="toggle-filter-label">Hide technical</span>
                   </label>
