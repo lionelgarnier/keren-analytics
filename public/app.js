@@ -2908,8 +2908,6 @@ async function init() {
   try {
     const session = await apiFetch("/auth/session");
     csrfToken = session.csrfToken || null;
-    const mode = session.mode || "mock";
-    document.querySelectorAll(".mode-badge").forEach((el) => { el.textContent = mode; });
 
     if (!session.authenticated) {
       showLanding();
