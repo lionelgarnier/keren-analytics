@@ -15,6 +15,10 @@
     <meta name="twitter:image" content="https://analytics.keren.run/docs/assets/og-image.png" />
     <title>Keren Analytics</title>
     <link rel="stylesheet" href="/styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" />
+    <link rel="stylesheet" href="/landing-v2.css" />
     <script src="/theme-init.js"></script>
   </head>
   <body>
@@ -23,7 +27,7 @@
       <div class="navbar-inner">
         <div class="navbar-left">
           <span class="logo">Keren Analytics</span>
-          <span class="badge" id="modeBadge"></span>
+          <span class="badge mode-badge" id="modeBadge"></span>
         </div>
         <div class="navbar-right">
           <a href="/docs" class="nav-link">Docs</a>
@@ -44,206 +48,426 @@
 
     <main class="container">
       <!-- ========== Landing page (shown before login) ========== -->
-      <section id="landingPage" class="hidden">
-        <div class="landing-hero">
-          <h2 class="landing-title">Azure App Insights → Marketing &amp; Technical dashboards in 2 minutes.</h2>
-          <p class="landing-subtitle">AI-mapped schema. 26 KQL templates. No raw telemetry persistence outside your tenant. MIT.</p>
-          <div class="landing-actions">
-            <button id="landingPreviewBtn" class="btn btn-primary btn-lg">Try the demo</button>
-            <button id="landingConnectBtn" class="btn btn-ghost btn-lg">Connect your Azure</button>
-            <a class="btn btn-ghost btn-lg landing-star-btn" href="https://github.com/lionelgarnier/keren-analytics" target="_blank" rel="noopener">★ Star on GitHub</a>
-          </div>
-          <!--
-          HERO SCREENSHOT placeholder (A3 / A5 — see docs/maintainer-todo.md).
-          Drop into <img class="landing-hero-shot"> once available.
-          Suggested: Marketing tab with narration + first-run banner + delta chips visible.
-          -->
-        </div>
+      <section id="landingPage" class="hidden lv2">
 
-        <div class="landing-features">
-          <div class="landing-card">
-            <div class="landing-card-icon">M</div>
-            <h3>Marketing Analytics</h3>
-            <p>Visitors, sessions, top pages, geo distribution, navigation paths, browser and device breakdown — with period-over-period delta chips.</p>
+        <!-- ── NAV ────────────────────────────────────────────────────────── -->
+        <nav class="lv2-nav">
+          <div class="lv2-nav-left">
+            <span class="lv2-logo">Keren<span class="lv2-logo-dot">.</span></span>
+            <span class="badge mode-badge" id="modeBadgeNav"></span>
+            <div class="lv2-nav-links">
+              <a href="#product">Product</a>
+              <a href="#how">How it works</a>
+              <a href="/docs">Docs</a>
+              <a href="#pricing">Pricing</a>
+            </div>
           </div>
-          <div class="landing-card">
-            <div class="landing-card-icon">T</div>
-            <h3>Technical Monitoring</h3>
-            <p>Response time percentiles, error rates, slow endpoints, frontend perf — all from existing telemetry, no agent to deploy.</p>
+          <div class="lv2-nav-right">
+            <a href="https://github.com/lionelgarnier/keren-analytics" id="lv2Stars" class="lv2-nav-muted" target="_blank" rel="noopener">★ <span id="lv2StarsCount" class="lv2-stars-count">412</span></a>
+            <a href="/auth/login" class="lv2-nav-muted" style="margin-left:8px; margin-right:12px;">Sign in</a>
+            <button id="themeToggleNav" class="theme-toggle" aria-label="Toggle dark mode" title="Toggle theme">
+              <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+              <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+            </button>
+            <button id="landingPreviewBtn" class="lv2-btn lv2-btn-primary">Try the demo</button>
           </div>
-          <div class="landing-card">
-            <div class="landing-card-icon">R</div>
-            <h3>Smart Readiness</h3>
-            <p>0–100 readiness score, signal breakdown, and AI-ready prompts you can paste into Cursor or Copilot to fill the gaps.</p>
-          </div>
-        </div>
+        </nav>
 
-        <div class="landing-section landing-compare">
-          <h3 class="landing-section-title">How it compares</h3>
-          <div class="landing-compare-table-wrap">
-            <table class="landing-compare-table">
-              <thead>
-                <tr>
-                  <th></th>
-                  <th>Keren Analytics</th>
-                  <th>Azure Portal</th>
-                  <th>Datadog</th>
-                  <th>Power BI</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <th scope="row">Time to first dashboard</th>
-                  <td class="cell-strong">~2 min (Docker)</td>
-                  <td>30+ min (write KQL)</td>
-                  <td>1–2h (agent + setup)</td>
-                  <td>Hours (data prep)</td>
-                </tr>
-                <tr>
-                  <th scope="row">Marketing vs Technical separation</th>
-                  <td class="cell-strong">Built-in</td>
-                  <td>Manual workbook</td>
-                  <td>Add-on</td>
-                  <td>Manual report</td>
-                </tr>
-                <tr>
-                  <th scope="row">Readiness scoring + AI prompts</th>
-                  <td class="cell-strong">0–100, LLM-ready</td>
-                  <td>—</td>
-                  <td>Limited</td>
-                  <td>—</td>
-                </tr>
-                <tr>
-                  <th scope="row">Custom-dimension auto-mapping</th>
-                  <td class="cell-strong">Alias + regex (LLM optional)</td>
-                  <td>Manual</td>
-                  <td>Manual</td>
-                  <td>Manual</td>
-                </tr>
-                <tr>
-                  <th scope="row">Data residency</th>
-                  <td class="cell-strong">No raw telemetry persistence outside your tenant</td>
-                  <td>Native</td>
-                  <td>New endpoint</td>
-                  <td>New endpoint</td>
-                </tr>
-                <tr>
-                  <th scope="row">License / cost</th>
-                  <td class="cell-strong">MIT, free</td>
-                  <td>Included w/ Azure</td>
-                  <td>Per-host $$$</td>
-                  <td>Per-user $$</td>
-                </tr>
-              </tbody>
-            </table>
+        <!-- ── HERO ──────────────────────────────────────────────────────── -->
+        <section class="lv2-hero">
+          <div class="lv2-live">
+            <span class="lv2-live-dot"></span>
+            <span class="lv2-tag">Live demo · open source · MIT</span>
           </div>
-          <p class="landing-compare-disclaimer">
-            Launch-time positions; the gaps narrow as each tool evolves. The
-            columns we're least kind to (Datadog, Power BI) are also the most
-            mature and have features we don't.
+
+          <h1 class="lv2-h1">
+            The Azure dashboard<br>
+            <em>you wish</em> the portal was.
+          </h1>
+
+          <div class="lv2-hero-row">
+            <p class="lv2-hero-lede">
+              Marketing &amp; Technical dashboards on top of Application Insights —
+              <strong>in 2 minutes</strong>, with no agent, no data leaving your tenant,
+              and a readiness score that tells you what to fix next.
+            </p>
+            <div class="lv2-hero-actions">
+              <button id="heroOpenDemoBtn" class="lv2-btn lv2-btn-lg lv2-btn-primary">Open the demo →</button>
+              <button id="landingConnectBtn" class="lv2-btn lv2-btn-lg lv2-btn-ghost">Connect your Azure</button>
+            </div>
+          </div>
+
+          <!-- Hero chart card -->
+          <div class="lv2-hero-card">
+            <div class="lv2-hero-card-head">
+              <div>
+                <span class="lv2-tag">Unique visitors · last 30 days</span>
+                <div class="lv2-bignum">
+                  <span class="lv2-bignum-value">12,847</span>
+                  <span class="lv2-delta-ok">↑ 13.6%</span>
+                  <span class="lv2-delta-muted">vs prev period</span>
+                </div>
+              </div>
+              <div class="lv2-pills">
+                <span class="lv2-pill">TODAY</span>
+                <span class="lv2-pill">7D</span>
+                <span class="lv2-pill is-active">30D</span>
+                <span class="lv2-pill">90D</span>
+              </div>
+            </div>
+
+            <div class="lv2-chart">
+              <svg viewBox="0 0 720 260" preserveAspectRatio="none" aria-hidden="true">
+                <defs>
+                  <linearGradient id="lv2HeroGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="currentColor" stop-opacity="0.35"/>
+                    <stop offset="100%" stop-color="currentColor" stop-opacity="0"/>
+                  </linearGradient>
+                </defs>
+                <line x1="0" y1="65"  x2="720" y2="65"  stroke="currentColor" stroke-opacity="0.06" stroke-dasharray="2 4"/>
+                <line x1="0" y1="130" x2="720" y2="130" stroke="currentColor" stroke-opacity="0.06" stroke-dasharray="2 4"/>
+                <line x1="0" y1="195" x2="720" y2="195" stroke="currentColor" stroke-opacity="0.06" stroke-dasharray="2 4"/>
+                <path d="M0,238 L25,231 L50,234 L75,224 L100,210 L125,217 L150,201 L175,182 L200,189 L225,168 L250,172 L275,154 L300,140 L325,147 L350,124 L375,108 L400,117 L425,98 L450,79 L475,90 L500,71 L525,55 L550,63 L575,42 L600,28 L625,35 L650,11 L675,3 L700,10 L720,3 L720,256 L0,256 Z" fill="url(#lv2HeroGrad)"/>
+                <path d="M0,238 L25,231 L50,234 L75,224 L100,210 L125,217 L150,201 L175,182 L200,189 L225,168 L250,172 L275,154 L300,140 L325,147 L350,124 L375,108 L400,117 L425,98 L450,79 L475,90 L500,71 L525,55 L550,63 L575,42 L600,28 L625,35 L650,11 L675,3 L700,10 L720,3" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                <circle cx="720" cy="3" r="8" fill="currentColor" fill-opacity="0.2"/>
+                <circle cx="720" cy="3" r="4" fill="currentColor"/>
+              </svg>
+            </div>
+
+            <div class="lv2-kpi-strip">
+              <div class="lv2-kpi">
+                <span class="lv2-tag">Sessions</span>
+                <div class="lv2-kpi-value">18,302</div>
+                <div class="lv2-kpi-meta"><span class="lv2-kpi-delta">+9.2%</span></div>
+              </div>
+              <div class="lv2-kpi">
+                <span class="lv2-tag">Page views</span>
+                <div class="lv2-kpi-value">64,118</div>
+                <div class="lv2-kpi-meta"><span class="lv2-kpi-delta">+11.0%</span></div>
+              </div>
+              <div class="lv2-kpi">
+                <span class="lv2-tag">Avg pages / session</span>
+                <div class="lv2-kpi-value">3.5</div>
+                <div class="lv2-kpi-meta"><span class="lv2-kpi-delta">+0.3</span></div>
+              </div>
+              <div class="lv2-kpi">
+                <span class="lv2-tag">P95 response</span>
+                <div class="lv2-kpi-value">312ms</div>
+                <div class="lv2-kpi-meta"><span class="lv2-kpi-delta lv2-kpi-delta-muted">stable</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="lv2-trust">
+            <span class="lv2-tag lv2-tag-dim">Built on</span>
+            <span>Application Insights</span><span>·</span>
+            <span>Log Analytics</span><span>·</span>
+            <span>Entra ID</span><span>·</span>
+            <span>OAuth (PKCE)</span><span>·</span>
+            <span>Node 22</span><span>·</span>
+            <span>Docker</span>
+          </div>
+        </section>
+
+        <!-- ── BIG STATS ─────────────────────────────────────────────────── -->
+        <section class="lv2-stats">
+          <div class="lv2-stat">
+            <div class="lv2-stat-num">2 min</div>
+            <p class="lv2-stat-label">From sign-in to first dashboard</p>
+          </div>
+          <div class="lv2-stat">
+            <div class="lv2-stat-num">22</div>
+            <p class="lv2-stat-label">KQL templates, server-rendered</p>
+          </div>
+          <div class="lv2-stat">
+            <div class="lv2-stat-num">0 rows</div>
+            <p class="lv2-stat-label">of raw telemetry ever stored</p>
+          </div>
+          <div class="lv2-stat">
+            <div class="lv2-stat-num">100</div>
+            <p class="lv2-stat-label">max readiness score, deterministically scored</p>
+          </div>
+        </section>
+
+        <!-- ── FEATURES ──────────────────────────────────────────────────── -->
+        <section class="lv2-features">
+          <div class="lv2-features-head">
+            <span class="lv2-tag">Three views</span>
+            <h2 class="lv2-features-title">
+              One connection. <em>Two audiences.</em> Zero KQL to write.
+            </h2>
+          </div>
+
+          <!-- Row 1 — Marketing -->
+          <div class="lv2-feature-row">
+            <div>
+              <span class="lv2-tag">01 · Marketing</span>
+              <h3 class="lv2-feature-title">
+                Behavioral analytics, <em>without the SDK ceremony.</em>
+              </h3>
+              <p class="lv2-feature-text">
+                Visitors, sessions, geo, navigation paths, UTM campaigns, peak hours.
+                Period-over-period deltas on every KPI. A Sankey of your real user flow,
+                built from the events you're already collecting.
+              </p>
+              <div class="lv2-feature-meta">
+                <span>· Traffic trend</span>
+                <span>· UTM breakdown</span>
+                <span>· Geo map</span>
+                <span>· User flow</span>
+              </div>
+            </div>
+            <div class="lv2-card lv2-widget">
+              <span class="lv2-tag">Top pages · last 7 days</span>
+              <div class="lv2-widget-list">
+                <div class="lv2-row">
+                  <span class="lv2-row-path">/</span>
+                  <div class="lv2-bar-track"><div class="lv2-bar-fill" style="width: 99%"></div></div>
+                  <span class="lv2-num">4,218</span><span class="lv2-num-muted">28.4%</span>
+                </div>
+                <div class="lv2-row">
+                  <span class="lv2-row-path">/pricing</span>
+                  <div class="lv2-bar-track"><div class="lv2-bar-fill" style="width: 50%"></div></div>
+                  <span class="lv2-num">2,104</span><span class="lv2-num-muted">14.2%</span>
+                </div>
+                <div class="lv2-row">
+                  <span class="lv2-row-path">/blog/launch</span>
+                  <div class="lv2-bar-track"><div class="lv2-bar-fill" style="width: 44%"></div></div>
+                  <span class="lv2-num">1,876</span><span class="lv2-num-muted">12.6%</span>
+                </div>
+                <div class="lv2-row">
+                  <span class="lv2-row-path">/docs/setup</span>
+                  <div class="lv2-bar-track"><div class="lv2-bar-fill" style="width: 33%"></div></div>
+                  <span class="lv2-num">1,402</span><span class="lv2-num-muted">9.4%</span>
+                </div>
+                <div class="lv2-row">
+                  <span class="lv2-row-path">/demo</span>
+                  <div class="lv2-bar-track"><div class="lv2-bar-fill" style="width: 28%"></div></div>
+                  <span class="lv2-num">1,186</span><span class="lv2-num-muted">8.0%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Row 2 — Technical (reversed) -->
+          <div class="lv2-feature-row is-reverse">
+            <div class="lv2-card lv2-widget">
+              <span class="lv2-tag">Slow endpoints · P95</span>
+              <div style="margin-top:16px">
+                <div class="lv2-endpoint-row">
+                  <span class="lv2-endpoint-path">POST /api/scan</span>
+                  <span class="lv2-endpoint-p95 is-warn">4,128ms</span>
+                  <span class="lv2-endpoint-err">err 0.3%</span>
+                </div>
+                <div class="lv2-endpoint-row">
+                  <span class="lv2-endpoint-path">GET /api/dashboard</span>
+                  <span class="lv2-endpoint-p95">1,872ms</span>
+                  <span class="lv2-endpoint-err">err 0.1%</span>
+                </div>
+                <div class="lv2-endpoint-row">
+                  <span class="lv2-endpoint-path">POST /api/auth/callback</span>
+                  <span class="lv2-endpoint-p95">1,240ms</span>
+                  <span class="lv2-endpoint-err">err 0.0%</span>
+                </div>
+                <div class="lv2-endpoint-row">
+                  <span class="lv2-endpoint-path">GET /api/resources</span>
+                  <span class="lv2-endpoint-p95">612ms</span>
+                  <span class="lv2-endpoint-err">err 0.0%</span>
+                </div>
+                <div class="lv2-endpoint-row">
+                  <span class="lv2-endpoint-path">GET /api/readiness</span>
+                  <span class="lv2-endpoint-p95">488ms</span>
+                  <span class="lv2-endpoint-err">err 0.0%</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <span class="lv2-tag">02 · Technical</span>
+              <h3 class="lv2-feature-title">
+                Latency &amp; errors, <em>percentile-honest.</em>
+              </h3>
+              <p class="lv2-feature-text">
+                p50/p95/p99 on every endpoint. Frontend Real-User Monitoring split into
+                network, send, receive, processing. Reconstructed session timelines —
+                no screen recording, just the events you already have.
+              </p>
+              <div class="lv2-feature-meta">
+                <span>· Percentile timelines</span>
+                <span>· Slow endpoints</span>
+                <span>· Browser timings</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Row 3 — Readiness -->
+          <div class="lv2-feature-row is-last">
+            <div>
+              <span class="lv2-tag">03 · Readiness</span>
+              <h3 class="lv2-feature-title">
+                A score, <em>and the prompt to fix it.</em>
+              </h3>
+              <p class="lv2-feature-text">
+                Seven signals, scored 0–100, weighted by what actually drives dashboard
+                value. Each gap comes with a copy-paste prompt you can drop into Cursor
+                or Copilot that generates the exact instrumentation code.
+              </p>
+            </div>
+            <div class="lv2-card lv2-ring-widget">
+              <svg width="140" height="140" viewBox="0 0 140 140" aria-hidden="true">
+                <circle cx="70" cy="70" r="58" fill="none" stroke-width="10"/>
+                <circle cx="70" cy="70" r="58" fill="none" stroke-width="10"
+                        stroke-linecap="round"
+                        stroke-dasharray="262 999"
+                        transform="rotate(-90 70 70)"/>
+                <text x="70" y="79" text-anchor="middle" font-size="36"
+                      font-family="'Instrument Serif', serif">72</text>
+              </svg>
+              <div class="lv2-ring-rows">
+                <div class="lv2-ring-row"><span>Traffic (pageViews)</span><div class="lv2-ring-bar"><div class="lv2-ring-bar-fill" style="width:100%"></div></div><span class="lv2-ring-num">20/20</span></div>
+                <div class="lv2-ring-row"><span>Sessions</span><div class="lv2-ring-bar"><div class="lv2-ring-bar-fill" style="width:100%"></div></div><span class="lv2-ring-num">15/15</span></div>
+                <div class="lv2-ring-row"><span>Backend perf</span><div class="lv2-ring-bar"><div class="lv2-ring-bar-fill" style="width:100%"></div></div><span class="lv2-ring-num">15/15</span></div>
+                <div class="lv2-ring-row"><span>Geo enrichment</span><div class="lv2-ring-bar"><div class="lv2-ring-bar-fill" style="width:100%"></div></div><span class="lv2-ring-num">10/10</span></div>
+                <div class="lv2-ring-row"><span>Browser timings</span><div class="lv2-ring-bar"><div class="lv2-ring-bar-fill" style="width:100%"></div></div><span class="lv2-ring-num">10/10</span></div>
+                <div class="lv2-ring-row"><span>Custom user IDs</span><div class="lv2-ring-bar"><div class="lv2-ring-bar-fill is-partial" style="width:13%"></div></div><span class="lv2-ring-num">2/15</span></div>
+                <div class="lv2-ring-row"><span>Custom events</span><div class="lv2-ring-bar"><div class="lv2-ring-bar-fill is-partial" style="width:0%"></div></div><span class="lv2-ring-num">0/15</span></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── COMPARE TABLE ─────────────────────────────────────────────── -->
+        <section class="lv2-compare">
+          <span class="lv2-tag">How it compares</span>
+          <h2 class="lv2-compare-title">Honest about the <em>trade-offs.</em></h2>
+
+          <table class="lv2-compare-table">
+            <thead>
+              <tr>
+                <th></th>
+                <th class="col-keren">Keren</th>
+                <th>Azure Portal</th>
+                <th>Datadog</th>
+                <th>Power BI</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Time to first dashboard</td>      <td class="col-keren">~2 min (Docker)</td>      <td>30+ min (write KQL)</td>      <td>1–2h (agent + setup)</td>      <td>Hours (data prep)</td></tr>
+              <tr><td>Marketing / Technical split</td>  <td class="col-keren">Built-in</td>             <td>Manual workbook</td>           <td>Add-on</td>                  <td>Manual report</td></tr>
+              <tr><td>Readiness + AI prompts</td>       <td class="col-keren">0–100, LLM-ready</td>    <td>—</td>                          <td>Limited</td>                 <td>—</td></tr>
+              <tr><td>Schema auto-mapping</td>          <td class="col-keren">Alias + regex (LLM opt-in)</td><td>Manual</td>                  <td>Manual</td>                  <td>Manual</td></tr>
+              <tr><td>Data residency</td>               <td class="col-keren">Stays in tenant</td>      <td>Native</td>                     <td>New endpoint</td>            <td>New endpoint</td></tr>
+              <tr><td>License / cost</td>               <td class="col-keren">MIT, free</td>            <td>Included w/ Azure</td>          <td>Per-host $$$</td>            <td>Per-user $$</td></tr>
+            </tbody>
+          </table>
+          <p class="lv2-compare-note">
+            Launch-time positions; the gaps narrow as each tool evolves. The columns
+            we're least kind to are the most mature and have features we don't.
           </p>
-        </div>
+        </section>
 
-        <div class="landing-section landing-security">
-          <h3 class="landing-section-title">Privacy &amp; security</h3>
-          <p>
-            Raw telemetry rows are not persisted outside your Azure tenant via
-            this service. Most browser payloads are <strong>aggregated metrics</strong>
-            (counts, percentiles, geo / browser distributions, top-N pages).
-            Setup and technical surfaces can include bounded, scrubbed snippets
-            such as recent session timelines.
-          </p>
-          <p>
-            That promise is encoded as automated checks in
-            <a href="https://github.com/lionelgarnier/keren-analytics/blob/main/scripts/security-audit.mjs" target="_blank" rel="noopener"><code>scripts/security-audit.mjs</code></a>.
-            Seven controls run on every push &amp; PR plus a Monday cron —
-            sensitive-data logging, session-cookie hardening, CSP purity,
-            no-raw-telemetry-persistence, committed env-files placeholder,
-            <code>npm audit</code> high+. Production refuses to boot without a
-            real <code>SESSION_SECRET</code>; per-IP rate limiting protects the
-            public demo. See the
-            <a href="https://github.com/lionelgarnier/keren-analytics/blob/main/SECURITY.md" target="_blank" rel="noopener">security policy</a>
-            for the auditable controls and the private reporting path.
-          </p>
-        </div>
+        <!-- ── PRIVACY ───────────────────────────────────────────────────── -->
+        <section class="lv2-privacy">
+          <div class="lv2-privacy-grid">
+            <div>
+              <span class="lv2-tag">Privacy &amp; security</span>
+              <h2 class="lv2-privacy-title">Your data <em>never leaves</em> your tenant.</h2>
+              <p class="lv2-privacy-lede">
+                Only aggregated metrics and setup metadata cross the wire. The promise
+                is enforced as automated checks that run on every push, every PR, and
+                a Monday cron.
+              </p>
+            </div>
+            <div class="lv2-checks">
+              <div class="lv2-check">
+                <div class="lv2-check-head">
+                  <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="6" fill="none" stroke-width="1.4"/><path d="M4 7l2 2 4-4" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  <span>No raw telemetry persistence</span>
+                </div>
+                <p class="lv2-check-desc">Any new fs.write in src/ fails CI</p>
+              </div>
+              <div class="lv2-check">
+                <div class="lv2-check-head">
+                  <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="6" fill="none" stroke-width="1.4"/><path d="M4 7l2 2 4-4" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  <span>CSP purity</span>
+                </div>
+                <p class="lv2-check-desc">No inline scripts, no eval</p>
+              </div>
+              <div class="lv2-check">
+                <div class="lv2-check-head">
+                  <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="6" fill="none" stroke-width="1.4"/><path d="M4 7l2 2 4-4" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  <span>Session cookies</span>
+                </div>
+                <p class="lv2-check-desc">httpOnly · secure · sameSite</p>
+              </div>
+              <div class="lv2-check">
+                <div class="lv2-check-head">
+                  <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="6" fill="none" stroke-width="1.4"/><path d="M4 7l2 2 4-4" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  <span>OAuth (PKCE)</span>
+                </div>
+                <p class="lv2-check-desc">Delegated tokens, no client secret</p>
+              </div>
+              <div class="lv2-check">
+                <div class="lv2-check-head">
+                  <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="6" fill="none" stroke-width="1.4"/><path d="M4 7l2 2 4-4" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  <span>Sensitive-data logging guard</span>
+                </div>
+                <p class="lv2-check-desc">Lint + audit pass</p>
+              </div>
+              <div class="lv2-check">
+                <div class="lv2-check-head">
+                  <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="6" fill="none" stroke-width="1.4"/><path d="M4 7l2 2 4-4" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  <span>npm audit (high+)</span>
+                </div>
+                <p class="lv2-check-desc">Blocks merge</p>
+              </div>
+            </div>
+          </div>
+        </section>
 
-        <div class="landing-section landing-faq">
-          <h3 class="landing-section-title">FAQ</h3>
+        <!-- ── FAQ ───────────────────────────────────────────────────────── -->
+        <section class="lv2-faq">
+          <span class="lv2-tag">FAQ</span>
+          <h2 class="lv2-faq-title">Common questions.</h2>
+
           <details>
-            <summary>Does it store my telemetry data?</summary>
-            <p>
-              No raw telemetry persistence outside your tenant. We keep setup
-              metadata (mapping, scan snapshots, validations) plus aggregate
-              dashboard outputs. Any additional persistence sink must be
-              documented in <code>SECURITY.md</code>; unexpected
-              <code>fs.write</code> in <code>src/</code> fails the security
-              audit.
-            </p>
+            <summary>Does it store my telemetry data?<span class="lv2-faq-plus">+</span></summary>
+            <p>No raw rows. Only aggregated metrics and setup metadata (mapping, dashboard payload). Two filesystem sinks on the server, both documented in SECURITY.md; any other fs.write in src/ fails the security audit.</p>
           </details>
           <details>
-            <summary>How does it connect to Azure?</summary>
-            <p>
-              OAuth (PKCE) against Entra ID. You sign in once, the service
-              exchanges the code for a delegated token, and queries run with
-              <em>your</em> permissions — Reader on the subscription, Log
-              Analytics Reader on the workspace. No client secret to manage on
-              your side. Full setup in
-              <a href="https://github.com/lionelgarnier/keren-analytics/blob/main/docs/setup-entra-id.md" target="_blank" rel="noopener">docs/setup-entra-id.md</a>.
-            </p>
+            <summary>How does it connect to Azure?<span class="lv2-faq-plus">+</span></summary>
+            <p>OAuth (PKCE) against Entra ID. You sign in once, the service exchanges the code for a delegated token, and queries run with your permissions — Reader on the subscription, Log Analytics Reader on the workspace.</p>
           </details>
           <details>
-            <summary>Do I need to register my own Azure app?</summary>
-            <p>
-              No. The host of the Keren Analytics instance you're using
-              (this demo, or whoever deployed it inside your company) did
-              that <strong>once</strong>. You just click <em>Connect your
-              Azure</em> and sign in with your normal Microsoft account —
-              same flow as Slack, Loom, Notion. The first sign-in from your
-              tenant may show a one-time consent screen ("This app wants to
-              read your Azure resources on your behalf"); a single click
-              and you're in. If your tenant restricts user-consent, an
-              admin needs to consent once for the whole org.
-            </p>
+            <summary>Do I need to register my own Azure app?<span class="lv2-faq-plus">+</span></summary>
+            <p>No. The host of the Keren instance you're using did that once. You click Connect, sign in with your normal Microsoft account — same flow as Slack, Loom, Notion.</p>
           </details>
           <details>
-            <summary>Is the AI part required?</summary>
-            <p>
-              No. The launch ships with deterministic schema mapping (alias
-              table + regex patterns covering ~80% of real-world naming) and
-              a deterministic "Environment analysis" panel that reads from the
-              dashboard payload. Azure Foundry-assisted setup is optional; when
-              disabled, deterministic mapping still powers the dashboard.
-            </p>
+            <summary>Is the AI part required?<span class="lv2-faq-plus">+</span></summary>
+            <p>No. Launch ships with deterministic schema mapping (alias + regex covering ~80% of real-world naming) and a deterministic Environment Analysis panel. Real Azure OpenAI is opt-in, post-launch.</p>
           </details>
-        </div>
+        </section>
 
-        <div class="landing-docs-link">
-          <a href="/docs">Read the documentation</a> — setup guides, campaign tracking, API reference
-        </div>
+        <!-- ── CTA ───────────────────────────────────────────────────────── -->
+        <section class="lv2-cta">
+          <h2>See yours in <em>two minutes.</em></h2>
+          <p>The demo runs on real sample data. Connect when you're ready — no signup, no card.</p>
+          <div class="lv2-cta-actions">
+            <button id="ctaOpenDemoBtn" class="lv2-btn lv2-btn-xl lv2-btn-primary">Open the demo →</button>
+            <button id="ctaDockerCopyBtn" class="lv2-btn lv2-btn-xl lv2-btn-ghost lv2-mono">$ docker compose up</button>
+          </div>
+        </section>
 
-        <footer class="landing-footer">
-          <div class="landing-footer-links">
+        <!-- ── FOOTER ────────────────────────────────────────────────────── -->
+        <footer class="lv2-footer">
+          <span>Keren · MIT · © Lionel Garnier &amp; contributors</span>
+          <div class="lv2-footer-links">
             <a href="https://github.com/lionelgarnier/keren-analytics" target="_blank" rel="noopener">GitHub</a>
-            <span class="landing-footer-sep">·</span>
-            <a href="https://github.com/lionelgarnier/keren-analytics/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
-            <span class="landing-footer-sep">·</span>
+            <a href="/docs">Docs</a>
             <a href="https://github.com/lionelgarnier/keren-analytics/blob/main/SECURITY.md" target="_blank" rel="noopener">Security</a>
-            <span class="landing-footer-sep">·</span>
-            <a href="/privacy">Privacy</a>
-            <span class="landing-footer-sep">·</span>
             <a href="mailto:garniel6@gmail.com">Contact</a>
           </div>
-          <div class="landing-footer-meta">
-            Keren Analytics — © Lionel Garnier and contributors. No tracking
-            cookies; the only analytics on this page is whatever Plausible /
-            Umami snippet the operator pastes in (none by default).
-          </div>
         </footer>
-        <!--
-        Plausible / Umami snippet slot (D5 — see docs/maintainer-todo.md).
-        When the launch-day analytics ship, paste the script tag right here,
-        not site-wide. Privacy stays the headline.
-        -->
+
       </section>
 
       <!-- Preview mode banner -->
