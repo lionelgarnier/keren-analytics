@@ -4,6 +4,7 @@ import { loadKqlTemplate, renderTemplate } from "./kql.js";
 import { toKqlDatetime, previousTimeRange, comparisonLabel } from "./timeRange.js";
 import { allowedKqlExpressions, mappingExpressions } from "./mapping.js";
 import { buildNarration } from "./narration.js";
+import { scrubPii } from "./schemaScan.js";
 
 function toRows(result) {
   if (!result || !result.tables || result.tables.length === 0) return [];
@@ -217,18 +218,30 @@ function buildSessionTimelines(rows) {
 
 /**
  * Transform URL parameter query rows into the frontend-expected shape.
+ * Exported for unit testing of the PII-scrub / UTM-gating behaviour.
  */
-function buildUrlParamsData(rows) {
+export function buildUrlParamsData(rows) {
   if (!rows || rows.length === 0) return null;
   const totalScanned = Number(rows[0]?.totalScanned) || 0;
   const urlsWithParams = Number(rows[0]?.urlsWithParams) || 0;
   return {
-    discovered: rows.map((row) => ({
-      param: row.paramName,
-      frequency: Number(row.frequency) || 0,
-      isUtm: Boolean(row.isUtm),
-      topValues: row.topValue ? [{ value: String(row.topValue), count: Number(row.frequency) || 0 }] : [],
-    })),
+    discovered: rows.map((row) => {
+      const isUtm = Boolean(row.isUtm);
+      // Only UTM params expose a sample value — that value IS the campaign
+      // name the user wants. For every other param the raw value is pure
+      // risk (auth tokens, tenant/user UUIDs, OAuth scopes have all been
+      // observed here); the param name + frequency carry the analytics
+      // signal. Whatever does get emitted is still PII-scrubbed.
+      return {
+        param: row.paramName,
+        frequency: Number(row.frequency) || 0,
+        isUtm,
+        topValues:
+          isUtm && row.topValue
+            ? [{ value: scrubPii(String(row.topValue)), count: Number(row.frequency) || 0 }]
+            : [],
+      };
+    }),
     totalUrlsScanned: totalScanned,
     urlsWithParams,
   };
@@ -313,6 +326,14 @@ export async function buildOverviewDashboard({
   const hasRequests = schemaProfile?.tables?.requests || readinessReport?.availableSignals?.requests;
   const hasGeo = readinessReport?.availableSignals?.geo;
   const hasBrowserTimings = readinessReport?.availableSignals?.browserTimings || schemaProfile?.tables?.browserTimings;
+  // Per-signal availability — whether the identity/page-view columns are
+  // actually populated (readiness probes them with isnotempty guards). The
+  // dashboard uses these to gate KPIs that would otherwise render a
+  // degenerate value (e.g. dcountif=0 sessions, all-zero peak hours).
+  const hasUserId = Boolean(readinessReport?.availableSignals?.userId);
+  const hasSessionId = Boolean(readinessReport?.availableSignals?.sessionId);
+  const hasPageViews = Boolean(readinessReport?.availableSignals?.pageViews);
+  const signalAvailability = { hasUserId, hasSessionId, hasPageViews };
   const sessionExpr =
     mapping.canonicalSessionId?.expr ||
     (schemaProfile?.tables?.requests ? mappingExpressions.sessionId.operation : mappingExpressions.sessionId.session);
@@ -672,6 +693,7 @@ export async function buildOverviewDashboard({
     avgResponseTimeMs: 0,
     p95ResponseTimeMs: 0,
     errorRate: 0,
+    clientErrorRate: 0,
     comparison: null,
   };
   const charts = {
@@ -751,6 +773,7 @@ export async function buildOverviewDashboard({
       pageViews: currentPageViews,
       pagesPerSession: currentSessions > 0 ? currentPageViews / currentSessions : null,
       comparison,
+      availability: signalAvailability,
     });
   }
 
@@ -759,10 +782,12 @@ export async function buildOverviewDashboard({
     kpis.avgResponseTimeMs = Number(toSingleValue(perfRows, "avgDuration")) || 0;
     kpis.p95ResponseTimeMs = Number(toSingleValue(perfRows, "p95Duration")) || 0;
     kpis.errorRate = Number(toSingleValue(perfRows, "errorRate")) || 0;
+    kpis.clientErrorRate = Number(toSingleValue(perfRows, "clientErrorRate")) || 0;
     publish("technicalKpis", ["performance"], {
       avgResponseTimeMs: kpis.avgResponseTimeMs,
       p95ResponseTimeMs: kpis.p95ResponseTimeMs,
       errorRate: kpis.errorRate,
+      clientErrorRate: kpis.clientErrorRate,
     });
   }
 
@@ -842,7 +867,10 @@ export async function buildOverviewDashboard({
       hour: Number(row.hour),
       count: Number(row.count) || 0,
     }));
-    publish("peakHours", ["peakHours"], { peakHours: charts.peakHours });
+    publish("peakHours", ["peakHours"], {
+      peakHours: charts.peakHours,
+      availability: signalAvailability,
+    });
   }
 
   async function assembleCampaigns() {
@@ -947,6 +975,7 @@ export async function buildOverviewDashboard({
       avgResponseTimeMs: kpis.avgResponseTimeMs,
       p95ResponseTimeMs: kpis.p95ResponseTimeMs,
       errorRate: kpis.errorRate,
+      clientErrorRate: kpis.clientErrorRate,
       comparison: kpis.comparison,
     },
     charts: {
@@ -975,6 +1004,9 @@ export async function buildOverviewDashboard({
       hasRequests: Boolean(hasRequests),
       hasGeo: Boolean(hasGeo),
       hasBrowserTimings: Boolean(hasBrowserTimings),
+      hasUserId,
+      hasSessionId,
+      hasPageViews,
     },
     meta: {
       mappingVersion: mapping.version,
@@ -998,6 +1030,7 @@ export async function buildOverviewDashboard({
       mapping,
       range: timeRange.key,
       aiMapping,
+      readinessReport,
     });
   } catch (error) {
     console.error(`[dashboard] buildNarration failed: ${error.message}`);

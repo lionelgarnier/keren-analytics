@@ -2,8 +2,11 @@ let start={{timeStart}};
 let end={{timeEnd}};
 requests
 | where timestamp between (start..end)
+| extend statusCode = toint(resultCode)
 | summarize avgDuration = avg(duration),
           p95Duration = percentile(duration, 95),
           total = count(),
-          errors = countif(success == false)
-| extend errorRate = iif(total == 0, 0.0, todouble(errors) / todouble(total))
+          serverErrors = countif(success == false and (isnull(statusCode) or statusCode >= 500)),
+          clientErrors = countif(statusCode >= 400 and statusCode < 500)
+| extend errorRate = iif(total == 0, 0.0, todouble(serverErrors) / todouble(total))
+| extend clientErrorRate = iif(total == 0, 0.0, todouble(clientErrors) / todouble(total))

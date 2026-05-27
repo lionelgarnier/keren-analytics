@@ -49,6 +49,12 @@ function topCampaign(charts) {
 function peakWindow(charts) {
   const peaks = charts?.peakHours || [];
   if (peaks.length === 0) return null;
+  // A genuine peak needs variance. When the session column is empty the
+  // peak-hours query yields a uniform grid (every cell 0) — reduce() would
+  // otherwise just return the first cell and invent a "peak".
+  const counts = peaks.map((row) => Number(row.count) || 0);
+  const max = Math.max(...counts);
+  if (max <= 0 || max === Math.min(...counts)) return null;
   const top = peaks.reduce((best, row) => (row.count > (best?.count || 0) ? row : best), null);
   if (!top || !Number.isFinite(top.dayIndex) || !Number.isFinite(top.hour)) return null;
   const day = DAY_NAMES[top.dayIndex] || null;
@@ -56,10 +62,23 @@ function peakWindow(charts) {
   return `${day} around ${String(top.hour).padStart(2, "0")}:00`;
 }
 
-function userIdSentence(mapping) {
+function userIdSentence(mapping, readiness) {
   const userId = mapping?.canonicalUserId;
   if (!userId || !userId.source) {
     return "No user identifier is mapped — cohort analysis falls back to anonymous IDs.";
+  }
+  // A mapping naming a column does not mean the column holds data. When the
+  // readiness probe found it empty, say so — never claim cohort-readiness
+  // for a column that is 100% null.
+  if (readiness) {
+    const signals = readiness.availableSignals || {};
+    const probes = readiness.probeCounts || {};
+    if (signals.userId === false || probes.userAuthCount === 0) {
+      return "The mapped user ID column is empty — cohort analysis is unavailable until user identity is instrumented (see the Readiness tab).";
+    }
+    if (signals.userIdDegraded) {
+      return "User identity is only partially populated — cohort counts may be under-reported.";
+    }
   }
   const source = String(userId.source);
   if (source.startsWith("user_AuthenticatedId")) {
@@ -82,7 +101,7 @@ function errorSentence(errorRate) {
   return `Error rate sits at ${pct} — well within the healthy band.`;
 }
 
-function buildParagraph({ dashboard, mapping, range }) {
+function buildParagraph({ dashboard, mapping, range, readiness }) {
   const kpis = dashboard?.kpis || {};
   const charts = dashboard?.charts || {};
   const rangeLabel = RANGE_LABELS[range] || "the selected window";
@@ -94,10 +113,21 @@ function buildParagraph({ dashboard, mapping, range }) {
 
   const sentences = [];
 
-  if (kpis.uniqueVisitors > 0 || kpis.sessions > 0) {
+  // Trust the readiness probe over the KPI value: an empty identity column
+  // makes dcountif()=0, but a stale cache or count quirk must never let the
+  // paragraph state visitor figures the probe says don't exist.
+  const hasIdentity = readiness
+    ? !!(readiness.availableSignals?.userId || readiness.availableSignals?.sessionId)
+    : kpis.uniqueVisitors > 0 || kpis.sessions > 0;
+
+  if (hasIdentity) {
     const sourceClause = top ? `, mostly via ${top}` : "";
     sentences.push(
       `Your environment captured ${visitors} visitors across ${sessions} sessions over ${rangeLabel}${sourceClause}.`
+    );
+  } else if (readiness) {
+    sentences.push(
+      `Your environment is emitting telemetry over ${rangeLabel}, but visitor and session counts are unavailable — the user ID and session ID columns are not populated. See the Readiness tab to instrument them.`
     );
   } else {
     sentences.push(
@@ -112,13 +142,13 @@ function buildParagraph({ dashboard, mapping, range }) {
   const errSent = errorSentence(kpis.errorRate);
   if (errSent) sentences.push(errSent);
 
-  sentences.push(userIdSentence(mapping));
+  sentences.push(userIdSentence(mapping, readiness));
 
   return sentences.join(" ");
 }
 
-export function buildNarration({ azureMode, dashboard, mapping, range, aiMapping }) {
-  const paragraph = buildParagraph({ dashboard, mapping, range });
+export function buildNarration({ azureMode, dashboard, mapping, range, aiMapping, readinessReport }) {
+  const paragraph = buildParagraph({ dashboard, mapping, range, readiness: readinessReport });
   const isMock = azureMode === "mock";
   // After Track F3, the wizard runs a real LLM call when `AI_PROVIDER=azure-foundry`
   // and persists the proposals. When that succeeded for the active scan

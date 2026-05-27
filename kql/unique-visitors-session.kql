@@ -3,4 +3,4 @@ let end={{timeEnd}};
 {{tableName}}
 | where timestamp between (start..end)
 | extend canonicalSessionId = {{sessionIdExpr}}
-| summarize uniqueVisitors = dcount(canonicalSessionId)
+| summarize uniqueVisitors = dcountif(canonicalSessionId, isnotempty(canonicalSessionId))

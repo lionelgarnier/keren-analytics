@@ -5,6 +5,7 @@ let end={{timeEnd}};
 | extend dowRaw = toint(dayofweek(timestamp) / 1d)
 | extend dayIndex = iif(dowRaw == 0, 6, dowRaw - 1)
 | extend hour = hourofday(timestamp)
-| summarize count = dcount({{sessionIdExpr}})
+| extend canonicalSessionId = {{sessionIdExpr}}
+| summarize count = dcountif(canonicalSessionId, isnotempty(canonicalSessionId))
   by dayIndex, hour
 | order by dayIndex asc, hour asc

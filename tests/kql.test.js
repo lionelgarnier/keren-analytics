@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { renderTemplate } from "../src/core/kql.js";
+import { renderTemplate, loadKqlTemplate, clearTemplateCache } from "../src/core/kql.js";
 
 test("renderTemplate rejects disallowed params", () => {
   const template = "table {{tableName}}";
@@ -14,4 +14,47 @@ test("renderTemplate substitutes params", () => {
   const template = "let start={{timeStart}};";
   const rendered = renderTemplate(template, { timeStart: 'datetime("2024-01-01T00:00:00Z")' });
   assert.equal(rendered, 'let start=datetime("2024-01-01T00:00:00Z");');
+});
+
+test("identity-count templates use dcountif so empty columns yield 0", () => {
+  // Bare dcount() of an all-empty-string column returns 1; dcountif() with an
+  // isnotempty guard returns 0. These five templates count an identity column.
+  clearTemplateCache();
+  const params = {
+    timeStart: 'datetime("2024-01-01T00:00:00Z")',
+    timeEnd: 'datetime("2024-01-08T00:00:00Z")',
+    tableName: "requests",
+    userIdExpr: "user_AuthenticatedId",
+    sessionIdExpr: "session_Id",
+    pagePathExpr: "name",
+    binSize: "1d",
+  };
+  const templates = [
+    "unique-visitors-user",
+    "unique-visitors-session",
+    "sessions",
+    "peak-hours",
+    "daily-trend",
+  ];
+  for (const name of templates) {
+    const rendered = renderTemplate(loadKqlTemplate(name), params);
+    assert.ok(rendered.includes("dcountif("), `${name} should count with dcountif`);
+    assert.ok(!rendered.includes("dcount("), `${name} should have no bare dcount(`);
+  }
+});
+
+test("error-rate templates separate server (5xx) from client (4xx) errors", () => {
+  clearTemplateCache();
+  const params = {
+    timeStart: 'datetime("2024-01-01T00:00:00Z")',
+    timeEnd: 'datetime("2024-01-08T00:00:00Z")',
+  };
+  const perf = renderTemplate(loadKqlTemplate("performance"), params);
+  assert.ok(perf.includes("clientErrorRate"), "performance exposes a separate clientErrorRate");
+  assert.ok(perf.includes("statusCode >= 500"), "performance counts 5xx as server errors");
+  // The old definition counted every failure (incl. 404s) as an error.
+  assert.ok(!/countif\(success == false\)/.test(perf), "performance no longer counts every failure as an error");
+
+  const slow = renderTemplate(loadKqlTemplate("slow-endpoints"), params);
+  assert.ok(slow.includes("statusCode >= 500"), "slow-endpoints counts 5xx as server errors");
 });

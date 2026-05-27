@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import supertest from "supertest";
 import { app } from "../src/server.js";
-import { buildOverviewDashboard } from "../src/core/dashboard.js";
+import { buildOverviewDashboard, buildUrlParamsData } from "../src/core/dashboard.js";
 import { buildMapping } from "../src/core/mapping.js";
 import { resolveTimeRange } from "../src/core/timeRange.js";
 
@@ -66,6 +66,12 @@ test("mock auth and dashboard overview flow", async () => {
   assert.equal(narration.mode, "mock");
   assert.equal(narration.badge, null);
   assert.ok(narration.paragraph && narration.paragraph.length > 0);
+
+  // Error rate is split: errorRate is server (5xx) failures only, with 4xx
+  // client errors surfaced separately so 404s no longer inflate the rate.
+  const kpis = dashboard.body.dashboard.kpis;
+  assert.ok(Number.isFinite(kpis.errorRate), "kpis.errorRate is numeric");
+  assert.ok(Number.isFinite(kpis.clientErrorRate), "kpis.clientErrorRate is numeric");
 
   // Period-over-period comparison (B4) — 7d range has prev7d as predecessor.
   const cmp = dashboard.body.dashboard.kpis.comparison;
@@ -203,6 +209,38 @@ test("dashboard: a non-critical query failure does not blank the marketing KPI c
   assert.equal(cards.marketingKpis?.error, undefined, "marketingKpis must not error on previousKpis failure");
   assert.equal(typeof cards.marketingKpis?.uniqueVisitors, "number", "marketingKpis still carries visitor data");
   assert.equal(typeof cards.marketingKpis?.sessions, "number", "marketingKpis still carries session data");
+});
+
+test("dashboard: availability exposes per-signal flags from readiness", async () => {
+  const { dashboard, cards } = await runDashboardWithClient("availability", {
+    async queryWorkspace() { return EMPTY_TABLE; },
+  });
+  const av = dashboard.availability;
+  assert.equal(typeof av.hasUserId, "boolean");
+  assert.equal(typeof av.hasSessionId, "boolean");
+  assert.equal(typeof av.hasPageViews, "boolean");
+  // The fixture's readiness has pageViews available but no userId/sessionId.
+  assert.equal(av.hasPageViews, true);
+  assert.equal(av.hasUserId, false);
+  assert.equal(av.hasSessionId, false);
+  // The marketingKpis + peakHours cards carry the flags for the frontend.
+  assert.equal(cards.marketingKpis?.availability?.hasSessionId, false);
+  assert.equal(cards.peakHours?.availability?.hasSessionId, false);
+});
+
+test("buildUrlParamsData: scrubs UTM values and withholds non-UTM values", () => {
+  const rows = [
+    { paramName: "utm_source", frequency: 120, isUtm: true, topValue: "newsletter", totalScanned: 500, urlsWithParams: 200 },
+    { paramName: "utm_campaign", frequency: 10, isUtm: true, topValue: "promo-ada@example.com", totalScanned: 500, urlsWithParams: 200 },
+    { paramName: "token", frequency: 30, isUtm: false, topValue: "c9e8ccfca7720f5b99b7fbdb12bdf63691181227547c81dec2a72e17113d4220", totalScanned: 500, urlsWithParams: 200 },
+  ];
+  const out = buildUrlParamsData(rows);
+  const find = (name) => out.discovered.find((p) => p.param === name);
+  // UTM param keeps a sample value, PII-scrubbed.
+  assert.deepEqual(find("utm_source").topValues, [{ value: "newsletter", count: 120 }]);
+  assert.deepEqual(find("utm_campaign").topValues, [{ value: "<email>", count: 10 }]);
+  // Non-UTM param exposes no raw value at all — the auth token never leaves.
+  assert.deepEqual(find("token").topValues, []);
 });
 
 test("dashboard: an assembler transform exception is isolated to its card", async () => {

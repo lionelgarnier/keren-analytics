@@ -4,4 +4,5 @@ let end={{timeEnd}};
 | where timestamp between (start..end)
 | extend canonicalUserId = {{userIdExpr}}
 | extend canonicalSessionId = {{sessionIdExpr}}
-| summarize uniqueVisitors = dcount(iif(isnotempty(canonicalUserId), canonicalUserId, canonicalSessionId))
+| extend canonicalIdentity = iif(isnotempty(canonicalUserId), canonicalUserId, canonicalSessionId)
+| summarize uniqueVisitors = dcountif(canonicalIdentity, isnotempty(canonicalIdentity))

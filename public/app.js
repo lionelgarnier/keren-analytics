@@ -1340,18 +1340,22 @@ function renderInsights(dashboard) {
     }
   }
 
-  // Insight 2: Peak traffic time
+  // Insight 2: Peak traffic time \u2014 needs session tracking and real variance
+  // (a uniform all-zero grid has no peak, only a reduce() tie-break artifact).
   const peakData = dashboard.charts.peakHours;
-  if (peakData && peakData.length > 0) {
+  const sessionTracked = dashboard.availability?.hasSessionId !== false;
+  if (sessionTracked && peakData && peakData.length > 0) {
     const peak = peakData.reduce((a, b) => a.count > b.count ? a : b);
-    const peakDayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    const dayLabel = peakDayNames[peak.dayIndex];
-    const window = `${peak.hour}:00-${peak.hour + 1}:00`;
-    const when = dayLabel ? `${dayLabel} ${window}` : window;
-    insights.push({
-      icon: "\u23F0",
-      text: `Peak traffic: <strong>${when}</strong> with ${fmt(peak.count)} visitors/period`,
-    });
+    if (Math.max(...peakData.map((p) => p.count || 0)) > 0) {
+      const peakDayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+      const dayLabel = peakDayNames[peak.dayIndex];
+      const window = `${peak.hour}:00-${peak.hour + 1}:00`;
+      const when = dayLabel ? `${dayLabel} ${window}` : window;
+      insights.push({
+        icon: "\u23F0",
+        text: `Peak traffic: <strong>${when}</strong> with ${fmt(peak.count)} visitors/period`,
+      });
+    }
   }
 
   // Insight 3: Top traffic source
@@ -1396,9 +1400,11 @@ function renderInsights(dashboard) {
   if (topPages.length >= 2) {
     const topShare = topPages[0].share || 0;
     if (topShare > 0.25) {
+      const topPath = topPages[0].path;
+      const tail = topPath === "/" ? "high homepage concentration" : "traffic is concentrated on one route";
       insights.push({
         icon: "\uD83D\uDCCA",
-        text: `<strong>${topPages[0].path}</strong> captures <span class="insight-highlight">${fmtPct(topShare)}</span> of all page views — high homepage concentration`,
+        text: `<strong>${topPath}</strong> captures <span class="insight-highlight">${fmtPct(topShare)}</span> of all page views — ${tail}`,
       });
     }
   }
@@ -1418,14 +1424,23 @@ function renderInsights(dashboard) {
 }
 
 /* ========== Render: Peak Hours Heatmap ========== */
-function renderPeakHours(data) {
+function renderPeakHours(data, availability) {
   const container = document.getElementById("peakHoursGrid");
   const emptyEl = document.getElementById("peakHoursEmpty");
   container.innerHTML = "";
 
-  if (!data || data.length === 0) {
+  // Peak hours is derived from distinct sessions per hour. Without session
+  // tracking the grid is uniformly zero — show the empty state instead.
+  const noSession = availability && availability.hasSessionId === false;
+  if (noSession || !data || data.length === 0) {
     container.classList.add("hidden");
-    emptyEl?.classList.remove("hidden");
+    if (emptyEl) {
+      const p = emptyEl.querySelector("p") || emptyEl;
+      p.textContent = noSession
+        ? "Peak hours need session tracking — set it up in the Readiness tab."
+        : "No hourly data available.";
+      emptyEl.classList.remove("hidden");
+    }
     return;
   }
   container.classList.remove("hidden");
@@ -1733,6 +1748,16 @@ function showParamDetail(param) {
   nameEl.textContent = `${param.param} (${fmt(param.frequency)} occurrences)`;
   valuesEl.innerHTML = "";
   detail.classList.remove("hidden");
+
+  // Non-UTM params carry no sample values — their raw values (auth tokens,
+  // UUIDs, OAuth scopes) are withheld server-side for privacy.
+  if (!param.topValues || param.topValues.length === 0) {
+    const note = document.createElement("div");
+    note.className = "param-value-empty";
+    note.textContent = "Values hidden — non-UTM parameter values are not shown for privacy.";
+    valuesEl.appendChild(note);
+    return;
+  }
 
   const maxCount = Math.max(...param.topValues.map((v) => v.count));
 
@@ -2191,14 +2216,14 @@ function renderFirstRunBanner(readinessScore) {
   const winsEl = document.getElementById("firstRunBannerWins");
   if (scoreEl) scoreEl.textContent = String(score);
   if (titleEl) {
-    const winCount = Math.min(wins.length, 2);
+    const winCount = wins.length;
     const plural = winCount === 1 ? "" : "s";
     titleEl.textContent = `Your environment scores ${score}/${maxScore}. ${winCount} quick win${plural} available:`;
   }
 
   if (winsEl) {
     winsEl.innerHTML = "";
-    for (const win of wins.slice(0, 2)) {
+    for (const win of wins) {
       const chip = document.createElement("button");
       chip.type = "button";
       chip.className = "first-run-banner-chip";
@@ -2460,19 +2485,93 @@ function showCardError(name, message) {
 }
 
 /* ========== Per-card renderers ========== */
+
+// Show a clickable hint under a KPI whose telemetry signal is missing; the
+// hint jumps to the matching Readiness signal row.
+function showKpiHint(hintId, signal, label) {
+  const hint = document.getElementById(hintId);
+  if (!hint) return;
+  hint.textContent = label || "Not tracked — set up in Readiness";
+  hint.dataset.signal = signal;
+  hint.classList.remove("hidden");
+  if (!hint.dataset.wired) {
+    hint.dataset.wired = "1";
+    hint.addEventListener("click", () => focusSignalPrompt(hint.dataset.signal));
+  }
+}
+
+function hideKpiHint(hintId) {
+  document.getElementById(hintId)?.classList.add("hidden");
+}
+
+// A KPI whose signal is missing renders an em-dash + hint instead of a
+// degenerate value (e.g. dcountif=0 visitors counted over an empty column).
+function setGatedKpi(valueId, hintId, value, untracked, signal) {
+  const valueEl = document.getElementById(valueId);
+  if (untracked) {
+    valueEl.textContent = "—";
+    showKpiHint(hintId, signal);
+  } else {
+    valueEl.textContent = fmt(value);
+    hideKpiHint(hintId);
+  }
+}
+
 function renderMarketingKpis(d) {
-  document.getElementById("kpiVisitors").textContent = fmt(d.uniqueVisitors);
-  document.getElementById("kpiSessions").textContent = fmt(d.sessions);
+  const av = d.availability || {};
+  const untrackedUser = av.hasUserId === false;
+  const untrackedSession = av.hasSessionId === false;
+  const untrackedPv = av.hasPageViews === false;
+
+  setGatedKpi("kpiVisitors", "kpiVisitorsHint", d.uniqueVisitors, untrackedUser, "userId");
+  setGatedKpi("kpiSessions", "kpiSessionsHint", d.sessions, untrackedSession, "sessionId");
+
+  // Avg Pages / Session is pageViews ÷ sessions — a meaningless ratio once
+  // sessions is unreliable (it produced the 7643 artifact).
+  if (untrackedSession) {
+    document.getElementById("kpiPagesPerSession").textContent = "—";
+    showKpiHint("kpiPagesPerSessionHint", "sessionId");
+  } else {
+    document.getElementById("kpiPagesPerSession").textContent =
+      d.pagesPerSession != null ? d.pagesPerSession.toFixed(1) : "-";
+    hideKpiHint("kpiPagesPerSessionHint");
+  }
+
+  // Page Views is a real count, but when no page-view telemetry exists it
+  // counts server requests — relabel the card so it stops claiming to be
+  // page views, while keeping the (real, useful) number.
   document.getElementById("kpiPageViews").textContent = fmt(d.pageViews);
-  document.getElementById("kpiPagesPerSession").textContent =
-    d.pagesPerSession != null ? d.pagesPerSession.toFixed(1) : "-";
-  renderKpiComparison({ comparison: d.comparison });
+  const pvLabel = document.getElementById("kpiPageViewsLabel");
+  if (pvLabel) pvLabel.textContent = untrackedPv ? "Requests" : "Page Views";
+  if (untrackedPv) {
+    showKpiHint("kpiPageViewsHint", "pageViews", "No page-view telemetry — showing server requests");
+  } else {
+    hideKpiHint("kpiPageViewsHint");
+  }
+
+  // Suppress the delta chip for any KPI whose signal is missing — a delta
+  // on a degenerate value is itself misleading.
+  let comparison = d.comparison;
+  if (comparison && (untrackedUser || untrackedSession)) {
+    comparison = { ...comparison };
+    if (untrackedUser) comparison.uniqueVisitors = null;
+    if (untrackedSession) comparison.sessions = null;
+  }
+  renderKpiComparison({ comparison });
 }
 
 function renderTechnicalKpis(d) {
   document.getElementById("kpiAvg").textContent = fmtMs(d.avgResponseTimeMs);
   document.getElementById("kpiP95").textContent = fmtMs(d.p95ResponseTimeMs);
   document.getElementById("kpiErrors").textContent = fmtPct(d.errorRate);
+  // 4xx responses (mostly 404s) are tracked separately — they are not server
+  // failures and must not inflate the error rate.
+  const clientEl = document.getElementById("kpiClientErrors");
+  if (clientEl) {
+    clientEl.textContent = d.clientErrorRate > 0
+      ? `+ ${fmtPct(d.clientErrorRate)} client errors (4xx)`
+      : "";
+  }
   const errorCard = document.getElementById("kpiErrorCard");
   if (d.errorRate > 0.05) {
     errorCard.style.borderLeft = "3px solid var(--danger)";
@@ -2553,7 +2652,7 @@ const CARD_RENDERERS = {
   os: (d) => renderDoughnut("osChart", "osEmpty", "os", d.os, "name", "count"),
   devices: (d) => renderDoughnut("deviceChart", "deviceEmpty", "device", d.devices, "name", "count"),
   geo: renderGeoCard,
-  peakHours: (d) => renderPeakHours(d.peakHours),
+  peakHours: (d) => renderPeakHours(d.peakHours, d.availability),
   campaigns: (d) => { renderCampaignTable(d.campaignBreakdown); renderUrlParams(d.urlParams); },
   referrers: (d) => renderReferrerChart(d.referrerSources),
   slowEndpoints: (d) => renderSlowEndpointsCard(d.slowEndpoints),
@@ -2578,12 +2677,14 @@ function cardDataFromDashboard(name, dash) {
         pageViews: totalPv,
         pagesPerSession: k.sessions > 0 ? totalPv / k.sessions : null,
         comparison: k.comparison,
+        availability: dash.availability,
       };
     case "technicalKpis":
       return {
         avgResponseTimeMs: k.avgResponseTimeMs,
         p95ResponseTimeMs: k.p95ResponseTimeMs,
         errorRate: k.errorRate,
+        clientErrorRate: k.clientErrorRate,
       };
     case "dailyTrend": return { dailyTrend: c.dailyTrend, kpiSparklines: c.kpiSparklines };
     case "topPages": return { topPages: c.topPages };
@@ -2592,7 +2693,7 @@ function cardDataFromDashboard(name, dash) {
     case "os": return { os: c.os };
     case "devices": return { devices: c.devices };
     case "geo": return { geoDistribution: c.geoDistribution };
-    case "peakHours": return { peakHours: c.peakHours };
+    case "peakHours": return { peakHours: c.peakHours, availability: dash.availability };
     case "campaigns": return { campaignBreakdown: c.campaignBreakdown, urlParams: c.urlParams };
     case "referrers": return { referrerSources: c.referrerSources };
     case "slowEndpoints": return { slowEndpoints: t.slowEndpoints };
