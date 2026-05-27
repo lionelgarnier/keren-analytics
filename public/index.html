@@ -3,6 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Keren Analytics turns Azure App Insights into Marketing and Technical dashboards in under 2 minutes." />
+    <meta property="og:title" content="Keren Analytics" />
+    <meta property="og:description" content="Azure App Insights -> Marketing and Technical dashboards in 2 minutes." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://analytics.keren.run/" />
+    <meta property="og:image" content="https://analytics.keren.run/docs/assets/og-image.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Keren Analytics" />
+    <meta name="twitter:description" content="Azure App Insights -> Marketing and Technical dashboards in 2 minutes." />
+    <meta name="twitter:image" content="https://analytics.keren.run/docs/assets/og-image.png" />
     <title>Keren Analytics</title>
     <link rel="stylesheet" href="/styles.css" />
     <script src="/theme-init.js"></script>
@@ -37,7 +47,7 @@
       <section id="landingPage" class="hidden">
         <div class="landing-hero">
           <h2 class="landing-title">Azure App Insights → Marketing &amp; Technical dashboards in 2 minutes.</h2>
-          <p class="landing-subtitle">AI-mapped schema. 22 KQL templates. Nothing raw ever leaves your tenant. MIT.</p>
+          <p class="landing-subtitle">AI-mapped schema. 26 KQL templates. No raw telemetry persistence outside your tenant. MIT.</p>
           <div class="landing-actions">
             <button id="landingPreviewBtn" class="btn btn-primary btn-lg">Try the demo</button>
             <button id="landingConnectBtn" class="btn btn-ghost btn-lg">Connect your Azure</button>
@@ -112,7 +122,7 @@
                 </tr>
                 <tr>
                   <th scope="row">Data residency</th>
-                  <td class="cell-strong">No raw data leaves your tenant</td>
+                  <td class="cell-strong">No raw telemetry persistence outside your tenant</td>
                   <td>Native</td>
                   <td>New endpoint</td>
                   <td>New endpoint</td>
@@ -137,11 +147,11 @@
         <div class="landing-section landing-security">
           <h3 class="landing-section-title">Privacy &amp; security</h3>
           <p>
-            User telemetry rows never leave your Azure tenant via this
-            service. Only <strong>aggregated metrics</strong> (counts,
-            percentiles, geo / browser distributions, top-N pages) and
-            <strong>setup metadata</strong> (mapping, schema profile, dashboard
-            payload) ever cross the wire.
+            Raw telemetry rows are not persisted outside your Azure tenant via
+            this service. Most browser payloads are <strong>aggregated metrics</strong>
+            (counts, percentiles, geo / browser distributions, top-N pages).
+            Setup and technical surfaces can include bounded, scrubbed snippets
+            such as recent session timelines.
           </p>
           <p>
             That promise is encoded as automated checks in
@@ -162,9 +172,10 @@
           <details>
             <summary>Does it store my telemetry data?</summary>
             <p>
-              No raw rows. Only aggregated metrics and setup metadata
-              (mapping, dashboard payload). Two filesystem sinks exist on the
-              server, both documented in <code>SECURITY.md</code>; any other
+              No raw telemetry persistence outside your tenant. We keep setup
+              metadata (mapping, scan snapshots, validations) plus aggregate
+              dashboard outputs. Any additional persistence sink must be
+              documented in <code>SECURITY.md</code>; unexpected
               <code>fs.write</code> in <code>src/</code> fails the security
               audit.
             </p>
@@ -200,14 +211,14 @@
               No. The launch ships with deterministic schema mapping (alias
               table + regex patterns covering ~80% of real-world naming) and
               a deterministic "Environment analysis" panel that reads from the
-              dashboard payload. Real Azure OpenAI integration is an opt-in
-              post-launch layer — the dashboard works fully without it.
+              dashboard payload. Azure Foundry-assisted setup is optional; when
+              disabled, deterministic mapping still powers the dashboard.
             </p>
           </details>
         </div>
 
         <div class="landing-docs-link">
-          <a href="/docs">Read the documentation</a> — setup guides, campaign tracking, A/B tests, API reference
+          <a href="/docs">Read the documentation</a> — setup guides, campaign tracking, API reference
         </div>
 
         <footer class="landing-footer">
@@ -217,6 +228,8 @@
             <a href="https://github.com/lionelgarnier/keren-analytics/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
             <span class="landing-footer-sep">·</span>
             <a href="https://github.com/lionelgarnier/keren-analytics/blob/main/SECURITY.md" target="_blank" rel="noopener">Security</a>
+            <span class="landing-footer-sep">·</span>
+            <a href="/privacy">Privacy</a>
             <span class="landing-footer-sep">·</span>
             <a href="mailto:garniel6@gmail.com">Contact</a>
           </div>
@@ -315,7 +328,7 @@
         <!-- ==================== MARKETING TAB ==================== -->
         <div id="tab-marketing" class="tab-content active">
 
-          <!-- Environment analysis (AI narration; deterministic in v0.1) -->
+          <!-- Environment analysis (deterministic fallback + optional AI-assisted setup context) -->
           <section id="narrationPanel" class="narration-panel hidden" aria-live="polite">
             <div class="narration-header">
               <span class="narration-tag">AI</span>
@@ -481,8 +494,6 @@
                     <th data-sort="string">Campaign</th>
                     <th data-sort="number">Visitors</th>
                     <th data-sort="number">Sessions</th>
-                    <th data-sort="number">Conv.</th>
-                    <th data-sort="number">Conv%</th>
                   </tr>
                 </thead>
                 <tbody id="campaignBody"></tbody>
@@ -511,15 +522,6 @@
             <span class="filter-bar-label">Filters:</span>
             <div id="filterChips" class="filter-chips"></div>
             <button id="clearFilters" class="btn btn-ghost btn-sm">Clear all</button>
-          </div>
-
-          <!-- A/B Test Monitor -->
-          <div id="abTestPanel" class="panel hidden">
-            <div class="panel-header">
-              <h3>A/B Tests Detected</h3>
-              <span class="badge">auto-detected</span>
-            </div>
-            <div id="abTestContainer" class="ab-tests"></div>
           </div>
 
           <!-- Conversion Funnel + Traffic Sources -->

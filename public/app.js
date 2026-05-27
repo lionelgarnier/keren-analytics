@@ -17,6 +17,7 @@ const onboardingBanner = document.getElementById("onboardingBanner");
 let lastDiscoveredResources = [];
 let lastDashboardData = null;
 let isPreviewMode = false;
+let csrfToken = null;
 /** Card names whose data arrived this load — drives the done-message safety net. */
 const receivedCards = new Set();
 
@@ -168,7 +169,7 @@ connectButton.addEventListener("click", () => {
 });
 
 logoutButton.addEventListener("click", async () => {
-  await fetch("/auth/logout", { method: "POST" });
+  await apiFetch("/auth/logout", { method: "POST" });
   window.location.href = "/";
 });
 
@@ -251,10 +252,18 @@ function exitPreviewMode() {
 
 /* ========== API ========== */
 async function apiFetch(url, options = {}) {
+  const method = (options.method || "GET").toUpperCase();
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {}),
+  };
+  if (method !== "GET" && method !== "HEAD" && csrfToken) {
+    headers["X-CSRF-Token"] = csrfToken;
+  }
   const response = await fetch(url, {
     credentials: "same-origin",
     cache: "no-store",
-    headers: { "Content-Type": "application/json" },
+    headers,
     ...options,
   });
   const data = await response.json().catch(() => ({}));
@@ -1082,85 +1091,9 @@ function renderAllSparklines(sparklines) {
 }
 
 /* ========== Render: A/B Test Monitor ========== */
-function renderAbTests(tests) {
+function renderAbTests(_tests) {
   const panel = document.getElementById("abTestPanel");
-  const container = document.getElementById("abTestContainer");
-  container.innerHTML = "";
-
-  if (!tests || tests.length === 0) {
-    panel.classList.add("hidden");
-    return;
-  }
-  panel.classList.remove("hidden");
-
-  tests.forEach((test) => {
-    const card = document.createElement("div");
-    card.className = "ab-test-card";
-
-    // Header
-    const header = document.createElement("div");
-    header.className = "ab-test-header";
-    header.innerHTML = `<span class="ab-test-name">${test.testName}</span><span class="ab-test-status">${test.status}</span>`;
-    card.appendChild(header);
-
-    // Determine winner by conversion rate
-    const convRates = test.variants.map((v) => v.visitors > 0 ? v.conversions / v.visitors : 0);
-    const winnerIdx = convRates.indexOf(Math.max(...convRates));
-
-    // Variants grid
-    const grid = document.createElement("div");
-    grid.className = "ab-test-variants";
-
-    test.variants.forEach((variant, idx) => {
-      const vEl = document.createElement("div");
-      vEl.className = `ab-variant${idx === winnerIdx ? " winner" : ""}`;
-
-      const nameEl = document.createElement("div");
-      nameEl.className = "ab-variant-name";
-      nameEl.textContent = variant.name;
-      vEl.appendChild(nameEl);
-
-      if (idx === winnerIdx && test.variants.length > 1) {
-        const badge = document.createElement("span");
-        badge.className = "ab-winner-badge";
-        badge.textContent = "WINNER";
-        vEl.appendChild(badge);
-      }
-
-      const convRate = variant.visitors > 0 ? variant.conversions / variant.visitors : 0;
-      const metrics = [
-        { label: "Visitors", value: fmt(variant.visitors) },
-        { label: "Conversions", value: fmt(variant.conversions) },
-        { label: "Conv. Rate", value: fmtPct(convRate), highlight: true },
-        { label: "Bounce Rate", value: fmtPct(variant.bounceRate) },
-        { label: "Avg Duration", value: `${Math.round(variant.avgDuration / 1000)}s` },
-      ];
-
-      const metricsEl = document.createElement("div");
-      metricsEl.className = "ab-metrics";
-      metrics.forEach((m) => {
-        const row = document.createElement("div");
-        row.className = "ab-metric";
-        const labelSpan = document.createElement("span");
-        labelSpan.className = "ab-metric-label";
-        labelSpan.textContent = m.label;
-        const valueSpan = document.createElement("span");
-        valueSpan.className = "ab-metric-value";
-        valueSpan.textContent = m.value;
-        if (m.highlight && idx === winnerIdx && test.variants.length > 1) {
-          valueSpan.classList.add("better");
-        }
-        row.appendChild(labelSpan);
-        row.appendChild(valueSpan);
-        metricsEl.appendChild(row);
-      });
-      vEl.appendChild(metricsEl);
-      grid.appendChild(vEl);
-    });
-
-    card.appendChild(grid);
-    container.appendChild(card);
-  });
+  if (panel) panel.classList.add("hidden");
 }
 
 /* ========== Render: Session Replay Timelines ========== */
@@ -1328,14 +1261,14 @@ function renderInsights(dashboard) {
   list.innerHTML = "";
   const insights = [];
 
-  // Insight 1: Best converting campaign
+  // Insight 1: Most active campaign source
   const campaigns = dashboard.charts.campaignBreakdown || [];
   if (campaigns.length > 0) {
-    const best = campaigns.reduce((a, b) => (a.convRate || 0) > (b.convRate || 0) ? a : b);
-    if (best.convRate > 0) {
+    const best = campaigns.reduce((a, b) => (a.visitors || 0) > (b.visitors || 0) ? a : b);
+    if ((best.visitors || 0) > 0) {
       insights.push({
         icon: "\uD83C\uDFAF",
-        text: `Best converting campaign: <strong>${best.campaign}</strong> via ${best.source} at <span class="insight-highlight">${fmtPct(best.convRate)}</span> conversion rate`,
+        text: `Top campaign source: <strong>${best.campaign}</strong> via ${best.source} with <span class="insight-highlight">${fmt(best.visitors)}</span> visitors`,
       });
     }
   }
@@ -1657,12 +1590,6 @@ function renderCampaignTable(data) {
     tr.appendChild(td(row.campaign));
     tr.appendChild(td(fmt(row.visitors), "num"));
     tr.appendChild(td(fmt(row.sessions), "num"));
-    tr.appendChild(td(fmt(row.signups), "num"));
-
-    const convTd = td(fmtPct(row.convRate), "num");
-    if (row.convRate >= 0.08) convTd.style.color = "var(--success)";
-    else if (row.convRate < 0.04) convTd.style.color = "var(--danger)";
-    tr.appendChild(convTd);
 
     // Click to filter
     tr.style.cursor = "pointer";
@@ -2729,7 +2656,7 @@ function renderDashboard(data) {
 
   safeRender("Narration", () => renderNarration(dashboard.narration));
   safeRender("Insights", () => renderInsights(dashboard));
-  safeRender("A/B tests", () => renderAbTests(dashboard.charts.abTests));
+  safeRender("A/B tests", () => renderAbTests(null));
   safeRender("Readiness", () => renderReadinessScore(data.readinessScore, data.readiness));
   safeRender("FirstRunBanner", () => renderFirstRunBanner(data.readinessScore));
 
@@ -2926,6 +2853,7 @@ async function init() {
 
   try {
     const session = await apiFetch("/auth/session");
+    csrfToken = session.csrfToken || null;
     modeBadge.textContent = session.mode || "mock";
 
     if (!session.authenticated) {

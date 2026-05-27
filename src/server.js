@@ -23,6 +23,7 @@ import {
 import { runWithToken } from "./providers/azure/tokenStore.js";
 import { createRateLimiter } from "./core/rateLimit.js";
 import { startBackupScheduler } from "./core/backupScheduler.js";
+import { createAzureFoundryProvider } from "./ai/azureFoundry.js";
 
 const app = express();
 const azureClient = getAzureClient();
@@ -129,6 +130,24 @@ function isTokenExpiringSoon(token) {
   const payload = decodeJwtPayload(token);
   if (!payload?.exp) return true;
   return payload.exp * 1000 - Date.now() < TOKEN_EXPIRY_BUFFER_MS;
+}
+
+function ensureCsrfToken(req) {
+  if (!req.session) return null;
+  if (!req.session.csrfToken) {
+    req.session.csrfToken = crypto.randomBytes(24).toString("hex");
+  }
+  return req.session.csrfToken;
+}
+
+function verifyCsrf(req, res, next) {
+  if (process.env.NODE_ENV === "test") return next();
+  const expected = req.session?.csrfToken;
+  const provided = req.get("X-CSRF-Token");
+  if (!expected || !provided || provided !== expected) {
+    return res.status(403).json({ error: "CSRF_MISMATCH" });
+  }
+  return next();
 }
 
 /* ========== PKCE helpers ========== */
@@ -243,7 +262,10 @@ function ensureAuth(req, res, next) {
   if (!req.session) {
     return res.status(500).json({ error: "SESSION_UNAVAILABLE" });
   }
-  if (req.session.tenantId) return next();
+  if (req.session.tenantId) {
+    ensureCsrfToken(req);
+    return next();
+  }
 
   // Mock mode: auto-set tenant
   if (config.azureMode === "mock") {
@@ -252,6 +274,7 @@ function ensureAuth(req, res, next) {
       return res.status(400).json({ error: "INVALID_TENANT_ID" });
     }
     req.session.tenantId = tenant;
+    ensureCsrfToken(req);
     return next();
   }
 
@@ -261,6 +284,7 @@ function ensureAuth(req, res, next) {
     const tid = payload?.tid;
     if (tid && isValidTenantId(tid)) {
       req.session.tenantId = tid;
+      ensureCsrfToken(req);
       return next();
     }
   }
@@ -369,6 +393,7 @@ app.get("/auth/callback", async (req, res) => {
     }
     req.session.userName = payload?.name || null;
     req.session.userUpn = payload?.upn || payload?.preferred_username || null;
+    ensureCsrfToken(req);
 
     res.redirect("/");
   } catch (err) {
@@ -393,6 +418,7 @@ app.get("/auth/session", (req, res) => {
     tokenExpiry: tokenPayload?.exp
       ? new Date(tokenPayload.exp * 1000).toISOString()
       : null,
+    csrfToken: ensureCsrfToken(req),
   });
 });
 
@@ -419,7 +445,7 @@ app.get("/auth/setup", (req, res) => {
   });
 });
 
-app.post("/auth/logout", (req, res) => {
+app.post("/auth/logout", verifyCsrf, (req, res) => {
   req.session.destroy((err) => {
     if (err) {
       return res.status(500).json({ error: "LOGOUT_FAILED" });
@@ -470,7 +496,7 @@ app.get("/azure/discover", ensureAuth, async (req, res) => {
   }
 });
 
-app.post("/azure/select", ensureAuth, (req, res) => {
+app.post("/azure/select", ensureAuth, verifyCsrf, (req, res) => {
   const tenantId = req.session.tenantId;
   const { resourceId, workspaceId, subscriptionId, resourceGroup, appInsightsName } = req.body || {};
   if (!resourceId || !workspaceId) {
@@ -492,7 +518,7 @@ app.post("/azure/select", ensureAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-app.post("/azure/select/clear", ensureAuth, (req, res) => {
+app.post("/azure/select/clear", ensureAuth, verifyCsrf, (req, res) => {
   const tenantId = req.session.tenantId;
   updateTenant(tenantId, { selectedResource: null });
   res.json({ ok: true });
@@ -736,7 +762,7 @@ app.get("/api/setup/state", ensureAuth, (req, res) => {
 // Trigger the CONFIG phase: a fresh scan + AI analysis for the selected
 // resource. This is the only entry point that re-runs the scan/LLM —
 // dashboard loads reuse its snapshot and never re-config.
-app.post("/api/setup/scan", ensureAuth, async (req, res) => {
+app.post("/api/setup/scan", ensureAuth, verifyCsrf, async (req, res) => {
   const tenantId = req.session.tenantId;
   try {
     const result = await runSetupScan({ tenantId, azureClient });
@@ -920,7 +946,7 @@ const VALID_DECISIONS = new Set(["accept_all", "override", "reject"]);
 
 // Persist the user's accept/override/reject decision. Subsequent dashboard
 // loads will apply the override via mergeWithValidation in the orchestrator.
-app.post("/api/setup/validate", ensureAuth, (req, res) => {
+app.post("/api/setup/validate", ensureAuth, verifyCsrf, (req, res) => {
   const tenantId = req.session.tenantId;
   const { decision, overrides } = req.body || {};
   // Validate the request body (400) before checking tenant state (409).
@@ -1061,6 +1087,70 @@ app.get("/preview/dashboard", async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: "PREVIEW_ERROR", message: error.message });
   }
+});
+
+app.get("/healthz", (_req, res) => {
+  res.json({ ok: true, mode: config.azureMode, aiProvider: config.aiProvider });
+});
+
+app.get("/api/ai/ping", async (_req, res) => {
+  if (config.aiProvider !== "azure-foundry") {
+    return res.json({
+      ok: true,
+      provider: config.aiProvider,
+      configured: config.aiProvider === "none",
+      message: "AI provider is disabled or deterministic-only.",
+    });
+  }
+
+  if (!config.azureFoundryEndpoint || !config.azureFoundryDeployment) {
+    return res.status(503).json({
+      ok: false,
+      provider: "azure-foundry",
+      configured: false,
+      message: "AZURE_FOUNDRY_ENDPOINT or AZURE_FOUNDRY_DEPLOYMENT is missing.",
+    });
+  }
+
+  try {
+    const provider = createAzureFoundryProvider({
+      endpoint: config.azureFoundryEndpoint,
+      deployment: config.azureFoundryDeployment,
+      requestTimeoutMs: 8000,
+    });
+    const probe = await provider.generate({
+      task: "mappingAnalysis",
+      systemPrompt: "Respond with strict JSON only.",
+      userPrompt: "Health check ping.",
+      schemaName: "ping",
+      schema: {
+        type: "object",
+        properties: { pong: { type: "boolean" } },
+        required: ["pong"],
+        additionalProperties: false,
+      },
+    });
+    if (!probe?.output?.pong) {
+      return res.status(503).json({
+        ok: false,
+        provider: "azure-foundry",
+        configured: true,
+        message: "Foundry probe returned an unexpected payload.",
+      });
+    }
+    return res.json({ ok: true, provider: "azure-foundry", configured: true });
+  } catch (error) {
+    return res.status(503).json({
+      ok: false,
+      provider: "azure-foundry",
+      configured: true,
+      message: error.message,
+    });
+  }
+});
+
+app.get("/privacy", (_req, res) => {
+  res.sendFile(path.resolve(__dirname, "..", "public", "privacy.html"));
 });
 
 /* ========== SPA catch-all (History API routing) ========== */

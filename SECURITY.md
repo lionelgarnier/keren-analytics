@@ -15,24 +15,26 @@ the public demo instance.
 
 ## What "no raw data leaves your tenant" means in practice
 
-The product promise is that user telemetry rows (App Insights `pageViews`,
-`requests`, `customEvents`, etc.) never leave the user's Azure tenant via
-this service. Only **aggregated metrics** (counts, percentiles, geo /
-browser distributions, top-N pages) are returned to the browser, and only
-**setup metadata** (mapping, schema profile, readiness counts, the rendered
-dashboard payload of aggregates) is persisted server-side.
+The product promise is that raw user telemetry rows (App Insights
+`pageViews`, `requests`, `customEvents`, etc.) are **not persisted** outside
+the user's Azure tenant via this service. Most browser payloads are
+aggregated metrics (counts, percentiles, geo/browser distributions, top-N
+pages). Some setup/technical surfaces may return bounded, scrubbed
+event-level snippets (for example recent session timelines) to support
+diagnosis without storing raw logs.
 
 That promise is encoded as automated checks in
 [`scripts/security-audit.mjs`](scripts/security-audit.mjs) so that
 regressions become visible the moment a PR introduces them. The CI badge in
 the README reflects the result on `main`.
 
-The two filesystem sinks that exist in `src/`:
+The known persistence sinks:
 
-| File                       | Persists                                                  | Contains raw telemetry? |
-|----------------------------|-----------------------------------------------------------|--------------------------|
-| `src/core/audit.js`        | metadata events: tenantId, queryName, durationMs, status  | No                       |
-| `src/core/metadataStore.js`| setup metadata + aggregated dashboard config              | No                       |
+| File | Persists | Contains raw telemetry? |
+|------|----------|--------------------------|
+| `src/core/audit.js` | metadata events: tenantId, queryName, durationMs, status | No |
+| `src/core/db.js` (+ store modules) | SQLite setup state (`tenants`, `scans`, `mappings`, `validations`) | No |
+| `src/core/backupScheduler.js` | encrypted blob snapshots of `data/keren.db` | No |
 
 Anything else attempting an `fs.write*` in `src/` will fail
 `scripts/security-audit.mjs` and turn the CI badge red. If a future feature
@@ -71,8 +73,9 @@ Tracked in `docs/backlog/phase-3.md` and the launch-readiness backlog. Not
 fixed because they are outside the pre-launch scope; do not introduce new
 patterns that depend on them being unaddressed.
 
-- **No CSRF token** — relies on `sameSite=lax` cookies. Acceptable for the
-  current API surface (no state-changing POSTs from third-party origins).
+- **CSRF coverage is session-header based** — state-changing POST routes
+  require `X-CSRF-Token` that matches a session-bound token exposed by
+  `GET /auth/session`. Future API surfaces should keep using this check.
 - **CDN supply-chain trust** — Leaflet (`unpkg.com`), Chart.js
   (`cdn.jsdelivr.net`), and OpenStreetMap tiles are loaded from public CDNs.
   Acceptable for the OSS-first launch; a self-hosted-assets variant is

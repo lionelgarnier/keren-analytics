@@ -100,7 +100,7 @@ intent but is leaner:
   status. The LLM *ranking* of resources is the remaining follow-up.
 - **Step 6 (narration LLM call) is also not wired yet.** The narration
   panel keeps the deterministic generator from `core/narration.js`;
-  what changed is that the "Preview — real LLM coming soon" badge now
+  what changed is that the "Preview — deterministic summary" badge now
   drops automatically when the **mapping** was AI-generated, because
   the AI feature is no longer aspirational.
 - **The wizard runs even when `AI_PROVIDER=none`.** In that mode the

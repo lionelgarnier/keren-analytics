@@ -48,6 +48,15 @@ links to the agent-side work that depends on it.
   URL: `https://analytics.keren.run` (DNS step below).
 - **Status**: TODO.
 
+### Launch-week scaling policy (`minReplicas=1`, `maxReplicas=1`)
+- **Why**: sessions are in-memory (`express-session` default store). For launch
+  reliability, keep a single replica and avoid cold starts.
+- **When**: launch week (before public traffic), then reassess after launch.
+- **How**: keep `infra/main.parameters.json` at `minReplicas=1`,
+  `maxReplicas=1` for the launch deployment. After launch, if you re-enable
+  scale-out, ship a shared session store first.
+- **Status**: TODO.
+
 ### First Azure deploy + Key Vault secret seeding
 - **Why**: the Bicep template provisions an empty Key Vault. The Container
   App boots with `secretRef`s pointing to `session-secret` and

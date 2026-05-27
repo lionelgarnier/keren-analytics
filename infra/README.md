@@ -13,7 +13,7 @@ In the resource group `keren-analytics-prod` (France Central):
   via the managed identity (no admin password)
 - Container Apps environment (`cae-keren-analytics`)
 - Container App (`ca-keren-analytics`)
-  - port 3000, scale 0 → 3 replicas, liveness probe on `/auth/session`
+  - port 3000, scale via params, liveness probe on `/healthz`
   - secrets `SESSION_SECRET` and `AZURE_CLIENT_SECRET` are inline Container App
     secrets passed via `@secure()` Bicep params (encrypted at rest by Azure).
     Key Vault is intentionally **not** in V1 — adding a KV secret reference at

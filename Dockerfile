@@ -25,6 +25,6 @@ ENV PORT=3000
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s \
-  CMD wget -qO- http://localhost:3000/auth/session || exit 1
+  CMD wget -qO- http://localhost:3000/healthz || exit 1
 
 CMD ["node", "src/server.js"]

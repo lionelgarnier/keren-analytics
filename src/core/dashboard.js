@@ -882,8 +882,6 @@ export async function buildOverviewDashboard({
       campaign: row.campaign,
       visitors: Number(row.visitors) || 0,
       sessions: Number(row.sessions) || 0,
-      signups: 0,
-      convRate: 0,
     }));
     charts.urlParams = buildUrlParamsData(toRows(uR));
     publish("campaigns", deps, {

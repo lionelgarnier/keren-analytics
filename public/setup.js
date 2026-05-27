@@ -26,6 +26,7 @@
     findings: null,        // /api/setup/findings response
     overrides: {},         // user-edited canonical fields
     activeSources: {},     // current "best guess" per canonical, used as form default
+    csrfToken: null,
   };
 
   // ── DOM helpers ───────────────────────────────────────────────
@@ -386,8 +387,11 @@
   // ── API ───────────────────────────────────────────────────────
   async function api(method, url, body) {
     const opts = { method, headers: { "Content-Type": "application/json" } };
+    if (method !== "GET" && method !== "HEAD" && state.csrfToken) {
+      opts.headers["X-CSRF-Token"] = state.csrfToken;
+    }
     if (body !== undefined) opts.body = JSON.stringify(body);
-    const res = await fetch(url, opts);
+    const res = await fetch(url, { credentials: "same-origin", ...opts });
     let payload = null;
     try { payload = await res.json(); } catch { /* non-JSON */ }
     if (!res.ok) {
@@ -629,10 +633,9 @@
       summaryEl.classList.add("hidden");
     }
 
-    // Graph-level cards: ✓ ready / ! needs setup / · partial, driven entirely
-    // by AI's dashboard_recommendations. We trust the AI here — there is no
-    // hard signal→panel table on the backend (would have to be maintained as
-    // panels evolve). Low-confidence overrides are caught in step 3.
+    // Graph-level cards: ✓ ready / ! needs setup / · partial, driven by
+    // `dashboard_recommendations`. These cards are setup-time guidance only:
+    // the dashboard itself still renders from detected availability + mapping.
     const recs = m?.proposals?.dashboard_recommendations || { feature: [], hide: [] };
     const featureSet = new Set(recs.feature || []);
     const hideSet = new Set(recs.hide || []);
@@ -675,7 +678,7 @@
     if (ms.length === 0) {
       coverageIntro.textContent = "Solid coverage — nothing flagged.";
     } else {
-      coverageIntro.textContent = "Add the signals below to unlock the ‘Needs instrumentation’ panels.";
+      coverageIntro.textContent = "Add the signals below to improve coverage for the suggested panels.";
       for (const s of ms) {
         const li = document.createElement("li");
         li.className = "setup-missing";
@@ -828,7 +831,7 @@
   }
 
   // ── Wire up ───────────────────────────────────────────────────
-  function init() {
+  async function init() {
     $("scanningContinue").addEventListener("click", () => {
       show("findings");
     });
@@ -859,6 +862,12 @@
       });
     }
 
+    try {
+      const session = await api("GET", "/auth/session");
+      state.csrfToken = session?.csrfToken || null;
+    } catch {
+      state.csrfToken = null;
+    }
     startStep1();
   }
 

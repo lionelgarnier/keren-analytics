@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Privacy - Keren Analytics</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/theme-init.js"></script>
+  </head>
+  <body>
+    <nav class="navbar">
+      <div class="navbar-inner">
+        <div class="navbar-left">
+          <a class="logo" href="/">Keren Analytics</a>
+          <span class="badge">Privacy</span>
+        </div>
+        <div class="navbar-right">
+          <button id="themeToggle" class="theme-toggle" aria-label="Toggle dark mode" title="Toggle theme">
+            <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          </button>
+        </div>
+      </div>
+    </nav>
+
+    <main class="container">
+      <section class="panel">
+        <h2>Privacy summary</h2>
+        <p>
+          Keren Analytics queries your Azure telemetry with delegated access and renders analytics dashboards.
+          Raw telemetry rows are not persisted outside your tenant. The service persists setup metadata and
+          aggregated dashboard outputs so your configuration survives restarts.
+        </p>
+      </section>
+
+      <section class="panel">
+        <h3>Data we process</h3>
+        <ul>
+          <li>Authentication/session data (Entra delegated sign-in state in session cookie).</li>
+          <li>Resource selection and setup state (scan snapshots, mappings, validations, readiness summaries).</li>
+          <li>Aggregated analytics payloads sent to the dashboard UI.</li>
+        </ul>
+      </section>
+
+      <section class="panel">
+        <h3>What we do not persist</h3>
+        <ul>
+          <li>No long-term storage of raw App Insights log rows outside your tenant.</li>
+          <li>No credentials committed in repository files.</li>
+          <li>No third-party tracking cookies by default on the landing page.</li>
+        </ul>
+      </section>
+
+      <section class="panel">
+        <h3>Retention and backups</h3>
+        <p>
+          Setup metadata is stored in SQLite (`data/keren.db`). In production, operators can enable
+          periodic encrypted snapshots to Azure Blob storage. Backup retention is configurable.
+        </p>
+      </section>
+
+      <section class="panel">
+        <h3>Contact</h3>
+        <p>
+          Questions or privacy requests: <a href="mailto:garniel6@gmail.com">garniel6@gmail.com</a>.
+          Security reports should follow <a href="https://github.com/lionelgarnier/keren-analytics/blob/main/SECURITY.md" target="_blank" rel="noopener">SECURITY.md</a>.
+        </p>
+      </section>
+    </main>
+
+    <script>
+      document.getElementById("themeToggle")?.addEventListener("click", () => {
+        const current = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+        if (current === "dark") document.documentElement.removeAttribute("data-theme");
+        else document.documentElement.setAttribute("data-theme", "dark");
+      });
+    </script>
+  </body>
+</html>

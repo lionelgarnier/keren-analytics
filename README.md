@@ -7,7 +7,7 @@
 
 > Turn Azure Application Insights into shareable **Marketing & Technical
 > dashboards in under 2 minutes** — AI-mapped schema, deterministic KQL,
-> nothing raw ever leaves your tenant. MIT.
+> no raw telemetry persistence outside your tenant. MIT.
 
 <!--
 HERO GIF placeholder (A3 — see docs/maintainer-todo.md).
@@ -42,6 +42,13 @@ Then open `http://localhost:3000`. The default mode is **mock** — a
 deterministic sample dataset that lets you click around with no Azure
 account at all.
 
+For production-like local runs, set a real session secret first:
+
+```bash
+SESSION_SECRET=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))") \
+NODE_ENV=production docker compose up --build
+```
+
 For real Azure mode, see [Setup: Entra ID](docs/setup-entra-id.md). Three
 commands and one `.env` file.
 
@@ -66,8 +73,8 @@ One image per group below would let the bullet list breathe.
   campaigns), Technical (latency percentiles, error rate, top slow
   endpoints), Readiness (telemetry coverage 0–100 + AI prompts).
 - **AI-style "Environment analysis" panel** that narrates your data in
-  plain English from the same numbers the dashboard shows — no LLM call
-  required at v0.1; real Azure OpenAI integration is post-launch.
+  plain English from the same numbers the dashboard shows — deterministic
+  by default, with optional Azure Foundry-backed mapping in setup.
 - **First-run banner** that surfaces the two highest-leverage telemetry
   improvements (e.g. *"Add user identity (+15)"*) and scrolls you to the
   matching prompt card on the Readiness tab.
@@ -76,13 +83,13 @@ One image per group below would let the bullet list breathe.
   windows.
 - **Schema auto-mapping** — alias table + regex pattern matching covers
   ~80% of real-world custom dimension naming (`uid`, `visitor_id`,
-  `accountId`, etc.) with zero config; LLM-assisted mapping is an
-  opt-in post-launch layer.
-- **22 versioned KQL templates** rendered server-side with strict
+  `accountId`, etc.) with zero config; optional Azure Foundry mapping
+  can refine proposals in setup.
+- **26 versioned KQL templates** rendered server-side with strict
   parameter substitution. Tenant identifiers never reach a query
   string.
 - **MIT-licensed, single binary** — Node 22, Express 5, Helmet,
-  in-memory cache. No DB, no Redis, no agent to deploy on your apps.
+  in-memory query cache, SQLite setup state. No agent to deploy on your apps.
 
 ## How it compares
 
@@ -92,7 +99,7 @@ One image per group below would let the bullet list breathe.
 | Marketing vs Technical separation| Built-in            | Manual workbook     | Add-on                | Manual report      |
 | Readiness scoring + AI prompts   | **0–100, LLM-ready prompts** | No        | Limited                | No                 |
 | Custom-dimension auto-mapping    | Alias + regex (LLM optional) | Manual    | Manual                | Manual             |
-| Data residency                   | **No raw data leaves your tenant** | Native | New endpoint   | New endpoint       |
+| Data residency                   | **No raw telemetry rows are persisted outside your tenant** | Native | New endpoint   | New endpoint       |
 | License / cost                   | **MIT, free**       | Included w/ Azure   | Per-host $$$          | Per-user $$        |
 | Self-hostable                    | Yes (`docker compose up`) | N/A           | No (SaaS)             | Limited            |
 
@@ -102,11 +109,12 @@ mature and have features we don't.
 
 ## Privacy & security
 
-The product promise is that **user telemetry rows never leave your
-Azure tenant via this service**. Only **aggregated metrics** (counts,
-percentiles, geo / browser distributions, top-N pages) and **setup
-metadata** (mapping, schema profile, dashboard payload) ever cross the
-wire to the browser or hit disk on the server.
+The product promise is that **raw telemetry rows are not persisted
+outside your Azure tenant**. The service stores setup metadata and
+aggregated dashboard outputs in SQLite. Most browser payloads are
+aggregated metrics (counts, percentiles, geo/browser distributions,
+top-N pages); a few setup/technical surfaces can include scrubbed,
+bounded event-level snippets (for example recent session timelines).
 
 That promise is encoded as automated checks in
 [`scripts/security-audit.mjs`](scripts/security-audit.mjs). Seven
@@ -127,7 +135,7 @@ Security policy and reporting path: [`SECURITY.md`](SECURITY.md).
 - **v0.1.x** — what's on `main` and the launch-readiness sprint
   ([docs/backlog/launch-readiness.md](docs/backlog/launch-readiness.md))
 - **Phase 3** — multi-tenant SaaS, persistence, real Azure OpenAI
-  integration. Gated on traction signals
+  hardening and broader AI surfaces. Gated on traction signals
   ([docs/launch-strategy.md](docs/launch-strategy.md) §3).
 - **Phase 4** — multi-cloud (AWS CloudWatch, GCP Cloud Logging) via
   the provider interface in
@@ -145,7 +153,9 @@ Set in `.env` (copy from `.env.example`):
 |----------------------------|-------------|-----------------------------------------------------------------------|
 | `AZURE_MODE`               | `mock`      | `mock` for the sample dataset, `real` for OAuth + your Azure tenant.  |
 | `SESSION_SECRET`           | _required_  | 32+ random bytes in production; app refuses to boot otherwise.        |
+| `AI_PROVIDER`              | `none`      | `none` (deterministic mapping) or `azure-foundry` (LLM-assisted setup). |
 | `AZURE_CLIENT_ID` / `_SECRET` / `_REDIRECT_URI` / `_TENANT_ID` | — | Entra ID app registration; see [docs/setup-entra-id.md](docs/setup-entra-id.md). |
+| `AZURE_FOUNDRY_ENDPOINT` / `_DEPLOYMENT` | — | Required only when `AI_PROVIDER=azure-foundry`. |
 | `MOCK_RESOURCES=multiple`  | _unset_     | Mock mode toggle to simulate multiple App Insights resources.         |
 
 Selected API surface (full list in [`src/server.js`](src/server.js)):

@@ -5,9 +5,9 @@
  * Single-process / single-replica only — multi-instance deployments are
  * out of scope for V1 (cf. CLAUDE.md "Known gaps").
  *
- * Schema covers all Track F tables, but only `tenants` and
- * `state_transitions` are wired in F1; `scans / mappings / signals /
- * validations` are placeholders for F2-F4.
+ * Schema covers all setup/runtime tables (`tenants`, `state_transitions`,
+ * `scans`, `mappings`, `signals`, `validations`) used by the setup wizard
+ * and per-resource validation flow.
  */
 
 // node:sqlite emits an ExperimentalWarning on import (still flagged

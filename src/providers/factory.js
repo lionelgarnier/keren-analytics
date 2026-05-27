@@ -10,7 +10,7 @@
  *
  * Note: KQL templates remain under `kql/` for V1. The `queries/azure/`
  * relocation proposed in `docs/architecture-multicloud.md` is deferred to
- * V2 — moving 22 templates would also require updating `core/kql.js` path
+ * V2 — moving the current KQL template set would also require updating `core/kql.js` path
  * resolution and `tests/kql.test.js`, which is out of scope for this refacto.
  */
 import { config } from "../config.js";

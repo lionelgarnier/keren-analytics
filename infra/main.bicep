@@ -305,13 +305,13 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
           probes: [
             {
               type: 'Liveness'
-              httpGet: { path: '/auth/session', port: 3000 }
+              httpGet: { path: '/healthz', port: 3000 }
               initialDelaySeconds: 10
               periodSeconds: 30
             }
             {
               type: 'Readiness'
-              httpGet: { path: '/auth/session', port: 3000 }
+              httpGet: { path: '/healthz', port: 3000 }
               initialDelaySeconds: 5
               periodSeconds: 10
             }

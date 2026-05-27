@@ -2,17 +2,18 @@
  * Deterministic, no-LLM narration of a dashboard payload.
  *
  * The "AI explains what your telemetry looks like" panel on the demo URL
- * (and the same panel — with a "preview" badge — in real mode) is rendered
+ * (and the same panel — with a deterministic preview badge when AI mapping
+ * is unavailable) is rendered
  * from this module. Every sentence is derived from the dashboard payload
  * the user already sees, so we never invent numbers.
  *
- * When real Azure OpenAI integration ships post-launch, this module's
- * shape (`{ headline, paragraph, badge, tagline, mode }`) is what the
- * frontend consumes — the LLM just produces a richer `paragraph`.
+ * The payload shape (`{ headline, paragraph, badge, tagline, mode }`) is
+ * stable regardless of whether setup used deterministic mapping or Azure
+ * Foundry proposals.
  */
 
 const TAGLINE = "AI explains what your telemetry looks like.";
-const PREVIEW_BADGE = "Preview — real LLM coming soon";
+const PREVIEW_BADGE = "Preview — deterministic summary";
 
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 

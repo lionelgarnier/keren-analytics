@@ -53,7 +53,7 @@ test("buildNarration: real mode adds preview badge when no AI mapping", () => {
   });
   assert.equal(r.mode, "preview");
   assert.match(r.badge, /Preview/i);
-  assert.match(r.badge, /real LLM/i);
+  assert.match(r.badge, /deterministic/i);
 });
 
 test("buildNarration: real mode + degraded AI keeps the preview badge", () => {
