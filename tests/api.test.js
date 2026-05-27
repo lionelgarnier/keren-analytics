@@ -23,16 +23,15 @@ test("landing page (A5): tagline, comparison table, FAQ, footer present", async 
   const request = supertest(app);
   const res = await request.get("/").expect(200);
   const body = res.text;
-  // Tagline + key value props from the rewrite. Asserting on the literal
-  // copy locks the launch positioning so an accidental edit (or AI
-  // re-rewrite) shows up as a failing test.
-  assert.match(body, /Azure App Insights → Marketing/);
-  assert.match(body, /AI-mapped schema/);
+  // Headline + key value props from the V2 landing rewrite. Asserting on
+  // the literal copy locks the launch positioning so an accidental edit
+  // (or AI re-rewrite) shows up as a failing test.
+  assert.match(body, /The Azure dashboard/);
+  assert.match(body, /Application Insights/);
   assert.match(body, /Try the demo/);
-  assert.match(body, /Star on GitHub/);
+  assert.match(body, /Open the demo/);
   // Comparison table
   assert.match(body, /How it compares/);
-  assert.match(body, /Keren Analytics/);
   assert.match(body, /Datadog/);
   assert.match(body, /Power BI/);
   // FAQ
@@ -40,7 +39,7 @@ test("landing page (A5): tagline, comparison table, FAQ, footer present", async 
   assert.match(body, /How does it connect to Azure\?/);
   assert.match(body, /Is the AI part required\?/);
   // Footer
-  assert.match(body, /MIT License/);
+  assert.match(body, /MIT/);
   assert.match(body, /garniel6@gmail\.com/);
 });
 
