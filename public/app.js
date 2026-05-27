@@ -1,7 +1,6 @@
 /* ========== DOM References ========== */
 const connectButton = document.getElementById("connectButton");
 const logoutButton = document.getElementById("logoutButton");
-const modeBadge = document.getElementById("modeBadge");
 const statusPanel = document.getElementById("statusPanel");
 const resourcePanel = document.getElementById("resourcePanel");
 const resourceList = document.getElementById("resourceList");
@@ -112,7 +111,22 @@ function updateSankeySVGColors() {
   });
 }
 
-document.getElementById("themeToggle")?.addEventListener("click", toggleTheme);
+document.querySelectorAll(".theme-toggle").forEach((b) => b.addEventListener("click", toggleTheme));
+
+/* ========== Landing visibility (controls original navbar hide) ========== */
+function setLandingActive(isActive) {
+  document.body.classList.toggle("landing-active", isActive);
+}
+
+function showLanding() {
+  landingPage.classList.remove("hidden");
+  setLandingActive(true);
+}
+
+function hideLanding() {
+  landingPage.classList.add("hidden");
+  setLandingActive(false);
+}
 
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
   if (localStorage.getItem("theme")) return;
@@ -197,12 +211,32 @@ changeResourceButton.addEventListener("click", async () => {
 });
 
 /* ========== Landing page events ========== */
-document.getElementById("landingConnectBtn").addEventListener("click", () => {
+document.getElementById("landingConnectBtn")?.addEventListener("click", () => {
   window.location.href = "/auth/login";
 });
 
-document.getElementById("landingPreviewBtn").addEventListener("click", () => {
+document.getElementById("landingPreviewBtn")?.addEventListener("click", () => {
   enterPreviewMode();
+});
+
+document.getElementById("heroOpenDemoBtn")?.addEventListener("click", () => {
+  enterPreviewMode();
+});
+
+document.getElementById("ctaOpenDemoBtn")?.addEventListener("click", () => {
+  enterPreviewMode();
+});
+
+document.getElementById("ctaDockerCopyBtn")?.addEventListener("click", async (e) => {
+  const btn = e.currentTarget;
+  const original = btn.textContent;
+  try {
+    await navigator.clipboard.writeText("docker compose up");
+    btn.textContent = "Copied!";
+  } catch {
+    btn.textContent = "Copy failed";
+  }
+  setTimeout(() => { btn.textContent = original; }, 1500);
 });
 
 document.getElementById("previewConnectBtn").addEventListener("click", () => {
@@ -213,6 +247,23 @@ document.getElementById("previewExitBtn").addEventListener("click", () => {
   exitPreviewMode();
 });
 
+async function loadStargazers() {
+  const countEl = document.getElementById("lv2StarsCount");
+  if (!countEl) return;
+  try {
+    const resp = await fetch("https://api.github.com/repos/lionelgarnier/keren-analytics", {
+      headers: { Accept: "application/vnd.github+json" },
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      if (typeof data.stargazers_count === "number") {
+        countEl.textContent = data.stargazers_count.toLocaleString();
+      }
+    }
+  } catch { /* keep static fallback */ }
+  countEl.classList.add("is-loaded");
+}
+
 document.getElementById("onboardingDismiss").addEventListener("click", () => {
   onboardingBanner.classList.add("hidden");
   try { localStorage.setItem("ea_onboarding_seen", "1"); } catch {}
@@ -220,7 +271,7 @@ document.getElementById("onboardingDismiss").addEventListener("click", () => {
 
 async function enterPreviewMode() {
   isPreviewMode = true;
-  landingPage.classList.add("hidden");
+  hideLanding();
   connectButton.classList.add("hidden");
   previewBanner.classList.remove("hidden");
   dashboardPanel.classList.remove("hidden");
@@ -244,7 +295,7 @@ function exitPreviewMode() {
   isPreviewMode = false;
   previewBanner.classList.add("hidden");
   dashboardPanel.classList.add("hidden");
-  landingPage.classList.remove("hidden");
+  showLanding();
   connectButton.classList.remove("hidden");
   statusPanel.textContent = "";
   router.push({ page: "home" });
@@ -2831,6 +2882,9 @@ async function showSetupInstructions() {
 async function init() {
   setStatus("Checking session...");
 
+  // Fire-and-forget: real stargazer count for the landing nav.
+  loadStargazers();
+
   // Init sortable tables
   initSortableTable("topPagesTable");
   initSortableTable("slowEndpointsTable");
@@ -2854,10 +2908,11 @@ async function init() {
   try {
     const session = await apiFetch("/auth/session");
     csrfToken = session.csrfToken || null;
-    modeBadge.textContent = session.mode || "mock";
+    const mode = session.mode || "mock";
+    document.querySelectorAll(".mode-badge").forEach((el) => { el.textContent = mode; });
 
     if (!session.authenticated) {
-      landingPage.classList.remove("hidden");
+      showLanding();
       statusPanel.textContent = "";
       if (route.page !== "home") router.replace({ page: "home" });
 
@@ -2871,7 +2926,7 @@ async function init() {
 
     connectButton.classList.add("hidden");
     logoutButton.classList.remove("hidden");
-    landingPage.classList.add("hidden");
+    hideLanding();
 
     if (session.user?.name) {
       logoutButton.textContent = `${session.user.name} — Logout`;
@@ -2950,7 +3005,7 @@ window.addEventListener("popstate", async () => {
       isPreviewMode = false;
       previewBanner.classList.add("hidden");
       dashboardPanel.classList.add("hidden");
-      landingPage.classList.remove("hidden");
+      showLanding();
       connectButton.classList.remove("hidden");
       statusPanel.textContent = "";
     }
@@ -2974,7 +3029,7 @@ window.addEventListener("popstate", async () => {
   if (route.page === "dashboard" && route.service) {
     resourcePanel.classList.add("hidden");
     previewBanner.classList.add("hidden");
-    landingPage.classList.add("hidden");
+    hideLanding();
     isPreviewMode = false;
     activateTab(route.tab, { updateUrl: false });
     const currentName = selectedResourceName.textContent;
