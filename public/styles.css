@@ -3917,3 +3917,504 @@ body {
   .setup-stepper { flex-wrap: wrap; }
   .setup-step { flex: 1 1 calc(50% - 6px); }
 }
+
+/* ============================================================
+   D v2 — service hub + setup wizard
+   Specs: handoff-d2/STYLE-GUIDE.md
+   Reference: handoff-d2/d2-reference.html
+   ============================================================ */
+
+/* ──────────────────────────────────────────────────────────────────────
+   1 · TOPBAR
+   Replaces the current .navbar pattern *for the /services and /setup
+   routes only*. Keep .navbar for the dashboard or wrap it in a body class.
+   ────────────────────────────────────────────────────────────────── */
+.d2-topbar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+.d2-topbar-l, .d2-topbar-r { display: flex; align-items: center; gap: 14px; }
+.d2-mark { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; letter-spacing: -0.2px; }
+.d2-mark-glyph {
+  width: 22px; height: 22px; border-radius: 6px;
+  background: var(--accent); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700;
+}
+.d2-mark-tag {
+  font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 10px;
+  letter-spacing: 1px; text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 3px 7px; border: 1px solid var(--border); border-radius: 5px;
+  margin-left: 2px;
+}
+.d2-tabs { display: flex; align-items: center; gap: 0; }
+.d2-tab {
+  padding: 8px 12px; font-size: 13px; color: var(--text-muted);
+  border-bottom: 2px solid transparent; margin-bottom: -13px;
+  cursor: pointer; text-decoration: none;
+}
+.d2-tab.is-active { color: var(--text-primary); border-color: var(--text-primary); }
+.d2-avatar {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--border-light);
+  display: flex; align-items: center; justify-content: center;
+  font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 11px; font-weight: 600;
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   2 · PAGE HEADER
+   breadcrumb + h1 + sub + right-aligned actions
+   ────────────────────────────────────────────────────────────────── */
+.d2-pageheader {
+  display: flex; justify-content: space-between; align-items: flex-end;
+  gap: 24px; margin-bottom: 28px;
+}
+.d2-pageheader-l { display: flex; flex-direction: column; gap: 8px; max-width: 640px; }
+.d2-pageheader-r { display: flex; align-items: center; gap: 10px; }
+
+.d2-breadcrumb {
+  display: flex; align-items: center; gap: 6px;
+  font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 11px;
+  color: var(--text-muted); letter-spacing: 0.2px;
+  flex-wrap: wrap;
+}
+.d2-breadcrumb-here { color: var(--text-primary); }
+.d2-breadcrumb-sep { opacity: 0.5; }
+.d2-breadcrumb-tag {
+  font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 9.5px;
+  padding: 1px 5px; border-radius: 3px;
+  color: var(--success); border: 1px solid var(--success-border); background: var(--success-bg);
+  letter-spacing: 0.8px;
+}
+.d2-breadcrumb-tag--ai {
+  color: var(--accent); border-color: var(--accent-border); background: var(--accent-bg);
+}
+
+.d2-h1 {
+  font-size: 36px; font-weight: 600; letter-spacing: -1px;
+  line-height: 1.15; margin: 0;
+}
+.d2-sub {
+  font-size: 14px; color: var(--text-secondary); margin: 0;
+  max-width: 640px; line-height: 1.5;
+}
+
+.d2-headeraction {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px; border-radius: 8px;
+  font-size: 13px; font-weight: 500; font-family: inherit;
+  background: transparent; border: 1px solid var(--border); color: var(--text-primary);
+  cursor: pointer;
+}
+.d2-headeraction--accent { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   3 · TOOLBAR (chips + search)
+   ────────────────────────────────────────────────────────────────── */
+.d2-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 16px; }
+.d2-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.d2-chip {
+  font-size: 12px; padding: 5px 11px; border-radius: 999px;
+  background: var(--border-light); color: var(--text-secondary);
+  border: 1px solid var(--border);
+  display: inline-flex; align-items: center; gap: 6px;
+  cursor: pointer;
+}
+.d2-chip.is-active { background: var(--text-primary); color: var(--bg); border-color: var(--text-primary); }
+.d2-chip-count { font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 10px; opacity: 0.7; }
+
+.d2-search {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 12px; border-radius: 8px;
+  background: var(--border-light); border: 1px solid var(--border);
+  font-size: 12.5px; color: var(--text-muted); min-width: 260px;
+}
+.d2-search input {
+  flex: 1; border: none; background: transparent; outline: none;
+  font-family: inherit; font-size: 12.5px; color: var(--text-primary);
+}
+.d2-search input::placeholder { color: var(--text-muted); }
+.d2-search-kbd {
+  font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 10px;
+  padding: 1px 5px; border: 1px solid var(--border); border-radius: 4px;
+  background: var(--bg); margin-left: auto;
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   4 · RESOURCE CARD (replaces .resource-card-v2 layout)
+   ────────────────────────────────────────────────────────────────── */
+.d2-resgrid { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+@media (max-width: 720px) { .d2-resgrid { grid-template-columns: 1fr; } }
+
+.d2-rescard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px 20px;
+  display: flex; flex-direction: column; gap: 14px;
+  transition: border-color 0.15s ease;
+  cursor: pointer;
+}
+.d2-rescard:hover { border-color: var(--ghost-hover-border); }
+.d2-rescard-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.d2-rescard-name { font-size: 15px; font-weight: 600; letter-spacing: -0.2px; display: flex; align-items: center; gap: 8px; color: var(--text-primary); }
+.d2-rescard-sub {
+  font-size: 11.5px; color: var(--text-muted);
+  margin-top: 4px; display: flex; align-items: center; gap: 6px;
+}
+
+.d2-env {
+  font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 9.5px; letter-spacing: 0.8px;
+  padding: 2px 7px; border-radius: 4px; text-transform: uppercase;
+  background: var(--border-light); color: var(--text-secondary);
+}
+.d2-env--prod { background: var(--success-bg); color: var(--success); }
+.d2-env--staging { background: var(--warning-bg); color: var(--warning); }
+.d2-env--dev { background: var(--accent-bg); color: var(--accent); }
+
+.d2-statpill {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; padding: 3px 9px; border-radius: 999px;
+  background: var(--border-light); color: var(--text-secondary);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+.d2-statpill-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.d2-statpill--ready { color: var(--success); background: var(--success-bg); border-color: transparent; }
+.d2-statpill--incomplete { color: var(--warning); background: var(--warning-bg); border-color: transparent; }
+.d2-statpill--unconfigured { color: var(--text-muted); }
+
+/* spark panel (the wrapped sparkline) */
+.d2-spark-wrap {
+  background: var(--border-light); border-radius: 8px;
+  padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 8px;
+}
+.d2-spark-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 10px;
+  color: var(--text-muted); letter-spacing: 0.6px; text-transform: uppercase;
+}
+.d2-spark-val { font-size: 15px; color: var(--text-primary); font-weight: 500; letter-spacing: -0.3px; text-transform: none; }
+.d2-spark-val-mute { color: var(--text-muted); }
+.d2-spark { height: 36px; display: flex; align-items: flex-end; gap: 2px; }
+.d2-spark-bar { flex: 1; background: var(--accent); border-radius: 1.5px; opacity: 0.9; }
+.d2-rescard--unconfigured .d2-spark-bar { background: var(--border); opacity: 0.8; }
+.d2-rescard--unconfigured .d2-spark-val { color: var(--text-muted); }
+.d2-rescard--incomplete .d2-spark-bar { background: var(--warning); opacity: 0.85; }
+
+/* tree-style meta inside cards */
+.d2-tree {
+  font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 10.5px;
+  color: var(--text-muted); line-height: 1.65;
+  display: flex; flex-direction: column;
+}
+.d2-tree-line { display: grid; grid-template-columns: 14px 64px 1fr; gap: 4px; align-items: baseline; }
+.d2-tree-glyph { color: var(--text-muted); opacity: 0.5; }
+.d2-tree-key { color: var(--text-muted); letter-spacing: 0.4px; }
+.d2-tree-val { color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.d2-tree-val-mute { color: var(--text-secondary); }
+
+.d2-cardcta {
+  display: flex; justify-content: space-between; align-items: center;
+  padding-top: 12px; border-top: 1px solid var(--border);
+}
+.d2-cta-link { font-size: 13px; font-weight: 500; color: var(--text-primary); display: inline-flex; align-items: center; gap: 6px; }
+.d2-cta-link.is-mute { color: var(--text-secondary); font-weight: 400; }
+.d2-cta-link.is-warn { color: var(--warning); }
+.d2-cta-secondary {
+  font-size: 11.5px; padding: 5px 10px; border-radius: 6px;
+  background: transparent; border: 1px solid var(--border);
+  color: var(--text-secondary); cursor: pointer;
+}
+.d2-cta-kbd {
+  font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 9.5px;
+  padding: 1px 5px; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--text-muted); margin-left: 6px;
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   5 · WIZARD PROGRESS STRIP
+   ────────────────────────────────────────────────────────────────── */
+.d2-progress { display: flex; align-items: center; gap: 8px; margin-bottom: 24px; }
+.d2-progress-step { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.d2-progress-bar { height: 3px; background: var(--border); border-radius: 999px; position: relative; overflow: hidden; }
+.d2-progress-bar-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); border-radius: 999px; }
+.d2-progress-step.is-done .d2-progress-bar-fill { width: 100%; background: var(--success); }
+.d2-progress-step.is-active .d2-progress-bar-fill { width: 48%; }
+.d2-progress-label {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 11.5px; color: var(--text-muted);
+  font-family: ui-monospace, "JetBrains Mono", monospace; letter-spacing: 0.4px;
+}
+.d2-progress-step.is-active .d2-progress-label,
+.d2-progress-step.is-active .d2-progress-label-num { color: var(--accent); }
+.d2-progress-step.is-done .d2-progress-label,
+.d2-progress-step.is-done .d2-progress-label-num { color: var(--success); }
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   6 · SCANNING SPLIT (live card + tree)
+   ────────────────────────────────────────────────────────────────── */
+.d2-scan { display: grid; gap: 18px; grid-template-columns: 1fr 1fr; align-items: start; }
+@media (max-width: 900px) { .d2-scan { grid-template-columns: 1fr; } }
+
+.d2-scan-now {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 20px 22px;
+  display: flex; flex-direction: column; gap: 16px;
+  position: relative; overflow: hidden;
+}
+.d2-scan-now::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, var(--accent), transparent);
+}
+.d2-scan-now-tag {
+  display: flex; align-items: center; gap: 8px;
+  font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 10.5px;
+  letter-spacing: 1px; text-transform: uppercase; color: var(--accent);
+}
+.d2-pulse-dot {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--accent);
+  animation: d2-pulse 1.6s infinite ease-in-out;
+}
+@keyframes d2-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent-border); }
+  50%      { box-shadow: 0 0 0 6px var(--accent-bg); }
+}
+.d2-scan-now-title { font-size: 20px; font-weight: 600; letter-spacing: -0.4px; line-height: 1.25; margin: 0; }
+.d2-scan-now-detail { font-size: 12.5px; color: var(--text-secondary); margin: 0; }
+.d2-scan-stats {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 0;
+  border-top: 1px solid var(--border); padding-top: 16px;
+}
+.d2-scan-stat { padding-right: 16px; }
+.d2-scan-stat + .d2-scan-stat { padding-left: 16px; border-left: 1px solid var(--border); }
+.d2-scan-stat-num { font-size: 22px; font-weight: 600; letter-spacing: -0.6px; color: var(--text-primary); }
+.d2-scan-stat-label {
+  font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 10px;
+  color: var(--text-muted); letter-spacing: 0.6px; text-transform: uppercase;
+  margin-top: 4px;
+}
+
+.d2-scan-tree {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 18px 20px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.d2-scan-tree-head {
+  display: flex; justify-content: space-between; align-items: center;
+  font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 10.5px;
+  letter-spacing: 0.8px; text-transform: uppercase; color: var(--text-muted);
+}
+.d2-scan-tree-body {
+  font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 12px;
+  line-height: 1.75; display: flex; flex-direction: column;
+}
+.d2-scan-tree-row { display: grid; grid-template-columns: 14px 1fr auto; gap: 8px; align-items: baseline; }
+.d2-scan-tree-row.is-active { background: var(--accent-bg); margin: 0 -10px; padding: 2px 10px; border-radius: 4px; }
+.d2-scan-tree-row.is-active .d2-scan-tree-text { color: var(--accent); }
+.d2-scan-tree-glyph { color: var(--text-muted); opacity: 0.5; }
+.d2-scan-tree-text { color: var(--text-primary); }
+.d2-scan-tree-text-mute { color: var(--text-muted); }
+.d2-scan-tree-count { font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 10.5px; color: var(--text-muted); }
+.d2-scan-tree-count.is-ok { color: var(--success); }
+.d2-scan-tree-count.is-active { color: var(--accent); }
+.d2-scan-tree-pad { padding-left: 16px; }
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   7 · FINDINGS
+   ────────────────────────────────────────────────────────────────── */
+.d2-find-hero {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 24px;
+  display: grid; gap: 32px;
+  grid-template-columns: 240px 1fr; align-items: center;
+  margin-bottom: 24px;
+}
+@media (max-width: 720px) { .d2-find-hero { grid-template-columns: 1fr; gap: 20px; } }
+
+.d2-find-gauge { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.d2-find-gauge-tag {
+  font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 10.5px;
+  letter-spacing: 1px; text-transform: uppercase; color: var(--text-muted);
+}
+.d2-find-gauge-num {
+  font-size: 56px; font-weight: 600; letter-spacing: -1.8px;
+  line-height: 1; color: var(--text-primary);
+  display: flex; align-items: baseline; gap: 6px;
+}
+.d2-find-gauge-num sup { font-size: 14px; color: var(--text-muted); font-weight: 500; }
+.d2-find-gauge-track {
+  width: 100%; height: 6px; background: var(--border-light);
+  border-radius: 999px; position: relative; overflow: hidden;
+}
+.d2-find-gauge-fill {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  background: linear-gradient(90deg, var(--success), var(--accent));
+  border-radius: 999px;
+}
+.d2-find-gauge-meta {
+  display: flex; gap: 12px;
+  font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 10.5px;
+  color: var(--text-muted); letter-spacing: 0.4px; text-transform: uppercase;
+}
+.d2-find-summary { font-size: 14px; color: var(--text-primary); line-height: 1.55; }
+.d2-find-summary strong { font-weight: 600; }
+.d2-find-summary-meta {
+  display: flex; align-items: center; gap: 12px; margin-top: 14px;
+  font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 11px; color: var(--text-muted);
+}
+
+.d2-find-section-title { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+.d2-find-section-title h3 { font-size: 15px; font-weight: 600; margin: 0; letter-spacing: -0.2px; }
+.d2-find-section-title span { font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 11px; color: var(--text-muted); }
+
+.d2-find-grid { display: grid; gap: 12px; grid-template-columns: 1fr 1fr 1fr; }
+@media (max-width: 900px) { .d2-find-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 600px) { .d2-find-grid { grid-template-columns: 1fr; } }
+
+.d2-find-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px 18px;
+  display: flex; flex-direction: column; gap: 14px; min-height: 140px;
+}
+.d2-find-card--needs { background: var(--warning-bg); border-color: transparent; }
+.d2-find-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.d2-find-card-name { font-size: 14px; font-weight: 600; letter-spacing: -0.2px; }
+.d2-find-card-desc { font-size: 12px; color: var(--text-secondary); margin-top: 2px; line-height: 1.4; }
+.d2-find-card-preview { margin-top: auto; color: var(--accent); }
+.d2-find-card-preview svg { display: block; width: 100%; height: 40px; }
+.d2-find-card--needs .d2-find-card-preview {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11.5px; color: var(--warning);
+  font-family: ui-monospace, "JetBrains Mono", monospace;
+}
+.d2-find-card--needs .d2-find-card-preview code {
+  padding: 2px 6px; background: rgba(255,255,255,0.5); border-radius: 4px;
+}
+[data-theme="dark"] .d2-find-card--needs .d2-find-card-preview code {
+  background: rgba(0,0,0,0.3);
+}
+
+.d2-find-improve {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 20px 22px; margin-top: 24px;
+}
+.d2-find-improve-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
+.d2-find-improve-title { font-size: 16px; font-weight: 600; letter-spacing: -0.2px; margin: 0; }
+.d2-find-improve-sub { font-size: 12.5px; color: var(--text-secondary); margin: 4px 0 0; }
+.d2-find-improve-item {
+  display: grid; gap: 16px;
+  grid-template-columns: 200px 1fr 140px;
+  padding: 14px 0; border-top: 1px solid var(--border);
+  align-items: center;
+}
+@media (max-width: 720px) { .d2-find-improve-item { grid-template-columns: 1fr; } }
+.d2-find-improve-field {
+  display: flex; align-items: center; gap: 10px;
+  font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 12.5px; color: var(--text-primary);
+}
+.d2-find-improve-field-tag {
+  font-size: 9.5px; padding: 2px 6px; border-radius: 3px;
+  background: var(--warning-bg); color: var(--warning);
+  letter-spacing: 0.6px; text-transform: uppercase;
+}
+.d2-find-improve-desc { font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; }
+.d2-find-improve-cta {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font-size: 12px; padding: 6px 12px; border-radius: 8px;
+  background: var(--text-primary); color: var(--bg); border: none; cursor: pointer;
+}
+.d2-find-improve-cta-kbd {
+  font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 10px;
+  padding: 1px 4px; background: rgba(255,255,255,0.18); border-radius: 3px;
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   8 · COMMAND BAR (persistent, sticks to bottom of screen)
+   ────────────────────────────────────────────────────────────────── */
+.d2-cmdbar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 11.5px; color: var(--text-muted);
+  position: sticky; bottom: 0; z-index: 10;
+}
+.d2-cmdbar-l, .d2-cmdbar-r { display: flex; align-items: center; gap: 16px; }
+.d2-cmdbar-cell { display: inline-flex; align-items: center; gap: 6px; }
+.d2-cmdbar-kbd {
+  font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 10px;
+  padding: 2px 6px; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--text-primary); background: var(--bg);
+}
+.d2-cmdbar-sep { opacity: 0.4; }
+.d2-cmdbar-status { display: inline-flex; align-items: center; gap: 6px; }
+.d2-cmdbar-status-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--success);
+  box-shadow: 0 0 0 2px var(--success-bg);
+}
+.d2-cmdbar-action {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 10px; border-radius: 6px;
+  background: var(--text-primary); color: var(--bg);
+  font-size: 11.5px; font-weight: 500; border: none; cursor: pointer;
+}
+.d2-cmdbar-action--accent { background: var(--accent); color: #fff; }
+
+
+/* ──────────────────────────────────────────────────────────────────────
+   9 · PAGE LAYOUT
+   ────────────────────────────────────────────────────────────────── */
+.d2-page {
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+  background: var(--bg);
+}
+.d2-page-body {
+  flex: 1;
+  padding: 36px 40px 24px;
+  max-width: 1180px;
+  margin: 0 auto;
+  width: 100%;
+}
+@media (max-width: 720px) {
+  .d2-page-body { padding: 24px 16px; }
+  .d2-pageheader { flex-direction: column; align-items: flex-start; }
+  .d2-pageheader-r { width: 100%; justify-content: flex-end; }
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   10 · LAYOUT GLUE (project-specific)
+   Wires the D v2 chrome into the existing SPA shell:
+   - On the /services and /setup routes the legacy .navbar is replaced by
+     the .d2-topbar, and the centered .container padding is dropped so the
+     d2-page can run full-bleed top to bottom.
+   ────────────────────────────────────────────────────────────────── */
+body.d2-route .navbar { display: none; }
+body.d2-route .container { max-width: none; margin: 0; padding: 0; }
+body.d2-route #statusPanel { display: none; }
+body.d2-route .resource-panel,
+.setup-page .d2-page {
+  margin: 0; max-width: none; padding: 0;
+  background: var(--bg);
+}
+/* The hub's resource-panel becomes the full-height d2 column when D-routed. */
+body.d2-route #resourcePanel.d2-page { margin: 0; }
+/* The d2-topbar theme toggle reuses the global .theme-toggle button styling. */
+.d2-topbar .theme-toggle { color: var(--text-secondary); }
+/* Improve-list CTA cell hosts the shared promptActionButton split-button. */
+.d2-find-improve-cta-wrap { display: flex; justify-content: flex-end; }
+@media (max-width: 720px) { .d2-find-improve-cta-wrap { justify-content: flex-start; } }
+/* Disabled forward CTAs read as inert. */
+.d2-headeraction:disabled,
+.d2-cmdbar-action:disabled { opacity: 0.45; cursor: not-allowed; }
