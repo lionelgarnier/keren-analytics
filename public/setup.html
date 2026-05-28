@@ -5,123 +5,144 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Setup wizard — Keren Analytics</title>
     <link rel="stylesheet" href="/styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" />
     <script src="/theme-init.js"></script>
   </head>
-  <body class="setup-page">
-    <nav class="navbar">
-      <div class="navbar-inner">
-        <div class="navbar-left">
-          <span class="logo">Keren Analytics</span>
-          <span class="badge badge-setup">Setup</span>
+  <body class="setup-page d2-route">
+    <div class="d2-page">
+      <!-- ===== D v2 topbar ===== -->
+      <div class="d2-topbar">
+        <div class="d2-topbar-l">
+          <span class="d2-mark"><span class="d2-mark-glyph">K</span>Keren<span class="d2-mark-tag">VIKL</span></span>
+          <div class="d2-tabs">
+            <a class="d2-tab" href="/services">Services</a>
+            <a class="d2-tab is-active" href="/setup">Setup</a>
+            <a class="d2-tab" href="#">Audit</a>
+            <a class="d2-tab" href="#">Settings</a>
+          </div>
         </div>
-        <div class="navbar-right">
+        <div class="d2-topbar-r">
           <button id="themeToggle" class="theme-toggle" aria-label="Toggle dark mode" title="Toggle theme">
             <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
             <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
           </button>
-          <a href="/" class="btn btn-ghost" id="skipToDashboard">Skip to dashboard</a>
+          <span class="d2-mark-tag" style="margin-left:0">⌘ K</span>
+          <span class="d2-avatar">··</span>
         </div>
       </div>
-    </nav>
 
-    <main class="setup-container">
-      <ol class="setup-stepper" aria-label="Setup steps">
-        <li data-step="scanning" class="setup-step active">
-          <span class="setup-step-num">1</span>
-          <span class="setup-step-label">Scanning</span>
-        </li>
-        <li data-step="findings" class="setup-step">
-          <span class="setup-step-num">2</span>
-          <span class="setup-step-label">AI findings</span>
-        </li>
-        <li data-step="validate" class="setup-step">
-          <span class="setup-step-num">3</span>
-          <span class="setup-step-label">Validate</span>
-        </li>
-        <li data-step="complete" class="setup-step">
-          <span class="setup-step-num">4</span>
-          <span class="setup-step-label">Save</span>
-        </li>
-      </ol>
+      <main class="d2-page-body">
+        <!-- Page header — content set per step by setup.js -->
+        <div class="d2-pageheader" id="setupHeader"></div>
 
-      <!-- Step 1: Scanning -->
-      <!-- Resource selection lives on the /services hub, not here — by the
-           time the wizard loads a resource is already selected. -->
-      <section id="step-scanning" class="setup-panel">
-        <div id="scanningPanel" class="setup-scanning hidden">
-          <div class="setup-spinner" id="scanningSpinner" aria-hidden="true"></div>
-          <h2 class="setup-h2" id="scanningHeading">Scanning your telemetry…</h2>
-          <p class="setup-narration" id="scanningNarration">Connecting to Application Insights…</p>
-          <ul class="setup-progress-log" id="scanningLog" aria-live="polite"></ul>
-          <div class="setup-error hidden" id="scanningError"></div>
-          <div class="setup-footer hidden" id="scanningFooter">
-            <button class="btn btn-ghost" id="scanningRescan">Re-scan</button>
-            <button class="btn btn-primary" id="scanningContinue">Continue to findings →</button>
+        <!-- 4-step progress strip -->
+        <div class="d2-progress" id="setupProgress" aria-label="Setup steps"></div>
+
+        <!-- Step 1: Scanning — live split (status card + streaming schema tree) -->
+        <section id="step-scanning" class="setup-panel">
+          <div id="scanningPanel" class="d2-scan hidden">
+            <div class="d2-scan-now">
+              <div class="d2-scan-now-tag">
+                <span class="d2-pulse-dot"></span>
+                <span id="scanNowTag">LIVE · STEP 01 OF 05</span>
+              </div>
+              <h2 class="d2-scan-now-title" id="scanningHeading">Connecting to telemetry</h2>
+              <p class="d2-scan-now-detail" id="scanningNarration">Connecting to Application Insights…</p>
+              <div class="d2-scan-stats">
+                <div class="d2-scan-stat">
+                  <div class="d2-scan-stat-num" id="scanStatDims">30</div>
+                  <div class="d2-scan-stat-label">Dimensions</div>
+                </div>
+                <div class="d2-scan-stat">
+                  <div class="d2-scan-stat-num" id="scanStatEvents">154</div>
+                  <div class="d2-scan-stat-label">Events / 7d</div>
+                </div>
+                <div class="d2-scan-stat">
+                  <div class="d2-scan-stat-num" id="scanStatTables">6</div>
+                  <div class="d2-scan-stat-label">Tables</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="d2-scan-tree">
+              <div class="d2-scan-tree-head">
+                <span id="scanTreeTitle">scan.tree</span>
+                <span id="scanTreeStream" style="display:flex;align-items:center;gap:6px;color:var(--accent)">
+                  <span class="d2-pulse-dot"></span> streaming
+                </span>
+              </div>
+              <div class="d2-scan-tree-body" id="scanningLog" aria-live="polite"></div>
+            </div>
           </div>
-        </div>
-      </section>
-
-      <!-- Step 2: AI findings — graph-level verdict per dashboard panel -->
-      <section id="step-findings" class="setup-panel hidden">
-        <header class="setup-panel-head">
-          <h2 class="setup-h2">What we can render for you</h2>
-          <p class="setup-subtitle" id="findingsSubtitle"></p>
-        </header>
-
-        <div class="setup-findings-summary hidden" id="findingsSummary"></div>
-
-        <div class="setup-graphs-grid" id="graphsGrid"></div>
-
-        <section class="setup-coverage-section">
-          <h3 class="setup-coverage-title">Improve your coverage</h3>
-          <p class="setup-coverage-intro" id="coverageIntro"></p>
-          <ul id="missingSignalsList" class="setup-missing-list"></ul>
+          <div class="setup-error hidden" id="scanningError"></div>
         </section>
 
-        <div class="setup-footer">
-          <button class="btn btn-ghost" id="findingsBack">Re-scan</button>
-          <button class="btn btn-primary" id="findingsContinue">Review &amp; save →</button>
-        </div>
-      </section>
+        <!-- Step 2: AI findings — hero + grid + improve list -->
+        <section id="step-findings" class="setup-panel hidden">
+          <div class="d2-find-hero hidden" id="findingsSummary"></div>
 
-      <!-- Step 3: Save — accept AI mapping, override hidden behind a disclosure -->
-      <section id="step-validate" class="setup-panel hidden">
-        <header class="setup-panel-head">
-          <h2 class="setup-h2">Save your mapping</h2>
-          <p class="setup-subtitle">
-            The AI proposed a mapping for the four canonical fields. Save as-is, or open
-            the technical view to override individual fields.
-          </p>
-        </header>
+          <div class="d2-find-section-title">
+            <h3>What we can render</h3>
+            <span id="findingsCounts"></span>
+          </div>
 
-        <div class="setup-validate-warning hidden" id="validateWarning"></div>
+          <div class="d2-find-grid" id="graphsGrid"></div>
 
-        <details class="setup-mapping-disclosure" id="mappingDisclosure">
-          <summary>Show / edit technical mapping</summary>
-          <table class="setup-mapping-table" id="validateTable">
-            <thead>
-              <tr><th>Canonical field</th><th>Active source</th><th>KQL expression</th><th></th></tr>
-            </thead>
-            <tbody id="validateBody"></tbody>
-          </table>
-        </details>
+          <div class="d2-find-improve" id="coverageSection">
+            <div class="d2-find-improve-head">
+              <div>
+                <h3 class="d2-find-improve-title">Improve your coverage</h3>
+                <p class="d2-find-improve-sub" id="coverageIntro"></p>
+              </div>
+            </div>
+            <div id="missingSignalsList"></div>
+          </div>
+        </section>
 
-        <div class="setup-footer">
-          <button class="btn btn-ghost" id="validateBack">← Back</button>
-          <button class="btn btn-primary" id="validateAcceptAll">Save mapping</button>
-          <button class="btn btn-primary hidden" id="validateSaveOverrides">Save my overrides</button>
-        </div>
-      </section>
+        <!-- Step 3: Save — accept AI mapping, override hidden behind a disclosure -->
+        <section id="step-validate" class="setup-panel hidden">
+          <header class="setup-panel-head">
+            <h2 class="setup-h2">Save your mapping</h2>
+            <p class="setup-subtitle">
+              The AI proposed a mapping for the four canonical fields. Save as-is, or open
+              the technical view to override individual fields.
+            </p>
+          </header>
 
-      <!-- Step 4: Saved -->
-      <section id="step-complete" class="setup-panel hidden">
-        <div class="setup-complete">
-          <div class="setup-complete-check" aria-hidden="true">✓</div>
-          <h2 class="setup-h2">Saved.</h2>
-          <p class="setup-narration" id="completeNarration">Loading your dashboard…</p>
-        </div>
-      </section>
-    </main>
+          <div class="setup-validate-warning hidden" id="validateWarning"></div>
+
+          <details class="setup-mapping-disclosure" id="mappingDisclosure">
+            <summary>Show / edit technical mapping</summary>
+            <table class="setup-mapping-table" id="validateTable">
+              <thead>
+                <tr><th>Canonical field</th><th>Active source</th><th>KQL expression</th><th></th></tr>
+              </thead>
+              <tbody id="validateBody"></tbody>
+            </table>
+          </details>
+
+          <div class="setup-footer">
+            <button class="btn btn-ghost" id="validateBack">← Back</button>
+            <button class="btn btn-primary" id="validateAcceptAll">Save mapping</button>
+            <button class="btn btn-primary hidden" id="validateSaveOverrides">Save my overrides</button>
+          </div>
+        </section>
+
+        <!-- Step 4: Saved -->
+        <section id="step-complete" class="setup-panel hidden">
+          <div class="setup-complete">
+            <div class="setup-complete-check" aria-hidden="true">✓</div>
+            <h2 class="setup-h2">Saved.</h2>
+            <p class="setup-narration" id="completeNarration">Loading your dashboard…</p>
+          </div>
+        </section>
+      </main>
+
+      <!-- Persistent command bar — content set per step by setup.js -->
+      <div class="d2-cmdbar" id="setupCmdbar"></div>
+    </div>
 
     <script src="/promptActionButton.js"></script>
     <script src="/setup.js"></script>

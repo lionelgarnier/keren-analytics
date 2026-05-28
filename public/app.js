@@ -3,7 +3,6 @@ const connectButton = document.getElementById("connectButton");
 const logoutButton = document.getElementById("logoutButton");
 const statusPanel = document.getElementById("statusPanel");
 const resourcePanel = document.getElementById("resourcePanel");
-const resourceList = document.getElementById("resourceList");
 const dashboardPanel = document.getElementById("dashboardPanel");
 const rangeSelect = document.getElementById("rangeSelect");
 const selectedResourceBar = document.getElementById("selectedResourceBar");
@@ -415,6 +414,7 @@ async function gotoService(resource, card, destination) {
       return;
     }
     resourcePanel.classList.add("hidden");
+    setD2Route(false);
     showSelectedResource(resource.appInsightsName);
     router.push({ page: "dashboard", service: resource.appInsightsName, tab: "marketing" });
     await loadDashboard(rangeSelect.value);
@@ -425,32 +425,61 @@ async function gotoService(resource, card, destination) {
   }
 }
 
+/* ========== D v2 service hub ========== */
+
+// Toggle the operator-console chrome (topbar replaces .navbar, full-bleed
+// container) for the /services route. The dashboard keeps .navbar.
+function setD2Route(active) {
+  document.body.classList.toggle("d2-route", active);
+}
+
+// Pure-CSS sparkline bar heights (0-100). Mirrors SparkBarsD2 in the D v2
+// reference (handoff-d2/reference-jsx/screens-dir-d2.jsx) so each status reads
+// the same: ready rises, incomplete spikes, unconfigured is a flat placeholder.
+function barHeights(kind, n = 22) {
+  const seed = kind.length;
+  return Array.from({ length: n }, (_, i) => {
+    const t = i / (n - 1);
+    let v;
+    if (kind === "rising") v = 28 + t * 62 + Math.sin(i + seed) * 8;
+    else if (kind === "flat") v = 52 + Math.sin(i + seed) * 14;
+    else if (kind === "spiky") v = 28 + Math.abs(Math.sin(i * 0.9 + seed)) * 64;
+    else if (kind === "placeholder") v = 8 + (i % 3) * 4;
+    else v = 50;
+    return Math.max(6, Math.min(96, v));
+  });
+}
+
+const D2_SPARK_KIND = { ready: "rising", incomplete: "spiky", unconfigured: "placeholder" };
+const D2_CTA_CLASS = { ready: "", incomplete: " is-warn", unconfigured: " is-mute" };
+
+const D2_THEME_TOGGLE_SVG =
+  '<svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>' +
+  '<svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
+
+// Bucket detectEnvironment()'s css class into a D v2 chip filter key.
+function d2EnvKey(env) {
+  if (env.css === "env-prod") return "prod";
+  if (env.css === "env-staging") return "staging";
+  if (env.css === "env-dev") return "dev";
+  return "other";
+}
+
+// Minimal HTML escaper for strings interpolated into card markup.
+function escapeHtmlApp(value) {
+  if (value === null || value === undefined) return "";
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function renderResources(resources) {
   lastDiscoveredResources = resources;
-  resourceList.innerHTML = "";
   statusPanel.textContent = "";
-
-  const searchWrapper = document.getElementById("resourceSearchWrapper");
-  const searchInput = document.getElementById("resourceSearchInput");
-  const emptySearch = document.getElementById("resourceEmptySearch");
-
-  if (resources.length >= 3 && searchWrapper) {
-    searchWrapper.classList.remove("hidden");
-    searchInput.value = "";
-    searchInput.oninput = () => {
-      const q = searchInput.value.toLowerCase();
-      let visible = 0;
-      resourceList.querySelectorAll(".resource-card-v2").forEach((c) => {
-        const match = !q || (c.dataset.search || "").includes(q);
-        c.style.display = match ? "" : "none";
-        if (match) visible++;
-      });
-      if (emptySearch) emptySearch.classList.toggle("hidden", visible > 0);
-    };
-  } else if (searchWrapper) {
-    searchWrapper.classList.add("hidden");
-  }
-  if (emptySearch) emptySearch.classList.add("hidden");
+  setD2Route(true);
 
   const envOrder = { "env-prod": 0, "env-staging": 1, "env-dev": 2, "env-qa": 3, "env-default": 4 };
   const sorted = [...resources].sort((a, b) => {
@@ -459,107 +488,171 @@ function renderResources(resources) {
     return d !== 0 ? d : (a.appInsightsName || "").localeCompare(b.appInsightsName || "");
   });
 
-  const ICON_FOLDER = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
-  const ICON_DB = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>';
-  const ICON_SUB = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+  const counts = { all: sorted.length, prod: 0, staging: 0, dev: 0 };
+  for (const r of sorted) {
+    const key = d2EnvKey(detectEnvironment(r));
+    if (key in counts) counts[key]++;
+  }
 
-  sorted.forEach((resource, idx) => {
+  const chip = (key, label) =>
+    `<button type="button" class="d2-chip${key === "all" ? " is-active" : ""}" data-env="${key}">${label} <span class="d2-chip-count">${counts[key]}</span></button>`;
+
+  // Full operator-console shell, rebuilt each render. resourcePanel itself is
+  // the full-height d2 column; topbar + body + command bar are its children.
+  resourcePanel.className = "resource-panel d2-page";
+  resourcePanel.innerHTML = `
+    <div class="d2-topbar">
+      <div class="d2-topbar-l">
+        <span class="d2-mark"><span class="d2-mark-glyph">K</span>Keren<span class="d2-mark-tag">VIKL</span></span>
+        <div class="d2-tabs">
+          <a class="d2-tab is-active" href="/services">Services</a>
+          <a class="d2-tab" href="/setup">Setup</a>
+          <a class="d2-tab" href="#">Audit</a>
+          <a class="d2-tab" href="#">Settings</a>
+        </div>
+      </div>
+      <div class="d2-topbar-r">
+        <button type="button" id="d2ThemeToggle" class="theme-toggle" aria-label="Toggle dark mode" title="Toggle theme">${D2_THEME_TOGGLE_SVG}</button>
+        <span class="d2-mark-tag" style="margin-left:0">⌘ K</span>
+        <span class="d2-avatar">··</span>
+      </div>
+    </div>
+    <div class="d2-page-body">
+      <div class="d2-pageheader">
+        <div class="d2-pageheader-l">
+          <div class="d2-breadcrumb">
+            <span>vikl.fr</span>
+            <span class="d2-breadcrumb-sep">/</span>
+            <span class="d2-breadcrumb-here">services</span>
+            <span class="d2-breadcrumb-tag">${counts.all} connected</span>
+          </div>
+          <h1 class="d2-h1">Services</h1>
+          <p class="d2-sub">${counts.all} Application Insights workspace${counts.all === 1 ? "" : "s"}. Open a ready service or finish setting one up — Keren maps the schema, then the AI tells you what's renderable.</p>
+        </div>
+        <div class="d2-pageheader-r">
+          <button type="button" class="d2-headeraction" id="d2FilterBtn">⌘K Filter</button>
+          <button type="button" class="d2-headeraction d2-headeraction--accent" id="d2ConnectBtn">+ Connect workspace</button>
+        </div>
+      </div>
+      <div class="d2-toolbar">
+        <div class="d2-chips" id="d2Chips">
+          ${chip("all", "All")}${chip("prod", "Prod")}${chip("staging", "Staging")}${chip("dev", "Dev")}
+        </div>
+        <div class="d2-search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="resourceSearchInput" placeholder="Filter by name, workspace, group…" />
+          <span class="d2-search-kbd">⌘K</span>
+        </div>
+      </div>
+      <div class="d2-resgrid" id="resourceList"></div>
+      <div id="resourceEmptySearch" class="resource-empty-search hidden"><p>No resources match your search.</p></div>
+    </div>
+    <div class="d2-cmdbar">
+      <div class="d2-cmdbar-l">
+        <span class="d2-cmdbar-status"><span class="d2-cmdbar-status-dot"></span>synced · ${new Date().toLocaleTimeString([], { hour12: false })}</span>
+        <span class="d2-cmdbar-sep">·</span>
+        <span>services · ${counts.all} node${counts.all === 1 ? "" : "s"}</span>
+      </div>
+      <div class="d2-cmdbar-r">
+        <span class="d2-cmdbar-cell"><span class="d2-cmdbar-kbd">↑</span><span class="d2-cmdbar-kbd">↓</span>navigate</span>
+        <span class="d2-cmdbar-cell"><span class="d2-cmdbar-kbd">↵</span>open</span>
+        <span class="d2-cmdbar-cell"><span class="d2-cmdbar-kbd">⌘K</span>filter</span>
+        <button type="button" class="d2-cmdbar-action" id="d2CmdConnectBtn">+ Connect workspace</button>
+      </div>
+    </div>
+  `;
+
+  const grid = resourcePanel.querySelector("#resourceList");
+  const emptySearch = resourcePanel.querySelector("#resourceEmptySearch");
+  const searchInput = resourcePanel.querySelector("#resourceSearchInput");
+
+  sorted.forEach((resource) => {
     const env = detectEnvironment(resource);
     const wsName = extractWorkspaceName(resource.workspaceId);
     const status = SERVICE_STATUS_META[resource.status] ? resource.status : "unconfigured";
     const statusMeta = SERVICE_STATUS_META[status];
     const destination = status === "ready" ? "dashboard" : "setup";
+    const envKey = d2EnvKey(env);
 
     const card = document.createElement("div");
-    card.className = `resource-card-v2 ${env.css} resource-card-status-${status}`;
-    card.style.animationDelay = `${idx * 60}ms`;
+    card.className = `d2-rescard d2-rescard--${status}`;
+    card.dataset.env = envKey;
     card.dataset.search = [resource.appInsightsName, resource.subscriptionId, resource.resourceGroup, wsName, env.label].join(" ").toLowerCase();
 
-    // Header: name + env badge
-    const top = document.createElement("div");
-    top.className = "resource-card-top";
+    const envBadge = env.short
+      ? `<span style="opacity:0.5">·</span><span class="d2-env d2-env--${envKey}">${escapeHtmlApp(env.short)}</span>`
+      : "";
+    const bars = barHeights(D2_SPARK_KIND[status])
+      .map((h) => `<span class="d2-spark-bar" style="height:${h}%"></span>`).join("");
+    const sparkValClass = status === "unconfigured" ? "d2-spark-val d2-spark-val-mute" : "d2-spark-val";
+    const ctaFooter = status === "ready"
+      ? `<button type="button" class="d2-cta-secondary" data-reconfigure>Reconfigurer</button>`
+      : (status === "unconfigured" ? `<span class="d2-cta-kbd">↵</span>` : "");
 
-    const nameBlock = document.createElement("div");
-    const nameEl = document.createElement("div");
-    nameEl.className = "resource-card-name";
-    nameEl.textContent = resource.appInsightsName;
-    nameBlock.appendChild(nameEl);
-    const typeEl = document.createElement("div");
-    typeEl.className = "resource-card-type";
-    typeEl.textContent = "Application Insights";
-    nameBlock.appendChild(typeEl);
-    top.appendChild(nameBlock);
+    card.innerHTML = `
+      <div class="d2-rescard-head">
+        <div>
+          <div class="d2-rescard-name">${escapeHtmlApp(resource.appInsightsName)}</div>
+          <div class="d2-rescard-sub">Application Insights ${envBadge}</div>
+        </div>
+        <span class="d2-statpill d2-statpill--${status}"><span class="d2-statpill-dot"></span>${escapeHtmlApp(statusMeta.label)}</span>
+      </div>
+      <div class="d2-spark-wrap">
+        <div class="d2-spark-head"><span>Events · 7d</span><span class="${sparkValClass}">—</span></div>
+        <div class="d2-spark">${bars}</div>
+      </div>
+      <div class="d2-tree">
+        <div class="d2-tree-line"><span class="d2-tree-glyph">┌</span><span class="d2-tree-key">sub</span><span class="d2-tree-val d2-tree-val-mute" title="${escapeHtmlApp(resource.subscriptionId || "")}">${escapeHtmlApp(truncateGuid(resource.subscriptionId))}</span></div>
+        <div class="d2-tree-line"><span class="d2-tree-glyph">├</span><span class="d2-tree-key">rg</span><span class="d2-tree-val" title="${escapeHtmlApp(resource.resourceGroup || "")}">${escapeHtmlApp(resource.resourceGroup || "—")}</span></div>
+        <div class="d2-tree-line"><span class="d2-tree-glyph">└</span><span class="d2-tree-key">ws</span><span class="d2-tree-val" title="${escapeHtmlApp(resource.workspaceId || "")}">${escapeHtmlApp(wsName)}</span></div>
+      </div>
+      <div class="d2-cardcta">
+        <span class="d2-cta-link${D2_CTA_CLASS[status]}">${escapeHtmlApp(statusMeta.action)} →</span>
+        ${ctaFooter}
+      </div>
+    `;
 
-    if (env.short) {
-      const badge = document.createElement("span");
-      badge.className = `resource-card-env-badge ${env.css}`;
-      badge.textContent = env.short;
-      top.appendChild(badge);
-    }
-    card.appendChild(top);
-
-    // Per-resource configuration status
-    const statusRow = document.createElement("div");
-    statusRow.className = "resource-card-statusrow";
-    const statusDot = document.createElement("span");
-    statusDot.className = "resource-status-dot";
-    statusRow.appendChild(statusDot);
-    const statusText = document.createElement("span");
-    statusText.className = "resource-status-label";
-    statusText.textContent = statusMeta.label;
-    statusRow.appendChild(statusText);
-    card.appendChild(statusRow);
-
-    // Metadata rows
-    const meta = document.createElement("div");
-    meta.className = "resource-card-meta";
-
-    const addRow = (iconSvg, text, title) => {
-      const row = document.createElement("div");
-      row.className = "resource-card-meta-row";
-      const icon = document.createElement("span");
-      icon.innerHTML = iconSvg;
-      row.appendChild(icon);
-      const val = document.createElement("span");
-      val.className = "resource-card-meta-value";
-      val.textContent = text;
-      if (title) val.title = title;
-      row.appendChild(val);
-      return row;
-    };
-
-    if (resource.resourceGroup) {
-      meta.appendChild(addRow(ICON_FOLDER, resource.resourceGroup, resource.resourceGroup));
-    }
-    meta.appendChild(addRow(ICON_DB, wsName, resource.workspaceId));
-    meta.appendChild(addRow(ICON_SUB, truncateGuid(resource.subscriptionId), resource.subscriptionId));
-    card.appendChild(meta);
-
-    // Action footer
-    const action = document.createElement("div");
-    action.className = "resource-card-action";
-    const selText = document.createElement("span");
-    selText.className = "resource-card-select-text";
-    selText.innerHTML = `${statusMeta.action} <span class="resource-card-select-arrow">\u2192</span>`;
-    action.appendChild(selText);
-    if (status === "ready") {
-      const reconfigureBtn = document.createElement("button");
-      reconfigureBtn.type = "button";
-      reconfigureBtn.className = "resource-card-reconfigure";
-      reconfigureBtn.textContent = "Reconfigurer";
+    const reconfigureBtn = card.querySelector("[data-reconfigure]");
+    if (reconfigureBtn) {
       reconfigureBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         gotoService(resource, card, "setup");
       });
-      action.appendChild(reconfigureBtn);
     }
-    card.appendChild(action);
-
-    // Click handler — entire card is clickable
     card.addEventListener("click", () => gotoService(resource, card, destination));
-
-    resourceList.appendChild(card);
+    grid.appendChild(card);
   });
+
+  // Filter state: active env chip + free-text search, combined.
+  let activeEnv = "all";
+  const applyFilter = () => {
+    const q = (searchInput.value || "").toLowerCase();
+    let visible = 0;
+    grid.querySelectorAll(".d2-rescard").forEach((c) => {
+      const envOk = activeEnv === "all" || c.dataset.env === activeEnv;
+      const textOk = !q || (c.dataset.search || "").includes(q);
+      const match = envOk && textOk;
+      c.style.display = match ? "" : "none";
+      if (match) visible++;
+    });
+    if (emptySearch) emptySearch.classList.toggle("hidden", visible > 0);
+  };
+  searchInput.addEventListener("input", applyFilter);
+  resourcePanel.querySelectorAll(".d2-chip").forEach((c) => {
+    c.addEventListener("click", () => {
+      activeEnv = c.dataset.env;
+      resourcePanel.querySelectorAll(".d2-chip").forEach((x) => x.classList.toggle("is-active", x === c));
+      applyFilter();
+    });
+  });
+
+  // Theme toggle inside the d2 topbar (the global .navbar toggle is hidden).
+  resourcePanel.querySelector("#d2ThemeToggle")?.addEventListener("click", toggleTheme);
+
+  // "Connect workspace" reuses the existing Azure connect flow.
+  const connect = () => { window.location.href = "/auth/login"; };
+  resourcePanel.querySelector("#d2ConnectBtn")?.addEventListener("click", connect);
+  resourcePanel.querySelector("#d2CmdConnectBtn")?.addEventListener("click", connect);
 
   resourcePanel.classList.remove("hidden");
 }
@@ -3028,6 +3121,7 @@ window.addEventListener("popstate", async () => {
 
   if (route.page === "dashboard" && route.service) {
     resourcePanel.classList.add("hidden");
+    setD2Route(false);
     previewBanner.classList.add("hidden");
     hideLanding();
     isPreviewMode = false;

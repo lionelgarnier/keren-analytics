@@ -1,18 +1,21 @@
 /**
- * Setup wizard — Track F4 (ADR 0005).
+ * Setup wizard — Track F4 (ADR 0005), Direction D v2 chrome.
  *
  * 4-step state machine over /api/setup/{state,scan,findings,validate}.
  * Vanilla JS to match public/app.js conventions; no bundler.
+ *
+ * D v2 is presentation-only: the state machine, fetch calls, SSE handling,
+ * prompt-action-button, and validate flow are unchanged from the original
+ * wizard. Only the DOM each render function emits (and the page chrome —
+ * topbar / progress strip / command bar) changed. See handoff-d2/.
  */
 (function () {
   "use strict";
 
   const STEPS = ["scanning", "findings", "validate", "complete"];
 
-  // Each scanning step in the log is clickable post-scan: a renderer maps the
-  // findings payload onto a debug panel that expands beneath the step row.
-  // This gives the user (and us, when debugging) full transparency about what
-  // the orchestrator actually fetched at each stage.
+  // The five pipeline stages the scan streams over SSE. Order drives both the
+  // live "now" card and the schema tree on the right of the scanning split.
   const SCANNING_STEPS = [
     { key: "connect", label: "Connecting to Application Insights…" },
     { key: "customDimensions", label: "Reading custom dimensions…" },
@@ -21,31 +24,42 @@
     { key: "ai", label: "Asking the AI to make sense of it…" },
   ];
 
+  // Tree-row labels (mono, terse) + live-card copy per pipeline stage.
+  const SCAN_TREE_LABELS = {
+    connect: "connect",
+    customDimensions: "read.customDimensions",
+    eventVolumes: "count.events",
+    identity: "detect.identity",
+    ai: "llm.summarize",
+  };
+  const SCAN_TITLES = {
+    connect: "Connecting to telemetry",
+    customDimensions: "Reading custom dimensions",
+    eventVolumes: "Counting event types & volumes",
+    identity: "Detecting identity & sessions",
+    ai: "Asking the model to make sense of it",
+  };
+  const SCAN_DETAILS = {
+    connect: "Linking the Application Insights workspace and checking access.",
+    customDimensions: "Enumerating custom dimensions across every table.",
+    eventVolumes: "requests · pageViews · dependencies · traces · exceptions · customEvents.",
+    identity: "Resolving user, session, and page-path fields from the schema.",
+    ai: "Scoring which dashboards your tenant can credibly render.",
+  };
+
   const state = {
     step: "scanning",
     findings: null,        // /api/setup/findings response
     overrides: {},         // user-edited canonical fields
     activeSources: {},     // current "best guess" per canonical, used as form default
     csrfToken: null,
+    resourceName: null,    // for the breadcrumb / scan tree title
+    scanStepIdx: 0,        // active pipeline stage (0-based) for the cmdbar scope
+    scanComplete: false,   // gates the "Continue" CTA on the scanning step
   };
 
   // ── DOM helpers ───────────────────────────────────────────────
   function $(id) { return document.getElementById(id); }
-
-  function show(step) {
-    state.step = step;
-    for (const s of STEPS) {
-      const panel = document.querySelector(`#step-${s}`);
-      if (panel) panel.classList.toggle("hidden", s !== step);
-    }
-    for (const li of document.querySelectorAll(".setup-step")) {
-      const s = li.dataset.step;
-      const idx = STEPS.indexOf(s);
-      const cur = STEPS.indexOf(step);
-      li.classList.toggle("active", idx === cur);
-      li.classList.toggle("done", idx < cur);
-    }
-  }
 
   function escapeHtml(value) {
     if (value === null || value === undefined) return "";
@@ -57,40 +71,152 @@
       .replace(/'/g, "&#39;");
   }
 
-  // ── Scanning log helpers ──────────────────────────────────────
-  // The log starts as a fixed list of "pending" steps. /api/setup/scan/stream
-  // then pushes one SSE event per pipeline stage; each event marks its step
-  // done and reveals a live preview of the real numbers it collected. Once
-  // the stream ends we wire each row to its renderStepDetails() debug panel.
+  function show(step) {
+    state.step = step;
+    for (const s of STEPS) {
+      const panel = document.querySelector(`#step-${s}`);
+      if (panel) panel.classList.toggle("hidden", s !== step);
+    }
+    renderChrome(step);
+  }
 
-  function initScanningLog() {
-    const ul = $("scanningLog");
-    ul.innerHTML = "";
-    for (const step of SCANNING_STEPS) {
-      const li = document.createElement("li");
-      li.className = "setup-log-line setup-log-pending";
-      li.dataset.step = step.key;
-      li.innerHTML = `
-        <button type="button" class="setup-log-toggle" aria-expanded="false" aria-disabled="true">
-          <span class="setup-log-marker" aria-hidden="true"></span>
-          <span class="setup-log-body">
-            <span class="setup-log-text"></span>
-            <span class="setup-log-preview"></span>
-          </span>
-          <span class="setup-log-chevron" aria-hidden="true">▸</span>
-        </button>
-        <div class="setup-log-details" role="region" hidden></div>
-      `;
-      li.querySelector(".setup-log-text").textContent = step.label;
-      ul.appendChild(li);
+  // ── Page chrome (header + progress strip + command bar) ───────
+  // Rebuilt per step. Buttons are wired here (not in init) because the header
+  // and command bar markup is re-rendered as the wizard advances.
+
+  const PROGRESS = [
+    { label: "Scanning", num: "01" },
+    { label: "AI findings", num: "02" },
+    { label: "Validate", num: "03" },
+    { label: "Save", num: "04" },
+  ];
+
+  function renderProgress(cur) {
+    return PROGRESS.map((s, i) => {
+      const cls = i < cur ? "is-done" : i === cur ? "is-active" : "";
+      const marker = i < cur ? "✓" : i === cur ? "now" : "";
+      return `
+        <div class="d2-progress-step ${cls}">
+          <div class="d2-progress-bar"><div class="d2-progress-bar-fill"></div></div>
+          <div class="d2-progress-label">
+            <span><span class="d2-progress-label-num">${s.num}</span> · ${s.label}</span>
+            <span>${marker}</span>
+          </div>
+        </div>`;
+    }).join("");
+  }
+
+  function headerAction(id, label, accent) {
+    return `<button type="button" class="d2-headeraction${accent ? " d2-headeraction--accent" : ""}" id="${id}">${label}</button>`;
+  }
+
+  function cmdbar(scope, cta) {
+    const ctaHtml = cta
+      ? `<button type="button" class="d2-cmdbar-action${cta.accent ? " d2-cmdbar-action--accent" : ""}" id="${cta.id}"${cta.disabled ? " disabled" : ""}>${cta.label}</button>`
+      : "";
+    return `
+      <div class="d2-cmdbar-l">
+        <span class="d2-cmdbar-status"><span class="d2-cmdbar-status-dot"></span>synced · ${new Date().toLocaleTimeString([], { hour12: false })}</span>
+        <span class="d2-cmdbar-sep">·</span>
+        <span id="setupCmdScope">${scope}</span>
+      </div>
+      <div class="d2-cmdbar-r">
+        <span class="d2-cmdbar-cell"><span class="d2-cmdbar-kbd">↑</span><span class="d2-cmdbar-kbd">↓</span>navigate</span>
+        <span class="d2-cmdbar-cell"><span class="d2-cmdbar-kbd">↵</span>open</span>
+        <span class="d2-cmdbar-cell"><span class="d2-cmdbar-kbd">⌘K</span>filter</span>
+        ${ctaHtml}
+      </div>`;
+  }
+
+  function renderChrome(step) {
+    const header = $("setupHeader");
+    const progress = $("setupProgress");
+    const bar = $("setupCmdbar");
+    const res = state.resourceName || "resource";
+    const curIdx = STEPS.indexOf(step);
+    progress.innerHTML = renderProgress(curIdx);
+
+    if (step === "scanning") {
+      header.classList.remove("hidden");
+      header.innerHTML = `
+        <div class="d2-pageheader-l">
+          <div class="d2-breadcrumb">
+            <span>vikl.fr</span><span class="d2-breadcrumb-sep">/</span>
+            <span>services</span><span class="d2-breadcrumb-sep">/</span>
+            <span class="d2-breadcrumb-here">${escapeHtml(res)}</span><span class="d2-breadcrumb-sep">/</span>
+            <span class="d2-breadcrumb-here">setup</span>
+          </div>
+          <h1 class="d2-h1">Scanning telemetry</h1>
+          <p class="d2-sub">Reading custom dimensions, counting event types, mapping identity. The schema fills in as we go — Keren will then ask the model what dashboards your tenant can credibly render.</p>
+        </div>
+        <div class="d2-pageheader-r">
+          ${headerAction("scanningRescan", "Re-scan", false)}
+          ${headerActionDisabled("scanningContinue", "Continue →", true, !state.scanComplete)}
+        </div>`;
+      $("scanningRescan").addEventListener("click", () => startStep1());
+      $("scanningContinue").addEventListener("click", () => { if (state.scanComplete) show("findings"); });
+      bar.innerHTML = cmdbar(
+        `setup · scanning · ${String(state.scanStepIdx + 1).padStart(2, "0")} / 05`,
+        { id: "cmdContinue", label: "Continue → findings", accent: true, disabled: !state.scanComplete }
+      );
+      $("cmdContinue")?.addEventListener("click", () => { if (state.scanComplete) show("findings"); });
+      return;
+    }
+
+    if (step === "findings") {
+      const c = computeFindingCounts();
+      header.classList.remove("hidden");
+      header.innerHTML = `
+        <div class="d2-pageheader-l">
+          <div class="d2-breadcrumb">
+            <span>vikl.fr</span><span class="d2-breadcrumb-sep">/</span>
+            <span>${escapeHtml(res)}</span><span class="d2-breadcrumb-sep">/</span>
+            <span class="d2-breadcrumb-here">findings</span>
+            <span class="d2-breadcrumb-tag d2-breadcrumb-tag--ai">AI · ${escapeHtml(c.modelTag)}</span>
+          </div>
+          <h1 class="d2-h1">What we can render</h1>
+          <p class="d2-sub">${c.ready} of ${c.total} dashboards can render now.${c.needs > 0 ? ` ${c.needs} need extra instrumentation to be useful — we've drafted the prompts so you can ship them in minutes.` : ""}</p>
+        </div>
+        <div class="d2-pageheader-r">
+          ${headerAction("findingsBack", "← Re-scan", false)}
+          ${headerAction("findingsContinue", "Review & save →", true)}
+        </div>`;
+      $("findingsBack").addEventListener("click", () => startStep1());
+      $("findingsContinue").addEventListener("click", () => gotoValidate());
+      bar.innerHTML = cmdbar("setup · findings · 02 / 04",
+        { id: "cmdReview", label: "Review & save →", accent: true });
+      $("cmdReview").addEventListener("click", () => gotoValidate());
+      return;
+    }
+
+    // validate + complete keep the legacy panel headings; the d2 page header is
+    // hidden so the heading isn't duplicated.
+    header.classList.add("hidden");
+    header.innerHTML = "";
+    if (step === "validate") {
+      bar.innerHTML = cmdbar("setup · validate · 03 / 04",
+        { id: "cmdSave", label: "Save mapping →", accent: true });
+      $("cmdSave").addEventListener("click", () => {
+        const overrides = Object.keys(state.overrides).length > 0;
+        submitValidation(overrides ? "override" : "accept_all");
+      });
+    } else {
+      bar.innerHTML = cmdbar("setup · save · done", null);
     }
   }
 
-  // ── Live scan preview (Track F4 streaming) ────────────────────
-  // SSE "step" events arrive in bursts (the scan yields three at once).
-  // A reveal queue staggers them so the log still reads as sequential
-  // progress instead of three rows flipping in the same frame.
+  function headerActionDisabled(id, label, accent, disabled) {
+    return `<button type="button" class="d2-headeraction${accent ? " d2-headeraction--accent" : ""}" id="${id}"${disabled ? " disabled" : ""}>${label}</button>`;
+  }
 
+  function gotoValidate() {
+    renderValidate();
+    show("validate");
+  }
+
+  // ── SSE reveal queue ──────────────────────────────────────────
+  // The scan yields step events in bursts; this staggers their reveal so the
+  // tree still reads as sequential progress.
   let revealQueue = [];
   let revealing = false;
 
@@ -98,12 +224,10 @@
     revealQueue = [];
     revealing = false;
   }
-
   function enqueueReveal(fn) {
     revealQueue.push(fn);
     if (!revealing) drainRevealQueue();
   }
-
   function drainRevealQueue() {
     const next = revealQueue.shift();
     if (!next) { revealing = false; return; }
@@ -112,276 +236,119 @@
     setTimeout(drainRevealQueue, 320);
   }
 
-  const prefersReducedMotion =
-    !!(window.matchMedia &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-
-  function formatCount(n) {
-    return Number(n || 0).toLocaleString("en-US");
-  }
-
-  // Animate an integer from 0 to `to` on an easeOutCubic curve. The
-  // numbers are real — only the ramp is cosmetic.
-  function countUp(el, to) {
-    const target = Number(to) || 0;
-    if (prefersReducedMotion || target <= 0) {
-      el.textContent = formatCount(target);
-      return;
-    }
-    const duration = 650;
-    const start = performance.now();
-    function frame(now) {
-      const t = Math.min(1, (now - start) / duration);
-      const eased = 1 - Math.pow(1 - t, 3);
-      el.textContent = formatCount(Math.round(target * eased));
-      if (t < 1) requestAnimationFrame(frame);
-    }
-    requestAnimationFrame(frame);
-  }
-
-  // Mark a step done, reveal its preview, and light up the next one.
-  function applyStepEvent(stepKey, payload) {
-    const items = Array.from($("scanningLog").children);
-    const idx = items.findIndex((li) => li.dataset.step === stepKey);
-    if (idx === -1) return;
-    const li = items[idx];
-    li.classList.remove("setup-log-pending", "setup-log-active");
-    li.classList.add("setup-log-done");
-    const preview = li.querySelector(".setup-log-preview");
-    if (preview) {
-      preview.innerHTML = previewHtml(stepKey, payload || {});
-      preview.classList.add("is-shown");
-      preview.querySelectorAll("[data-count]").forEach((node) => {
-        countUp(node, node.dataset.count);
-      });
-    }
-    const next = items[idx + 1];
-    if (next) {
-      next.classList.remove("setup-log-pending");
-      next.classList.add("setup-log-active");
-      $("scanningNarration").textContent = SCANNING_STEPS[idx + 1].label;
-    }
-  }
-
-  const IDENTITY_FIELD_LABELS = {
-    canonicalUserId: "user",
-    canonicalSessionId: "session",
-    canonicalPagePath: "page",
-    canonicalReferrer: "referrer",
-  };
-
-  // Collapsed one-line preview for a finished step. Mirrors the keys
-  // emitted by emitScanSteps() / the "connect" + "ai" emits in the
-  // orchestrator — keep the two in sync.
-  function previewHtml(key, p) {
-    if (key === "connect") {
-      const name = p.resourceName || "your resource";
-      return `<span class="setup-preview-text">Connected to <code>${escapeHtml(name)}</code> · workspace linked</span>`;
-    }
-    if (key === "customDimensions") {
-      const keys = (p.sampleKeys || []).slice(0, 6);
-      const chips = keys.map((k, i) =>
-        `<span class="setup-preview-chip" style="animation-delay:${i * 70}ms">${escapeHtml(k)}</span>`
-      ).join("");
-      const extra = (p.keyCount || 0) - keys.length;
-      const more = extra > 0
-        ? `<span class="setup-preview-chip setup-preview-chip-more">+${extra}</span>`
-        : "";
-      return `
-        <span class="setup-preview-num" data-count="${p.keyCount || 0}">0</span>
-        <span class="setup-preview-label">custom dimensions · ${p.tableCount || 0} table(s)</span>
-        ${chips}${more}
+  // ── Scanning tree ─────────────────────────────────────────────
+  function initScanningTree() {
+    const body = $("scanningLog");
+    body.innerHTML = "";
+    SCANNING_STEPS.forEach((step, i) => {
+      const glyph = i === 0 ? "┌" : i === SCANNING_STEPS.length - 1 ? "└" : "├";
+      const row = document.createElement("div");
+      row.className = "d2-scan-tree-row";
+      row.dataset.step = step.key;
+      row.innerHTML = `
+        <span class="d2-scan-tree-glyph">${glyph}</span>
+        <span class="d2-scan-tree-text d2-scan-tree-text-mute">${SCAN_TREE_LABELS[step.key]}</span>
+        <span class="d2-scan-tree-count">queued</span>
       `;
+      body.appendChild(row);
+    });
+    if ($("scanTreeTitle")) {
+      $("scanTreeTitle").textContent = `scan.tree · ${state.resourceName || "telemetry"}`;
+    }
+  }
+
+  function treeRow(stepKey) {
+    return $("scanningLog").querySelector(`.d2-scan-tree-row[data-step="${stepKey}"]`);
+  }
+
+  function treeCount(key, p) {
+    if (key === "connect") return "✓ linked";
+    if (key === "customDimensions") return `✓ ${p.keyCount || 0} fields`;
+    if (key === "eventVolumes") return `✓ ${p.totalEvents || 0} events`;
+    if (key === "identity") return `✓ ${p.resolved || 0}/${p.total || 4}`;
+    if (key === "ai") return p.degraded ? "✓ heuristic" : `✓ ${p.ready || 0} ready`;
+    return "✓";
+  }
+
+  // Padded child rows for the data-rich stages (custom dimensions sample keys).
+  function insertSubRows(row, key, p) {
+    if (key !== "customDimensions") return;
+    const keys = (p.sampleKeys || []).slice(0, 3);
+    if (keys.length === 0) return;
+    const extra = (p.keyCount || 0) - keys.length;
+    const frag = document.createDocumentFragment();
+    const lines = keys.map((k) => ({ glyph: "├─", text: k, count: "✓" }));
+    if (extra > 0) lines.push({ glyph: "└─", text: `+ ${extra} more dimensions`, count: "··" });
+    else if (lines.length) lines[lines.length - 1].glyph = "└─";
+    for (const ln of lines) {
+      const el = document.createElement("div");
+      el.className = "d2-scan-tree-row d2-scan-tree-pad";
+      el.innerHTML = `
+        <span class="d2-scan-tree-glyph">${ln.glyph}</span>
+        <span class="d2-scan-tree-text d2-scan-tree-text-mute">${escapeHtml(ln.text)}</span>
+        <span class="d2-scan-tree-count${ln.count === "✓" ? " is-ok" : ""}">${ln.count}</span>
+      `;
+      frag.appendChild(el);
+    }
+    row.after(frag);
+  }
+
+  function updateScanStats(key, p) {
+    if (key === "customDimensions") {
+      if (p.keyCount != null) $("scanStatDims").textContent = p.keyCount;
+      if (p.tableCount != null) $("scanStatTables").textContent = p.tableCount;
     }
     if (key === "eventVolumes") {
-      return `
-        <span class="setup-preview-num" data-count="${p.totalEvents || 0}">0</span>
-        <span class="setup-preview-label">events · ${p.eventTypeCount || 0} type(s) · ${p.tableCount || 0} table(s)</span>
-      `;
+      if (p.totalEvents != null) $("scanStatEvents").textContent = p.totalEvents;
+      if (p.tableCount != null) $("scanStatTables").textContent = p.tableCount;
     }
-    if (key === "identity") {
-      const pills = (p.fields || []).map((f) => {
-        const cls = f.resolved ? "setup-preview-pill-yes" : "setup-preview-pill-no";
-        const mark = f.resolved ? "✓" : "—";
-        const label = IDENTITY_FIELD_LABELS[f.canonical] || f.canonical;
-        return `<span class="setup-preview-pill ${cls}">${mark} ${escapeHtml(label)}</span>`;
-      }).join("");
-      const gaps = (p.gapCount || 0) > 0
-        ? `<span class="setup-preview-label">${p.gapCount} gap(s) flagged</span>`
-        : `<span class="setup-preview-label">no gaps</span>`;
-      return `
-        <span class="setup-preview-label"><strong>${p.resolved || 0}/${p.total || 4}</strong> identity fields</span>
-        ${pills}${gaps}
-      `;
+  }
+
+  // Reflect the active pipeline stage in the left "live now" card + cmdbar.
+  function updateLiveCard(activeIdx) {
+    const step = SCANNING_STEPS[activeIdx];
+    if (!step) return;
+    state.scanStepIdx = activeIdx;
+    $("scanNowTag").textContent = `LIVE · STEP ${String(activeIdx + 1).padStart(2, "0")} OF 05`;
+    $("scanningHeading").textContent = SCAN_TITLES[step.key] || step.label;
+    $("scanningNarration").textContent = SCAN_DETAILS[step.key] || step.label;
+    const scope = $("setupCmdScope");
+    if (scope) scope.textContent = `setup · scanning · ${String(activeIdx + 1).padStart(2, "0")} / 05`;
+  }
+
+  // Mark a stage done, advance the active row, and update the live card.
+  function applyStepEvent(stepKey, payload) {
+    const p = payload || {};
+    const row = treeRow(stepKey);
+    if (!row) return;
+    const idx = SCANNING_STEPS.findIndex((s) => s.key === stepKey);
+
+    row.classList.remove("is-active");
+    row.querySelector(".d2-scan-tree-text").classList.remove("d2-scan-tree-text-mute");
+    const countEl = row.querySelector(".d2-scan-tree-count");
+    countEl.className = "d2-scan-tree-count is-ok";
+    countEl.textContent = treeCount(stepKey, p);
+    insertSubRows(row, stepKey, p);
+    updateScanStats(stepKey, p);
+
+    if (stepKey === "connect" && p.resourceName && p.resourceName !== state.resourceName) {
+      state.resourceName = p.resourceName;
+      if ($("scanTreeTitle")) $("scanTreeTitle").textContent = `scan.tree · ${p.resourceName}`;
+      if (state.step === "scanning") renderChrome("scanning");
     }
-    if (key === "ai") {
-      if (p.degraded) {
-        return `<span class="setup-preview-label">Deterministic heuristic — no LLM call</span>`;
+
+    const next = SCANNING_STEPS[idx + 1];
+    if (next) {
+      const nextRow = treeRow(next.key);
+      if (nextRow) {
+        nextRow.classList.add("is-active");
+        nextRow.querySelector(".d2-scan-tree-text").classList.remove("d2-scan-tree-text-mute");
+        const nc = nextRow.querySelector(".d2-scan-tree-count");
+        nc.className = "d2-scan-tree-count is-active";
+        nc.textContent = "running";
       }
-      const summary = (p.summary || "").trim();
-      const truncated = summary.length > 90 ? summary.slice(0, 89) + "…" : summary;
-      const verdict = `<span class="setup-preview-label">${p.ready || 0} panel(s) ready · ${p.needsInstrumentation || 0} to instrument</span>`;
-      return truncated
-        ? `<span class="setup-preview-text">${escapeHtml(truncated)}</span> ${verdict}`
-        : verdict;
+      updateLiveCard(idx + 1);
     }
-    return "";
-  }
-
-  function markStepsComplete(findings) {
-    for (const li of $("scanningLog").children) {
-      li.classList.remove("setup-log-pending", "setup-log-active");
-      li.classList.add("setup-log-done");
-      const toggle = li.querySelector(".setup-log-toggle");
-      const details = li.querySelector(".setup-log-details");
-      toggle.removeAttribute("aria-disabled");
-      details.innerHTML = renderStepDetails(li.dataset.step, findings);
-      toggle.addEventListener("click", () => {
-        const expanded = toggle.getAttribute("aria-expanded") === "true";
-        toggle.setAttribute("aria-expanded", String(!expanded));
-        details.hidden = expanded;
-      });
-    }
-  }
-
-  function renderStepDetails(key, findings) {
-    const f = findings || {};
-    if (key === "connect") return renderConnectDetails(f);
-    if (key === "customDimensions") return renderCustomDimensionsDetails(f);
-    if (key === "eventVolumes") return renderEventVolumesDetails(f);
-    if (key === "identity") return renderIdentityDetails(f);
-    if (key === "ai") return renderAiDetails(f);
-    return "";
-  }
-
-  function renderConnectDetails(f) {
-    const r = f.selectedResource || {};
-    const span = f.scan?.timestampSpan || {};
-    const rows = [
-      ["Resource", r.appInsightsName || r.name],
-      ["Subscription", r.subscriptionId],
-      ["Resource group", r.resourceGroup],
-      ["Workspace ID", r.workspaceId],
-      ["Scanned at", f.scan?.scannedAt],
-      ["Earliest event", span.earliest],
-      ["Latest event", span.latest],
-    ];
-    return `<dl class="setup-log-kv">${rows.map(([k, v]) => `
-      <dt>${escapeHtml(k)}</dt><dd>${v ? `<code>${escapeHtml(v)}</code>` : "<em>—</em>"}</dd>
-    `).join("")}</dl>`;
-  }
-
-  function renderCustomDimensionsDetails(f) {
-    const cds = f.scan?.customDimensions || [];
-    if (cds.length === 0) {
-      return `<p class="setup-log-empty">No custom dimensions found in the scan window.</p>`;
-    }
-    const rows = cds.map((cd) => `
-      <tr>
-        <td><code>${escapeHtml(cd.keyName)}</code></td>
-        <td><code>${escapeHtml(cd.tableName)}</code></td>
-        <td>${cd.cardinality ?? "?"}</td>
-        <td>${cd.occurrences ?? "?"}</td>
-        <td>${(cd.samples || []).slice(0, 3).map((s) => `<code>${escapeHtml(s)}</code>`).join(", ") || "<em>—</em>"}</td>
-      </tr>
-    `).join("");
-    return `
-      <p class="setup-log-summary">${cds.length} custom-dimension key(s) detected across all tables. Sample values are PII-scrubbed before persistence.</p>
-      <div class="setup-log-table-wrap">
-        <table class="setup-log-table">
-          <thead><tr><th>Key</th><th>Table</th><th>Cardinality</th><th>Occurrences</th><th>Sample values</th></tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
-    `;
-  }
-
-  function renderEventVolumesDetails(f) {
-    const tables = f.scan?.tables || {};
-    const events = f.scan?.eventNames || [];
-    const tablePills = Object.entries(tables).map(([name, present]) => `
-      <li class="setup-pill setup-pill-${present ? "present" : "missing"}">${escapeHtml(name)}</li>
-    `).join("") || `<li class="setup-log-empty">No table presence info reported.</li>`;
-    const evRows = events.length === 0
-      ? `<tr><td colspan="2"><em>No events recorded in the scan window.</em></td></tr>`
-      : events.map((e) => `
-          <tr><td><code>${escapeHtml(e.name)}</code></td><td>${e.count}</td></tr>
-        `).join("");
-    return `
-      <h4 class="setup-log-h4">Tables populated</h4>
-      <ul class="setup-pill-list setup-log-pills">${tablePills}</ul>
-      <h4 class="setup-log-h4">Event types (${events.length})</h4>
-      <div class="setup-log-table-wrap">
-        <table class="setup-log-table">
-          <thead><tr><th>Event name</th><th>Count</th></tr></thead>
-          <tbody>${evRows}</tbody>
-        </table>
-      </div>
-    `;
-  }
-
-  function renderIdentityDetails(f) {
-    const eff = Array.isArray(f.effectiveMapping) ? f.effectiveMapping : [];
-    const gaps = f.scan?.gaps || [];
-    const mapRows = eff.length === 0
-      ? `<tr><td colspan="4"><em>No mapping produced yet.</em></td></tr>`
-      : eff.map((row) => `
-          <tr>
-            <td><code>${escapeHtml(row.canonical)}</code></td>
-            <td>${row.source ? `<code>${escapeHtml(row.source)}</code>` : "<em>—</em>"}</td>
-            <td><span class="setup-origin setup-origin-${escapeHtml(row.origin || "none")}">${escapeHtml(row.origin || "missing")}</span></td>
-            <td><span class="setup-confidence setup-confidence-${escapeHtml(row.confidence)}">${escapeHtml(row.confidence)}</span></td>
-          </tr>
-        `).join("");
-    const gapBlock = gaps.length === 0
-      ? `<p class="setup-log-empty">No gaps detected — canonical identity coverage looks complete.</p>`
-      : `<ul class="setup-gaps-list">${gaps.map((g) => `
-          <li class="setup-gap setup-gap-${escapeHtml(g.severity || "medium")}">
-            <strong>${escapeHtml(g.title)}</strong><span>${escapeHtml(g.detail || "")}</span>
-          </li>
-        `).join("")}</ul>`;
-    return `
-      <h4 class="setup-log-h4">Effective canonical mapping</h4>
-      <div class="setup-log-table-wrap">
-        <table class="setup-log-table">
-          <thead><tr><th>Canonical field</th><th>Source</th><th>Origin</th><th>Confidence</th></tr></thead>
-          <tbody>${mapRows}</tbody>
-        </table>
-      </div>
-      <h4 class="setup-log-h4">Gaps flagged by the heuristic</h4>
-      ${gapBlock}
-    `;
-  }
-
-  function renderAiDetails(f) {
-    const m = f.mapping;
-    if (!m) {
-      return `<p class="setup-log-empty">No AI mapping was returned — the deterministic fallback is in effect.</p>`;
-    }
-    const kv = [
-      ["Source", m.source],
-      ["Degraded", m.degraded ? "yes (fell back to deterministic)" : "no"],
-      ["Created at", m.createdAt],
-    ];
-    const recs = m.proposals?.dashboard_recommendations;
-    const recsBlock = recs ? `
-      <h4 class="setup-log-h4">Dashboard recommendations</h4>
-      <dl class="setup-log-kv">
-        <dt>Feature</dt><dd>${(recs.feature || []).map((s) => `<code>${escapeHtml(s)}</code>`).join(", ") || "<em>—</em>"}</dd>
-        <dt>Hide</dt><dd>${(recs.hide || []).map((s) => `<code>${escapeHtml(s)}</code>`).join(", ") || "<em>—</em>"}</dd>
-        <dt>Rationale</dt><dd>${escapeHtml(recs.rationale || "—")}</dd>
-      </dl>
-    ` : "";
-    return `
-      <dl class="setup-log-kv">${kv.map(([k, v]) => `
-        <dt>${escapeHtml(k)}</dt><dd>${v ? escapeHtml(v) : "<em>—</em>"}</dd>
-      `).join("")}</dl>
-      <h4 class="setup-log-h4">AI summary</h4>
-      <p class="setup-log-prose">${escapeHtml(m.proposals?.summary || "—")}</p>
-      ${recsBlock}
-      <h4 class="setup-log-h4">Raw proposals payload</h4>
-      <pre class="setup-log-json"><code>${escapeHtml(JSON.stringify(m.proposals ?? null, null, 2))}</code></pre>
-    `;
   }
 
   // ── API ───────────────────────────────────────────────────────
@@ -405,16 +372,13 @@
   }
 
   // ── Step 1 — Scanning ─────────────────────────────────────────
-  //
-  // Resource selection lives on the /services hub, not here. By the
-  // time the wizard loads, a resource is normally already selected; if
-  // none is and the tenant has several, we bounce back to the hub so
-  // there is a single place to pick a resource.
   function showScanningView() {
     $("scanningPanel").classList.remove("hidden");
   }
 
   async function startStep1() {
+    state.scanComplete = false;
+    state.scanStepIdx = 0;
     show("scanning");
     showScanningView();
 
@@ -441,9 +405,17 @@
       return;
     }
 
+    const selName =
+      discovery.selectedResource?.appInsightsName ||
+      discovery.selectedResource ||
+      (resources.length === 1 ? resources[0].appInsightsName : null);
+    if (selName) {
+      state.resourceName = typeof selName === "string" ? selName : selName.appInsightsName;
+      if (state.step === "scanning") renderChrome("scanning");
+    }
+
     if (discovery.selectedResource || discovery.autoSelected || resources.length === 1) {
-      // A resource is already selected (hub pre-selected it, or only one
-      // exists / the orchestrator auto-selected it). Scan it.
+      // A resource is already selected. Scan it.
       await runScan();
       return;
     }
@@ -454,39 +426,40 @@
 
   let activeEventSource = null;
 
-  // Drives step 1 over /api/setup/scan/stream. Each SSE "step" event
-  // reveals real numbers under its log row; "done" loads the findings
-  // and wires up the click-to-inspect detail panels.
+  // Drives step 1 over /api/setup/scan/stream. Each SSE "step" event advances
+  // the schema tree; "done" loads the findings and enables Continue.
   function runScan(opts = {}) {
     const narrationEl = $("scanningNarration");
     const headingEl = $("scanningHeading");
-    const spinnerEl = $("scanningSpinner");
-    const footerEl = $("scanningFooter");
     const errorEl = $("scanningError");
 
     // Reset scanning view for a fresh run (including Re-scan from findings).
     if (activeEventSource) { activeEventSource.close(); activeEventSource = null; }
     resetRevealQueue();
+    state.scanComplete = false;
+    state.scanStepIdx = 0;
     errorEl.classList.add("hidden");
     errorEl.innerHTML = "";
-    footerEl.classList.add("hidden");
-    spinnerEl.classList.remove("hidden");
-    headingEl.textContent = "Scanning your telemetry…";
-    initScanningLog();
+    initScanningTree();
+    if ($("scanTreeStream")) $("scanTreeStream").style.display = "";
 
     // Light up the first step; the rest advance as SSE events arrive.
-    const firstStep = $("scanningLog").children[0];
-    if (firstStep) {
-      firstStep.classList.remove("setup-log-pending");
-      firstStep.classList.add("setup-log-active");
+    const firstRow = treeRow(SCANNING_STEPS[0].key);
+    if (firstRow) {
+      firstRow.classList.add("is-active");
+      firstRow.querySelector(".d2-scan-tree-text").classList.remove("d2-scan-tree-text-mute");
+      const fc = firstRow.querySelector(".d2-scan-tree-count");
+      fc.className = "d2-scan-tree-count is-active";
+      fc.textContent = "running";
     }
-    narrationEl.textContent = SCANNING_STEPS[0].label;
+    updateLiveCard(0);
+    if (state.step === "scanning") renderChrome("scanning");
 
     const handleFailure = (err) => {
       resetRevealQueue();
       narrationEl.textContent = "Scan failed.";
       headingEl.textContent = "Scan failed.";
-      spinnerEl.classList.add("hidden");
+      if ($("scanTreeStream")) $("scanTreeStream").style.display = "none";
       errorEl.innerHTML = "";
       const msgEl = document.createElement("p");
       msgEl.className = "setup-error-message";
@@ -494,7 +467,6 @@
       actionsEl.className = "setup-error-actions";
 
       if (err.status === 401) {
-        // Session expired — bounce to "/" so the OAuth flow takes over.
         msgEl.textContent = "You're not signed in. Redirecting…";
         setTimeout(() => { window.location.href = "/"; }, 1200);
       } else if (
@@ -502,7 +474,6 @@
         (err.payload?.error === "RESOURCE_SELECTION_REQUIRED" ||
           err.payload?.error === "RESOURCE_NOT_SELECTED")
       ) {
-        // No resource selected — the /services hub is where you pick one.
         msgEl.textContent = "Choose a resource first. Redirecting…";
         setTimeout(() => { window.location.href = "/services"; }, 800);
       } else {
@@ -525,14 +496,15 @@
       return;
     }
 
-    // Don't auto-advance: stay on the scanning panel so the user can
-    // inspect each step. They click "Continue" to move on.
+    // Stay on the scanning panel so the user can inspect the tree. They click
+    // "Continue" (header or command bar) to advance.
     const finishScan = () => {
-      spinnerEl.classList.add("hidden");
-      headingEl.textContent = "Scan complete.";
-      narrationEl.textContent = "Click any step to inspect what we collected.";
-      markStepsComplete(state.findings);
-      footerEl.classList.remove("hidden");
+      headingEl.textContent = "Scan complete";
+      narrationEl.textContent = "Review the schema tree, then continue to the AI findings.";
+      $("scanNowTag").textContent = "DONE · 05 OF 05";
+      if ($("scanTreeStream")) $("scanTreeStream").style.display = "none";
+      state.scanComplete = true;
+      if (state.step === "scanning") renderChrome("scanning");
     };
 
     let settled = false;
@@ -587,6 +559,12 @@
   // ── Step 2 — Findings ─────────────────────────────────────────
   async function loadFindings() {
     state.findings = await api("GET", "/api/setup/findings");
+    if (state.findings?.selectedResource) {
+      state.resourceName =
+        state.findings.selectedResource.appInsightsName ||
+        state.findings.selectedResource.name ||
+        state.resourceName;
+    }
     renderFindings();
   }
 
@@ -594,122 +572,195 @@
   // drives the visual grid order on step 2; labels stay short to fit a card.
   const DASHBOARD_PANELS = [
     { id: "traffic",     label: "Traffic trends",      hint: "Visits over time, hourly peaks." },
-    { id: "users",       label: "User analytics",      hint: "Unique users, cohorts, retention." },
+    { id: "users",       label: "Users & cohorts",     hint: "Unique users, cohorts, retention." },
     { id: "sessions",    label: "Session insights",    hint: "Length, engagement, return rate." },
     { id: "pages",       label: "Top pages",           hint: "Most-viewed paths, content performance." },
-    { id: "geo",         label: "Geo distribution",    hint: "Where your traffic comes from." },
-    { id: "devices",     label: "Devices & browsers",  hint: "OS, browser, screen split." },
+    { id: "geo",         label: "Geography",           hint: "Country, city, language splits." },
+    { id: "devices",     label: "Devices & tech",      hint: "Browser, OS, device class." },
     { id: "performance", label: "Performance",         hint: "Slow endpoints, request duration." },
     { id: "campaigns",   label: "Campaigns & sources", hint: "UTM tracking, referrer attribution." },
   ];
 
-  function renderFindings() {
-    const f = state.findings;
-    if (!f) return;
-    const resName = f.selectedResource?.appInsightsName || f.selectedResource?.name || "your resource";
-    $("findingsSubtitle").textContent =
-      `Scanned ${resName} on ${new Date(f.scan.scannedAt).toLocaleString()}.`;
+  // Best-effort "blocked on <field>" hint for panels the AI tells us to hide.
+  // The actionable, data-true guidance is the improve list below.
+  const PANEL_BLOCKERS = {
+    users: "canonicalUserId",
+    sessions: "canonicalSessionId",
+    campaigns: "utm_source",
+    geo: "client_CountryOrRegion",
+    devices: "client_Browser",
+  };
 
-    // AI summary (banner). When the AI was degraded, we still get a deterministic
-    // result — say so explicitly so the user knows the cards below are
-    // heuristic, not LLM-judged.
-    const m = f.mapping;
-    const summary = m?.proposals?.summary;
-    const summaryEl = $("findingsSummary");
-    summaryEl.innerHTML = "";
-    if (summary) {
-      summaryEl.classList.remove("hidden");
-      summaryEl.innerHTML = `
-        <p class="setup-summary-text">${escapeHtml(summary)}</p>
-        <span class="setup-summary-source">via ${escapeHtml(m?.source || "ai")}</span>
-      `;
-    } else if (m?.degraded || !m) {
-      summaryEl.classList.remove("hidden");
-      summaryEl.innerHTML = `
-        <p class="setup-summary-text">No AI summary — the cards below reflect a deterministic heuristic. The dashboard will still render based on what we detected.</p>
-        <span class="setup-summary-source setup-summary-source-fallback">deterministic fallback</span>
-      `;
-    } else {
-      summaryEl.classList.add("hidden");
+  // Mirror of src/core/readinessScore.js (kept in sync) so the gauge can be
+  // computed client-side from the readinessReport already in the findings
+  // payload, without an extra endpoint.
+  const SIGNAL_WEIGHTS = {
+    pageViews: 20, requests: 15, sessionId: 15, userId: 15,
+    userAgent: 10, geo: 10, browserTimings: 15,
+  };
+  function readinessPercentage(report) {
+    if (!report) return 0;
+    const signals = report.availableSignals || {};
+    const degraded = Boolean(signals.userIdDegraded);
+    let score = 0;
+    for (const [key, points] of Object.entries(SIGNAL_WEIGHTS)) {
+      if (key === "userId" && degraded) continue;
+      if (signals[key]) score += points;
     }
+    return Math.round(score); // maxScore == 100
+  }
 
-    // Graph-level cards: ✓ ready / ! needs setup / · partial, driven by
-    // `dashboard_recommendations`. These cards are setup-time guidance only:
-    // the dashboard itself still renders from detected availability + mapping.
+  // Spark shape per ready panel (line chart). Mirrors handoff-d2 sparkPath.
+  const SPARK_KIND = {
+    traffic: "rising", users: "mound", sessions: "flat", pages: "flat",
+    geo: "mound", devices: "rising", performance: "spiky", campaigns: "rising",
+  };
+  function sparkPath(kind, w = 200, h = 40) {
+    const pts = {
+      rising: [4, 8, 7, 10, 9, 14, 12, 16, 18, 22, 24],
+      flat: [12, 13, 11, 12, 13, 14, 12, 13, 11, 12, 13],
+      spiky: [8, 9, 14, 10, 22, 11, 24, 12, 19, 10, 9],
+      mound: [4, 8, 12, 18, 22, 24, 22, 18, 12, 8, 4],
+    }[kind] || [10, 10, 10, 10, 10];
+    const max = Math.max(...pts), min = Math.min(...pts);
+    const range = Math.max(1, max - min);
+    const step = w / (pts.length - 1);
+    return pts.map((v, i) => {
+      const x = (i * step).toFixed(1);
+      const y = (h - ((v - min) / range) * (h - 2) - 1).toFixed(1);
+      return `${i === 0 ? "M" : "L"}${x} ${y}`;
+    }).join(" ");
+  }
+
+  // Resolve each panel to ready / needs, using dashboard_recommendations.
+  function panelVerdicts() {
+    const m = state.findings?.mapping;
     const recs = m?.proposals?.dashboard_recommendations || { feature: [], hide: [] };
     const featureSet = new Set(recs.feature || []);
     const hideSet = new Set(recs.hide || []);
+    return DASHBOARD_PANELS.map((panel) => {
+      let state_;
+      if (hideSet.has(panel.id)) state_ = "needs";
+      else if (featureSet.has(panel.id)) state_ = "ready";
+      else state_ = "ready"; // partial / unscored panels still render
+      return { ...panel, verdict: state_ };
+    });
+  }
+
+  function computeFindingCounts() {
+    const verdicts = panelVerdicts();
+    const ready = verdicts.filter((v) => v.verdict === "ready").length;
+    const needs = verdicts.filter((v) => v.verdict === "needs").length;
+    const m = state.findings?.mapping;
+    const missing = m?.proposals?.missing_signals || [];
+    const score = readinessPercentage(state.findings?.scan?.readinessReport);
+    return {
+      ready, needs, total: verdicts.length, score,
+      missingCount: missing.length,
+      modelTag: (m?.source || "ai").replace(/^azure-/, ""),
+    };
+  }
+
+  function renderFindings() {
+    const f = state.findings;
+    if (!f) return;
+    const counts = computeFindingCounts();
+    const m = f.mapping;
+
+    // Hero: readiness gauge + AI summary.
+    const hero = $("findingsSummary");
+    const summary = m?.proposals?.summary;
+    const summaryHtml = summary
+      ? `<div class="d2-find-summary">${escapeHtml(summary)}</div>`
+      : `<div class="d2-find-summary">${m?.degraded || !m
+          ? "No AI summary — the cards below reflect a deterministic heuristic. The dashboard still renders based on what we detected."
+          : "Your telemetry has been scanned. The cards below show what each dashboard can render today."}</div>`;
+    const sourceMeta = m
+      ? `<div class="d2-find-summary-meta"><span>via ${escapeHtml(m.source || "ai")}</span><span>·</span><span>scanned ${new Date(f.scan.scannedAt).toLocaleTimeString([], { hour12: false })}</span></div>`
+      : "";
+    hero.classList.remove("hidden");
+    hero.innerHTML = `
+      <div class="d2-find-gauge">
+        <div class="d2-find-gauge-tag">Readiness score</div>
+        <div class="d2-find-gauge-num">${counts.score}<sup>/100</sup></div>
+        <div class="d2-find-gauge-track"><div class="d2-find-gauge-fill" style="width:${counts.score}%"></div></div>
+        <div class="d2-find-gauge-meta">
+          <span>↑ ${100 - counts.score} to perfect</span>
+          <span>· ${counts.missingCount} signal${counts.missingCount === 1 ? "" : "s"}</span>
+        </div>
+      </div>
+      <div>
+        ${summaryHtml}
+        ${sourceMeta}
+      </div>
+    `;
+
+    // Section title counts.
+    $("findingsCounts").textContent = `${counts.ready} ready · ${counts.needs} to instrument`;
+
+    // Findings grid: ready cards get a sparkline, needs cards a blocked-on tag.
     const grid = $("graphsGrid");
     grid.innerHTML = "";
-    for (const panel of DASHBOARD_PANELS) {
-      const featured = featureSet.has(panel.id);
-      const hidden = hideSet.has(panel.id);
-      let statusClass, statusLabel, icon;
-      if (featured) { statusClass = "ready"; statusLabel = "Ready"; icon = "✓"; }
-      else if (hidden) { statusClass = "missing"; statusLabel = "Needs instrumentation"; icon = "!"; }
-      else { statusClass = "partial"; statusLabel = "Partial"; icon = "·"; }
-      const card = document.createElement("article");
-      card.className = `setup-graph-card setup-graph-${statusClass}`;
+    for (const panel of panelVerdicts()) {
+      const card = document.createElement("div");
+      const ready = panel.verdict === "ready";
+      card.className = `d2-find-card${ready ? "" : " d2-find-card--needs"}`;
+      const pill = ready
+        ? `<span class="d2-statpill d2-statpill--ready"><span class="d2-statpill-dot"></span>Ready</span>`
+        : `<span class="d2-statpill d2-statpill--incomplete"><span class="d2-statpill-dot"></span>Signal needed</span>`;
+      const preview = ready
+        ? `<div class="d2-find-card-preview"><svg viewBox="0 0 200 40" preserveAspectRatio="none"><path d="${sparkPath(SPARK_KIND[panel.id] || "rising")}" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/></svg></div>`
+        : `<div class="d2-find-card-preview"><span>blocked on</span><code>${escapeHtml(PANEL_BLOCKERS[panel.id] || "signal")}</code></div>`;
       card.innerHTML = `
-        <span class="setup-graph-card-icon" aria-hidden="true">${icon}</span>
-        <div class="setup-graph-card-body">
-          <h4>${escapeHtml(panel.label)}</h4>
-          <p class="setup-graph-card-hint">${escapeHtml(panel.hint)}</p>
+        <div class="d2-find-card-head">
+          <div>
+            <div class="d2-find-card-name">${escapeHtml(panel.label)}</div>
+            <div class="d2-find-card-desc">${escapeHtml(panel.hint)}</div>
+          </div>
+          ${pill}
         </div>
-        <span class="setup-graph-card-status">${escapeHtml(statusLabel)}</span>
+        ${preview}
       `;
       grid.appendChild(card);
     }
 
-    // Stash activeSources for the validate step; step 2 no longer renders the
-    // technical proposals table itself.
+    // Stash activeSources for the validate step.
     state.activeSources = {};
     for (const row of (f.effectiveMapping || [])) {
       state.activeSources[row.canonical] = { source: row.source, expr: row.expr };
     }
 
-    // "Improve your coverage" — primary action is the AI-generated code prompt
-    // the user pastes into Cursor / Claude Code. The KQL stays available under
-    // a disclosure for power users who want to see the query that would run.
+    // Improve list: one row per missing signal, with the AI code prompt wired
+    // into the shared split-button (promptActionButton.js).
     const ms = m?.proposals?.missing_signals || [];
-    const msUl = $("missingSignalsList");
-    const coverageIntro = $("coverageIntro");
-    msUl.innerHTML = "";
+    const list = $("missingSignalsList");
+    const section = $("coverageSection");
+    const intro = $("coverageIntro");
+    list.innerHTML = "";
     if (ms.length === 0) {
-      coverageIntro.textContent = "Solid coverage — nothing flagged.";
-    } else {
-      coverageIntro.textContent = "Add the signals below to improve coverage for the suggested panels.";
-      for (const s of ms) {
-        const li = document.createElement("li");
-        li.className = "setup-missing";
-        const codePrompt = s.code_prompt || "";
-        const kqlSnippet = s.recommended_kql || "";
-        li.innerHTML = `
-          <div class="setup-missing-head">
-            <strong>${escapeHtml(s.signal)}</strong>
-            <span class="setup-missing-actions"></span>
-          </div>
-          <p class="setup-missing-why">${escapeHtml(s.why_missing)}</p>
-          <p class="setup-missing-remediation">${escapeHtml(s.remediation || "")}</p>
-          ${codePrompt ? `
-            <details class="setup-prompt-disclosure">
-              <summary>Show the prompt</summary>
-              <pre class="setup-missing-prompt"><code>${escapeHtml(codePrompt)}</code></pre>
-            </details>
-          ` : ""}
-          ${kqlSnippet ? `
-            <details class="setup-kql-disclosure">
-              <summary>Show the KQL this would unlock (power users)</summary>
-              <pre class="setup-missing-kql"><code>${escapeHtml(kqlSnippet)}</code></pre>
-            </details>
-          ` : ""}
-        `;
-        if (codePrompt && typeof window.createPromptActionButton === "function") {
-          const actionBtn = window.createPromptActionButton({ prompt: codePrompt, label: "Use prompt" });
-          li.querySelector(".setup-missing-actions").appendChild(actionBtn);
-        }
-        msUl.appendChild(li);
+      if (section) section.classList.add("hidden");
+      return;
+    }
+    if (section) section.classList.remove("hidden");
+    intro.textContent = "Two signals away from a complete picture — we've drafted the prompts you can paste into your codebase.";
+    for (const s of ms) {
+      const item = document.createElement("div");
+      item.className = "d2-find-improve-item";
+      const desc = s.why_missing || s.remediation || "";
+      item.innerHTML = `
+        <div class="d2-find-improve-field">
+          <span class="d2-find-improve-field-tag">missing</span>
+          ${escapeHtml(s.signal)}
+        </div>
+        <div class="d2-find-improve-desc">${escapeHtml(desc)}</div>
+        <div class="d2-find-improve-cta-wrap"></div>
+      `;
+      const codePrompt = s.code_prompt || "";
+      const ctaWrap = item.querySelector(".d2-find-improve-cta-wrap");
+      if (codePrompt && typeof window.createPromptActionButton === "function") {
+        ctaWrap.appendChild(window.createPromptActionButton({ prompt: codePrompt, label: "Use prompt" }));
       }
+      list.appendChild(item);
     }
   }
 
@@ -720,9 +771,6 @@
     const fields = ["canonicalUserId", "canonicalSessionId", "canonicalPagePath", "canonicalReferrer"];
     const byCanonical = Object.fromEntries(effective.map((r) => [r.canonical, r]));
 
-    // Auto-expand the technical disclosure + show a warning when the AI is
-    // unsure about any field. The user can still one-click save, but the
-    // critical bit is now visible without an extra click.
     const lowConf = effective
       .filter((r) => fields.includes(r.canonical) && r.confidence === "low")
       .map((r) => r.canonical);
@@ -832,33 +880,20 @@
 
   // ── Wire up ───────────────────────────────────────────────────
   async function init() {
-    $("scanningContinue").addEventListener("click", () => {
-      show("findings");
-    });
-    $("scanningRescan").addEventListener("click", () => {
-      startStep1();
-    });
-    $("findingsBack").addEventListener("click", () => {
-      startStep1();
-    });
-    $("findingsContinue").addEventListener("click", () => {
-      renderValidate();
-      show("validate");
-    });
-    $("validateBack").addEventListener("click", () => {
-      show("findings");
-    });
+    // Validate-step buttons live in static markup; the rest of the chrome
+    // (header + command bar) is wired per render in renderChrome().
+    $("validateBack").addEventListener("click", () => show("findings"));
     $("validateAcceptAll").addEventListener("click", () => submitValidation("accept_all"));
     $("validateSaveOverrides").addEventListener("click", () => submitValidation("override"));
 
-    // Theme toggle (mirror of app.js behavior).
     const themeBtn = $("themeToggle");
     if (themeBtn) {
       themeBtn.addEventListener("click", () => {
         const current = document.documentElement.getAttribute("data-theme") || "light";
         const next = current === "dark" ? "light" : "dark";
-        document.documentElement.setAttribute("data-theme", next);
-        try { localStorage.setItem("keren-theme", next); } catch {}
+        if (next === "dark") document.documentElement.setAttribute("data-theme", "dark");
+        else document.documentElement.removeAttribute("data-theme");
+        try { localStorage.setItem("theme", next); } catch {}
       });
     }
 
