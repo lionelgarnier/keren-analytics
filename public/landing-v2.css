@@ -67,11 +67,11 @@
 
 /* ── Nav ─────────────────────────────────────────────────────────────────── */
 .lv2-nav {
-  display: flex; justify-content: space-between; align-items: center;
+  display: flex; align-items: center; gap: 36px;
   padding: 28px 64px;
 }
-.lv2-nav-left { display: flex; align-items: center; gap: 36px; }
-.lv2-nav-right { display: flex; align-items: center; gap: 12px; font-size: 13.5px; }
+.lv2-nav-left { display: flex; align-items: center; gap: 10px; }
+.lv2-nav-right { display: flex; align-items: center; gap: 12px; font-size: 13.5px; margin-left: auto; }
 .lv2-logo { font-weight: 600; font-size: 16px; letter-spacing: -0.2px; }
 .lv2-logo-dot { color: var(--lv2-accent); }
 .lv2-nav-links { display: flex; gap: 24px; font-size: 13.5px; color: var(--lv2-text-dim); }
@@ -432,13 +432,30 @@ body.landing-active .navbar { display: none; }
   .lv2-kpi-strip { grid-template-columns: 1fr; }
   .lv2-kpi + .lv2-kpi { padding-left: 0; border-left: none; padding-top: 20px; margin-top: 20px; border-top: 1px solid var(--lv2-border); }
   .lv2-ring-widget { flex-direction: column; }
+  .lv2-hero-card { padding: 22px; }
+  .lv2-hero-card-head { flex-direction: column; align-items: flex-start; gap: 18px; }
+  .lv2-bignum { flex-wrap: wrap; gap: 6px 14px; }
+  .lv2-pills { align-self: flex-start; flex-wrap: wrap; }
 }
 
-/* ── Nav: collapse secondary items on narrow viewports ───────────────── */
+/* ── Nav: wrap secondary items onto a sub-line on narrow viewports ────── */
 @media (max-width: 768px) {
-  .lv2-nav { padding: 16px 20px; gap: 12px; }
+  .lv2-nav { padding: 14px 20px; gap: 8px 12px; flex-wrap: wrap; }
   .lv2-nav-left { gap: 10px; min-width: 0; }
-  .lv2-nav-links { display: none; }
+  .lv2-nav-links {
+    order: 3;
+    flex-basis: 100%;
+    gap: 22px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-top: 10px;
+    margin-top: 2px;
+    border-top: 1px solid var(--lv2-border);
+    scrollbar-width: none;
+    font-size: 13px;
+  }
+  .lv2-nav-links::-webkit-scrollbar { display: none; }
+  .lv2-nav-links a { white-space: nowrap; }
   .lv2-nav-right { gap: 8px; flex-shrink: 0; }
   .lv2-nav-right #lv2Stars,
   .lv2-nav-right a.lv2-nav-muted[href="/auth/login"] { display: none; }
