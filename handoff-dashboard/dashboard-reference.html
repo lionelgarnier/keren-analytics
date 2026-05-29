@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1320" />
+    <title>Dashboard D v2 — Visual Reference (standalone)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="reference-jsx/screens.css" />
+    <link rel="stylesheet" href="reference-jsx/screens-d-e.css" />
+    <link rel="stylesheet" href="reference-jsx/screens-d2.css" />
+    <link rel="stylesheet" href="reference-jsx/screens-dash.css" />
+    <style>
+      html, body { margin: 0; padding: 0; background: #efece4; }
+      body { font-family: 'Geist', system-ui, sans-serif; padding: 32px; display: flex; flex-direction: column; gap: 64px; align-items: flex-start; }
+      .ref-section { display: flex; flex-direction: column; gap: 14px; }
+      .ref-label {
+        font-family: 'Geist Mono', monospace; font-size: 11px;
+        letter-spacing: 1.4px; text-transform: uppercase; color: #6b7280;
+      }
+      .ref-row { display: flex; gap: 32px; flex-wrap: wrap; align-items: flex-start; }
+      .ref-wrap { width: 1280px; border: 1px solid rgba(0,0,0,0.08); border-radius: 8px; overflow: hidden; box-shadow: 0 18px 40px -24px rgba(0,0,0,0.2); }
+      .ref-wrap-mobile { width: 390px; border: 1px solid rgba(0,0,0,0.08); border-radius: 28px; overflow: hidden; box-shadow: 0 18px 40px -24px rgba(0,0,0,0.2); }
+      .ref-sub { font-size: 13px; color: #6b7280; max-width: 1280px; line-height: 1.5; }
+    </style>
+    <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel" src="reference-jsx/screens-data.jsx"></script>
+    <script type="text/babel" src="reference-jsx/screens-dash-data.jsx"></script>
+    <script type="text/babel" src="reference-jsx/screens-dir-d2.jsx"></script>
+    <script type="text/babel" src="reference-jsx/screens-dir-dash-shared.jsx"></script>
+    <script type="text/babel" src="reference-jsx/screens-dir-dash-panels.jsx"></script>
+    <script type="text/babel" src="reference-jsx/screens-dir-dash-interactions.jsx"></script>
+    <script type="text/babel" src="reference-jsx/screens-dir-dash.jsx"></script>
+    <script type="text/babel">
+      function Section({ label, sub, children }) {
+        return (
+          <div className="ref-section">
+            <span className="ref-label">{label}</span>
+            {sub && <p className="ref-sub">{sub}</p>}
+            <div className="ref-row">{children}</div>
+          </div>
+        );
+      }
+      function Wrap({ children, mobile }) {
+        return <div className={mobile ? 'ref-wrap-mobile' : 'ref-wrap'}>{children}</div>;
+      }
+
+      function App() {
+        return (
+          <>
+            <h1 style={{ fontSize: 32, fontWeight: 600, letterSpacing: -0.6, margin: 0 }}>
+              Dashboard D v2 — Visual Reference
+            </h1>
+            <p className="ref-sub" style={{ margin: '-40px 0 0' }}>
+              Standalone reference for the dashboard redesign on top of D v2 (Services / Setup).
+              Open this file in a browser and inspect any element with DevTools.
+              Source of truth for tokens lives in <code>reference-jsx/screens.css</code> +{' '}
+              <code>reference-jsx/screens-dash.css</code>. Project-token-mapped CSS is in <code>dashboard-snippets.css</code>.
+            </p>
+
+            <Section label="① Marketing · Variation A · Light"
+              sub="Editorial narration card under the page header, dense KPIs (label · big value · delta inline · compare meta), no per-card sparklines. Sparks are reserved for the big trend charts.">
+              <Wrap>
+                <DashboardD2 viewport="desktop" theme="light" tab="marketing" variant="a" />
+              </Wrap>
+            </Section>
+
+            <Section label="② Marketing · Variation A · Dark"
+              sub="Same layout, warm dark tokens. Light + dark parity comes for free from the existing token system.">
+              <Wrap>
+                <DashboardD2 viewport="desktop" theme="dark" tab="marketing" variant="a" />
+              </Wrap>
+            </Section>
+
+            <Section label="③ Marketing · Variation B · Console KPIs"
+              sub="Alternative KPI treatment: each card carries its own surface-2 sparkline panel (like the resource cards on /services). Narration condensed into a one-line strip.">
+              <Wrap>
+                <DashboardD2 viewport="desktop" theme="light" tab="marketing" variant="b" />
+              </Wrap>
+            </Section>
+
+            <Section label="④ Technical tab"
+              sub="Backend response, error rate, frontend performance, slow endpoints, session timelines.">
+              <Wrap>
+                <DashboardD2 viewport="desktop" theme="light" tab="technical" variant="a" />
+              </Wrap>
+            </Section>
+
+            <Section label="⑤ Readiness tab"
+              sub="Score gauge with success → accent gradient, signal breakdown (9 signals), 'improve your coverage' reuses the findings-improve pattern from D v2.">
+              <Wrap>
+                <DashboardD2 viewport="desktop" theme="light" tab="readiness" variant="a" />
+              </Wrap>
+            </Section>
+
+            <Section label="⑥ Mobile · Marketing"
+              sub="Page header stacks; KPI grid drops to 2-col; insights, sub-tabs and panels stack at full width; charts and tables are the same components, naturally responsive.">
+              <Wrap mobile>
+                <DashboardD2 viewport="mobile" theme="light" tab="marketing" variant="a" />
+              </Wrap>
+            </Section>
+
+            <Section label="⑦ Interaction · Hover on the trend chart"
+              sub="Dashed vertical guide + accent-ringed dot + tooltip card. Tooltip carries mono numbers, an optional delta, and a foot line for context.">
+              <Wrap>
+                <DashboardD2 viewport="desktop" theme="light" tab="marketing" variant="a" interaction="hover-trend" />
+              </Wrap>
+            </Section>
+
+            <Section label="⑧ Interaction · Filter applied"
+              sub="Chip bar (accent-soft background) appears below the sub-tabs. KPIs become contextual (vs. unfiltered baseline). Filtered panels carry a small mono '● filtered' pill. The command bar scope reflects the active filter.">
+              <Wrap>
+                <DashboardD2 viewport="desktop" theme="light" tab="marketing" variant="a" interaction="filter" />
+              </Wrap>
+            </Section>
+
+            <Section label="⑨ Interaction · ⌘K command palette"
+              sub="Centered modal over a soft scrim, grouped result list (Pages · Campaigns · Jump to), active item highlighted with accent-soft, foot with the keyboard map.">
+              <Wrap>
+                <DashboardD2 viewport="desktop" theme="light" tab="marketing" variant="a" interaction="cmdk" />
+              </Wrap>
+            </Section>
+
+            <Section label="⑩ Interaction · Drill drawer"
+              sub="Right-side panel (520px) over a soft scrim. Header carries eyebrow + KPI title + delta pill. Body stacks sections: trend → top sources → by hour → top entry pages.">
+              <Wrap>
+                <DashboardD2 viewport="desktop" theme="light" tab="marketing" variant="a" interaction="drill" />
+              </Wrap>
+            </Section>
+          </>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+  </body>
+</html>

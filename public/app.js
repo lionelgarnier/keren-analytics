@@ -76,6 +76,45 @@ function getCSSVar(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
+/* Resolve a CSS color (hex or rgb[a]) to an rgba() string with the given alpha.
+   Lets charts read D v2 tokens at render time instead of hardcoding hex. */
+function colorWithAlpha(cssColor, alpha) {
+  const c = (cssColor || "").trim();
+  let r = 0, g = 0, b = 0;
+  if (c.startsWith("#")) {
+    let hex = c.slice(1);
+    if (hex.length === 3) hex = hex.split("").map((h) => h + h).join("");
+    const n = parseInt(hex, 16);
+    r = (n >> 16) & 255; g = (n >> 8) & 255; b = n & 255;
+  } else {
+    const m = c.match(/(\d+(?:\.\d+)?)/g);
+    if (m && m.length >= 3) { r = +m[0]; g = +m[1]; b = +m[2]; }
+  }
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+/* D v2 chart palette: accent at descending opacity + success + warning, read
+   from tokens so light/dark parity is free. Used for categorical charts. */
+function chartPalette(n) {
+  const accent = getCSSVar("--accent") || "#2563eb";
+  const success = getCSSVar("--success") || "#16a34a";
+  const warning = getCSSVar("--warning") || "#d97706";
+  const muted = getCSSVar("--text-muted") || "#9ca3af";
+  const base = [
+    accent,
+    success,
+    warning,
+    colorWithAlpha(accent, 0.65),
+    colorWithAlpha(success, 0.6),
+    colorWithAlpha(accent, 0.4),
+    colorWithAlpha(warning, 0.55),
+    muted,
+  ];
+  const out = [];
+  for (let i = 0; i < n; i++) out.push(base[i % base.length]);
+  return out;
+}
+
 function applyChartThemeDefaults() {
   Chart.defaults.color = getCSSVar("--text-muted");
   Object.values(charts).forEach((c) => {
@@ -120,6 +159,7 @@ function setLandingActive(isActive) {
 function showLanding() {
   landingPage.classList.remove("hidden");
   setLandingActive(true);
+  setD2Route(false);
 }
 
 function hideLanding() {
@@ -146,23 +186,20 @@ Chart.defaults.plugins.legend.labels.usePointStyle = true;
 Chart.defaults.plugins.legend.labels.pointStyleWidth = 8;
 Chart.defaults.plugins.legend.labels.padding = 16;
 
-const CHART_COLORS = [
-  "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6",
-  "#06b6d4", "#f97316", "#ec4899", "#84cc16", "#6366f1",
-];
-
 /* ========== Tab Navigation ========== */
-const tabs = document.querySelectorAll(".tab[data-tab]");
+const tabs = document.querySelectorAll(".dash-subtab[data-tab]");
 
 function activateTab(tabName, { updateUrl = true } = {}) {
   tabs.forEach((t) => {
     const isTarget = t.dataset.tab === tabName;
-    t.classList.toggle("active", isTarget);
+    t.classList.toggle("is-active", isTarget);
     t.setAttribute("aria-selected", isTarget ? "true" : "false");
   });
   document.querySelectorAll(".tab-content").forEach((tc) => tc.classList.remove("active"));
   const target = document.getElementById(`tab-${tabName}`);
   if (target) target.classList.add("active");
+
+  updateDashScope(tabName);
 
   if (updateUrl) {
     const currentRoute = router.current;
@@ -174,6 +211,209 @@ function activateTab(tabName, { updateUrl = true } = {}) {
 
 tabs.forEach((tab) => {
   tab.addEventListener("click", () => activateTab(tab.dataset.tab));
+});
+
+/* ========== D v2 dashboard chrome ========== */
+
+const RANGE_LABEL = { today: "today", "7d": "7d", "30d": "30d" };
+
+// Bottom command bar scope: "<tab> · <range>" (+ filter suffix when active).
+function updateDashScope(tabName) {
+  const scope = document.getElementById("dashScope");
+  if (!scope) return;
+  const active = tabName || document.querySelector(".dash-subtab.is-active")?.dataset.tab || "marketing";
+  const range = RANGE_LABEL[rangeSelect.value] || rangeSelect.value;
+  let label = `${active} · ${range}`;
+  if (activeFilters.length) {
+    label += ` · filter: ${activeFilters.map((f) => f.value).join(", ")}`;
+  }
+  scope.textContent = label;
+}
+
+// Keep the segmented range control in sync with the hidden <select>.
+function syncRangeButtons() {
+  document.querySelectorAll(".dash-range-btn").forEach((b) => {
+    b.classList.toggle("is-active", b.dataset.range === rangeSelect.value);
+  });
+}
+
+document.querySelectorAll(".dash-range-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    if (rangeSelect.value === btn.dataset.range) return;
+    rangeSelect.value = btn.dataset.range;
+    syncRangeButtons();
+    rangeSelect.dispatchEvent(new Event("change"));
+  });
+});
+
+// "Change" returns to the service hub (reuses the existing clear-selection flow).
+document.getElementById("dashChangeBtn")?.addEventListener("click", () => {
+  changeResourceButton?.click();
+});
+
+/* ----- Refresh (R key / palette) ----- */
+function refreshDashboard() {
+  if (!isPreviewMode && router.current.page !== "dashboard") return;
+  if (isPreviewMode) enterPreviewMode();
+  else loadDashboard(rangeSelect.value);
+}
+
+function setDashRange(range) {
+  if (!RANGE_LABEL[range] || rangeSelect.value === range) return;
+  rangeSelect.value = range;
+  syncRangeButtons();
+  rangeSelect.dispatchEvent(new Event("change"));
+}
+
+/* ----- ⌘K command palette ----- */
+const CMDK_COMMANDS = [
+  { label: "Go to Marketing", hint: "tab", run: () => activateTab("marketing") },
+  { label: "Go to Technical", hint: "tab", run: () => activateTab("technical") },
+  { label: "Go to Readiness", hint: "tab", run: () => activateTab("readiness") },
+  { label: "Range: Today", hint: "range", run: () => setDashRange("today") },
+  { label: "Range: Last 7 days", hint: "range", run: () => setDashRange("7d") },
+  { label: "Range: Last 30 days", hint: "range", run: () => setDashRange("30d") },
+  { label: "Refresh data", hint: "R", run: () => refreshDashboard() },
+  { label: "Clear all filters", hint: "filter", run: () => clearAllFilters() },
+];
+
+let cmdkActiveIdx = 0;
+let cmdkMatches = [];
+
+function cmdkEls() {
+  return {
+    modal: document.getElementById("dashCmdk"),
+    input: document.getElementById("dashCmdkInput"),
+    list: document.getElementById("dashCmdkList"),
+  };
+}
+
+function renderCmdkList(query) {
+  const { list } = cmdkEls();
+  if (!list) return;
+  const q = (query || "").trim().toLowerCase();
+  cmdkMatches = q
+    ? CMDK_COMMANDS.filter((c) => c.label.toLowerCase().includes(q))
+    : CMDK_COMMANDS.slice();
+  if (cmdkActiveIdx >= cmdkMatches.length) cmdkActiveIdx = 0;
+  list.innerHTML = "";
+  cmdkMatches.forEach((cmd, i) => {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = `dash-cmdk-item${i === cmdkActiveIdx ? " is-active" : ""}`;
+    item.innerHTML = `<span class="dash-cmdk-item-glyph">&rsaquo;</span><span>${cmd.label}</span><span class="dash-cmdk-item-meta">${cmd.hint}</span>`;
+    item.addEventListener("mouseenter", () => { cmdkActiveIdx = i; updateCmdkActive(); });
+    item.addEventListener("click", () => runCmdk(i));
+    list.appendChild(item);
+  });
+}
+
+function updateCmdkActive() {
+  const { list } = cmdkEls();
+  if (!list) return;
+  [...list.children].forEach((el, i) => el.classList.toggle("is-active", i === cmdkActiveIdx));
+}
+
+function openCmdk() {
+  const { modal, input } = cmdkEls();
+  if (!modal) return;
+  cmdkActiveIdx = 0;
+  renderCmdkList("");
+  modal.classList.remove("hidden");
+  if (input) { input.value = ""; input.focus(); }
+}
+
+function closeCmdk() {
+  cmdkEls().modal?.classList.add("hidden");
+}
+
+function runCmdk(idx) {
+  const cmd = cmdkMatches[idx];
+  closeCmdk();
+  if (cmd) cmd.run();
+}
+
+document.getElementById("dashCmdkBtn")?.addEventListener("click", openCmdk);
+cmdkEls().input?.addEventListener("input", (e) => { cmdkActiveIdx = 0; renderCmdkList(e.target.value); });
+cmdkEls().input?.addEventListener("keydown", (e) => {
+  if (e.key === "ArrowDown") { e.preventDefault(); cmdkActiveIdx = Math.min(cmdkActiveIdx + 1, cmdkMatches.length - 1); updateCmdkActive(); }
+  else if (e.key === "ArrowUp") { e.preventDefault(); cmdkActiveIdx = Math.max(cmdkActiveIdx - 1, 0); updateCmdkActive(); }
+  else if (e.key === "Enter") { e.preventDefault(); runCmdk(cmdkActiveIdx); }
+});
+document.querySelectorAll("#dashCmdk [data-cmdk-close]").forEach((el) =>
+  el.addEventListener("click", (e) => { if (e.target === e.currentTarget) closeCmdk(); })
+);
+
+/* ----- KPI drill drawer ----- */
+function openDrill(title, rows) {
+  const modal = document.getElementById("dashDrill");
+  const titleEl = document.getElementById("dashDrillTitle");
+  const body = document.getElementById("dashDrillBody");
+  if (!modal || !body) return;
+  if (titleEl) titleEl.textContent = title;
+  body.innerHTML = "";
+  rows.forEach((r) => {
+    const section = document.createElement("div");
+    section.className = "dash-drill-section";
+    section.innerHTML = `<div class="dash-drill-section-h">${r.k}</div><div class="dash-drill-val">${r.v}</div>`;
+    body.appendChild(section);
+  });
+  modal.classList.remove("hidden");
+}
+
+function closeDrill() {
+  document.getElementById("dashDrill")?.classList.add("hidden");
+}
+
+function wireKpiDrill(grid) {
+  grid?.querySelectorAll(".dash-kpi-a").forEach((card) => {
+    if (card.dataset.drillWired) return;
+    card.dataset.drillWired = "1";
+    card.style.cursor = "pointer";
+    card.addEventListener("click", () => {
+      const label = card.querySelector(".dash-kpi-a-label")?.textContent?.trim() || "Metric";
+      const value = card.querySelector(".dash-kpi-a-value")?.textContent?.trim() || "—";
+      const delta = card.querySelector(".dash-kpi-a-delta")?.textContent?.trim();
+      const compare = card.querySelector(".dash-kpi-a-compare")?.textContent?.trim();
+      const rows = [
+        { k: "Current", v: value },
+        { k: "Range", v: RANGE_LABEL[rangeSelect.value] || rangeSelect.value },
+      ];
+      if (delta) rows.push({ k: "Change", v: delta });
+      if (compare) rows.push({ k: "vs previous", v: compare });
+      openDrill(label, rows);
+    });
+  });
+}
+
+document.querySelectorAll("#dashDrill [data-drill-close]").forEach((el) => el.addEventListener("click", closeDrill));
+
+/* ----- Global dashboard keyboard shortcuts ----- */
+function inEditableTarget(e) {
+  const t = e.target;
+  return t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
+}
+
+document.addEventListener("keydown", (e) => {
+  const dashOpen = !dashboardPanel.classList.contains("hidden");
+  // ⌘K / Ctrl+K toggles the palette from anywhere on the dashboard.
+  if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
+    if (!dashOpen) return;
+    e.preventDefault();
+    const open = !document.getElementById("dashCmdk")?.classList.contains("hidden");
+    open ? closeCmdk() : openCmdk();
+    return;
+  }
+  if (e.key === "Escape") {
+    closeCmdk();
+    closeDrill();
+    return;
+  }
+  if (!dashOpen || inEditableTarget(e)) return;
+  if (e.key === "r" || e.key === "R") {
+    e.preventDefault();
+    refreshDashboard();
+  }
 });
 
 /* ========== Events ========== */
@@ -273,6 +513,7 @@ async function enterPreviewMode() {
   hideLanding();
   connectButton.classList.add("hidden");
   previewBanner.classList.remove("hidden");
+  setD2Route(true);
   dashboardPanel.classList.remove("hidden");
   if (router.current.page === "preview") {
     router.replace({ page: "preview" });
@@ -294,6 +535,7 @@ function exitPreviewMode() {
   isPreviewMode = false;
   previewBanner.classList.add("hidden");
   dashboardPanel.classList.add("hidden");
+  setD2Route(false);
   showLanding();
   connectButton.classList.remove("hidden");
   statusPanel.textContent = "";
@@ -367,6 +609,11 @@ function truncateGuid(id) {
 function showSelectedResource(name) {
   selectedResourceName.textContent = name;
   selectedResourceBar.classList.remove("hidden");
+  // Mirror the service name into the D v2 dashboard header + breadcrumb.
+  const h1 = document.getElementById("dashServiceName");
+  const crumb = document.getElementById("dashBreadcrumbName");
+  if (h1) h1.textContent = name;
+  if (crumb) crumb.textContent = name;
 }
 
 /** POST /azure/select for a resource — shared by the hub cards and the
@@ -414,7 +661,7 @@ async function gotoService(resource, card, destination) {
       return;
     }
     resourcePanel.classList.add("hidden");
-    setD2Route(false);
+    setD2Route(true);
     showSelectedResource(resource.appInsightsName);
     router.push({ page: "dashboard", service: resource.appInsightsName, tab: "marketing" });
     await loadDashboard(rangeSelect.value);
@@ -456,6 +703,11 @@ const D2_CTA_CLASS = { ready: "", incomplete: " is-warn", unconfigured: " is-mut
 const D2_THEME_TOGGLE_SVG =
   '<svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>' +
   '<svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
+
+// Inject the topbar theme-toggle icons (markup ships empty). The global
+// ".theme-toggle" click binding already wires toggleTheme.
+const dashThemeToggleEl = document.getElementById("dashThemeToggle");
+if (dashThemeToggleEl) dashThemeToggleEl.innerHTML = D2_THEME_TOGGLE_SVG;
 
 // Bucket detectEnvironment()'s css class into a D v2 chip filter key.
 function d2EnvKey(env) {
@@ -776,8 +1028,8 @@ function renderDailyTrend(data) {
         {
           label: "Visitors",
           data: points.map((p) => p.visitors),
-          borderColor: "#3b82f6",
-          backgroundColor: "rgba(59, 130, 246, 0.06)",
+          borderColor: getCSSVar("--accent"),
+          backgroundColor: colorWithAlpha(getCSSVar("--accent"), 0.06),
           fill: true,
           tension: 0.35,
           pointRadius: pointSize,
@@ -787,8 +1039,8 @@ function renderDailyTrend(data) {
         {
           label: "Page Views",
           data: points.map((p) => p.pageViews),
-          borderColor: "#10b981",
-          backgroundColor: "rgba(16, 185, 129, 0.04)",
+          borderColor: getCSSVar("--success"),
+          backgroundColor: colorWithAlpha(getCSSVar("--success"), 0.05),
           fill: true,
           tension: 0.35,
           pointRadius: pointSize,
@@ -841,7 +1093,7 @@ function renderDoughnut(canvasId, emptyId, chartKey, items, labelKey, valueKey) 
       datasets: [
         {
           data: items.map((i) => i[valueKey]),
-          backgroundColor: CHART_COLORS.slice(0, items.length),
+          backgroundColor: chartPalette(items.length),
           borderWidth: 0,
           hoverOffset: 6,
         },
@@ -890,7 +1142,7 @@ function renderGeoChart(data) {
       datasets: [
         {
           data: items.map((i) => i.count),
-          backgroundColor: "#3b82f6",
+          backgroundColor: getCSSVar("--accent"),
           borderRadius: 4,
           maxBarThickness: 28,
         },
@@ -948,7 +1200,7 @@ function renderBrowserTimings(data) {
         {
           label: "Avg Duration (ms)",
           data: [data.avgNetwork, data.avgSend, data.avgReceive, data.avgProcessing],
-          backgroundColor: ["#3b82f6", "#06b6d4", "#10b981", "#f59e0b"],
+          backgroundColor: chartPalette(4),
           borderRadius: 6,
           maxBarThickness: 40,
         },
@@ -1133,11 +1385,12 @@ function renderGeoMap(data) {
     const radius = Math.max(5, Math.sqrt(item.count / maxCount) * 35);
     const pct = maxCount > 0 ? ((item.count / maxCount) * 100).toFixed(0) : 0;
 
+    const accent = getCSSVar("--accent") || "#2563eb";
     const circle = L.circleMarker(coords, {
       radius,
-      fillColor: "#3b82f6",
+      fillColor: accent,
       fillOpacity: 0.55,
-      color: "#2563eb",
+      color: accent,
       weight: 1.5,
     }).addTo(geoMapInstance);
 
@@ -1217,19 +1470,19 @@ function renderAnomalyBadge(badgeId, anomaly, invertBad) {
 function renderAllSparklines(sparklines) {
   if (!sparklines) return;
   if (sparklines.visitors) {
-    renderSparkline("sparkVisitors", sparklines.visitors.points, "#3b82f6");
+    renderSparkline("sparkVisitors", sparklines.visitors.points, getCSSVar("--accent"));
     renderAnomalyBadge("anomalyVisitors", sparklines.visitors.anomaly, false);
   }
   if (sparklines.sessions) {
-    renderSparkline("sparkSessions", sparklines.sessions.points, "#10b981");
+    renderSparkline("sparkSessions", sparklines.sessions.points, getCSSVar("--success"));
     renderAnomalyBadge("anomalySessions", sparklines.sessions.anomaly, false);
   }
   if (sparklines.errorRate) {
-    renderSparkline("sparkErrorRate", sparklines.errorRate.points.map((v) => v * 100), "#ef4444");
+    renderSparkline("sparkErrorRate", sparklines.errorRate.points.map((v) => v * 100), getCSSVar("--danger"));
     renderAnomalyBadge("anomalyErrorRate", sparklines.errorRate.anomaly, true);
   }
   if (sparklines.avgResponse) {
-    renderSparkline("sparkAvgResponse", sparklines.avgResponse.points, "#f59e0b");
+    renderSparkline("sparkAvgResponse", sparklines.avgResponse.points, getCSSVar("--warning"));
     renderAnomalyBadge("anomalyAvgResponse", sparklines.avgResponse.anomaly, true);
   }
 }
@@ -1363,6 +1616,10 @@ function renderKpiComparison(kpis) {
     const sign = entry.deltaPct > 0 ? "+" : "";
     deltaEl.textContent = `${sign}${entry.deltaPct.toFixed(1)}%`;
     deltaEl.dataset.direction = entry.direction || "neutral";
+    // D v2 delta pill: green when improving, amber when regressing.
+    const up = (entry.direction || "") === "up" || (entry.direction == null && entry.deltaPct >= 0);
+    deltaEl.classList.toggle("is-up", up);
+    deltaEl.classList.toggle("is-down", !up);
     deltaEl.classList.remove("hidden");
 
     captionEl.textContent = cmp.label || "";
@@ -1411,8 +1668,8 @@ function renderInsights(dashboard) {
     const best = campaigns.reduce((a, b) => (a.visitors || 0) > (b.visitors || 0) ? a : b);
     if ((best.visitors || 0) > 0) {
       insights.push({
-        icon: "\uD83C\uDFAF",
-        text: `Top campaign source: <strong>${best.campaign}</strong> via ${best.source} with <span class="insight-highlight">${fmt(best.visitors)}</span> visitors`,
+        kind: "up",
+        text: `Top campaign source: <strong>${best.campaign}</strong> via ${best.source} with <strong>${fmt(best.visitors)}</strong> visitors`,
       });
     }
   }
@@ -1429,8 +1686,8 @@ function renderInsights(dashboard) {
       const window = `${peak.hour}:00-${peak.hour + 1}:00`;
       const when = dayLabel ? `${dayLabel} ${window}` : window;
       insights.push({
-        icon: "\u23F0",
-        text: `Peak traffic: <strong>${when}</strong> with ${fmt(peak.count)} visitors/period`,
+        kind: "up",
+        text: `Peak traffic: <strong>${when}</strong> with <strong>${fmt(peak.count)}</strong> visitors/period`,
       });
     }
   }
@@ -1442,8 +1699,8 @@ function renderInsights(dashboard) {
     const top = sources[0];
     if (top && total > 0) {
       insights.push({
-        icon: "\uD83D\uDD17",
-        text: `Top traffic source: <strong>${top.source}</strong> drives <span class="insight-highlight">${((top.count / total) * 100).toFixed(0)}%</span> of all traffic`,
+        kind: "up",
+        text: `Top traffic source: <strong>${top.source}</strong> drives <strong>${((top.count / total) * 100).toFixed(0)}%</strong> of all traffic`,
       });
     }
   }
@@ -1451,13 +1708,13 @@ function renderInsights(dashboard) {
   // Insight 4: Error rate check
   if (dashboard.kpis.errorRate > 0.03) {
     insights.push({
-      icon: "\u26A0\uFE0F",
-      text: `Error rate at <span class="insight-warning">${fmtPct(dashboard.kpis.errorRate)}</span> — above 3% threshold. Check slow endpoints in the Technical tab.`,
+      kind: "warn",
+      text: `Error rate at <strong>${fmtPct(dashboard.kpis.errorRate)}</strong> — above 3% threshold. Check slow endpoints in the Technical tab.`,
     });
   } else if (dashboard.kpis.errorRate > 0) {
     insights.push({
-      icon: "\u2705",
-      text: `Error rate is healthy at <span class="insight-highlight">${fmtPct(dashboard.kpis.errorRate)}</span>`,
+      kind: "ok",
+      text: `Error rate is healthy at <strong>${fmtPct(dashboard.kpis.errorRate)}</strong>`,
     });
   }
 
@@ -1467,7 +1724,7 @@ function renderInsights(dashboard) {
     const pct = urlParams.totalUrlsScanned > 0 ? ((urlParams.urlsWithParams / urlParams.totalUrlsScanned) * 100).toFixed(0) : 0;
     const utmCount = urlParams.discovered.filter((p) => p.isUtm).length;
     insights.push({
-      icon: "\uD83D\uDD0D",
+      kind: "ok",
       text: `<strong>${urlParams.discovered.length}</strong> URL parameters auto-detected (${utmCount} UTM). <strong>${pct}%</strong> of page views carry tracking params.`,
     });
   }
@@ -1480,8 +1737,8 @@ function renderInsights(dashboard) {
       const topPath = topPages[0].path;
       const tail = topPath === "/" ? "high homepage concentration" : "traffic is concentrated on one route";
       insights.push({
-        icon: "\uD83D\uDCCA",
-        text: `<strong>${topPath}</strong> captures <span class="insight-highlight">${fmtPct(topShare)}</span> of all page views — ${tail}`,
+        kind: "up",
+      text: `<strong>${topPath}</strong> captures <strong>${fmtPct(topShare)}</strong> of all page views — ${tail}`,
       });
     }
   }
@@ -1494,8 +1751,8 @@ function renderInsights(dashboard) {
   panel.classList.remove("hidden");
   insights.forEach((insight) => {
     const item = document.createElement("div");
-    item.className = "insight-item";
-    item.innerHTML = `<span class="insight-icon">${insight.icon}</span><span class="insight-text">${insight.text}</span>`;
+    item.className = `dash-insight dash-insight--${insight.kind || "up"}`;
+    item.innerHTML = `<span class="dash-insight-dot"></span><span>${insight.text}</span>`;
     list.appendChild(item);
   });
 }
@@ -1525,67 +1782,38 @@ function renderPeakHours(data, availability) {
 
   const maxCount = Math.max(...data.map((d) => d.count));
   const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const byKey = {};
+  data.forEach((d) => { byKey[`${d.dayIndex}:${d.hour}`] = d.count; });
 
-  const isDark = getTheme() === "dark";
-  const heatScale = isDark
-    ? ["#0c1a2e", "#0c3a6e", "#1d6eb5", "#38bdf8", "#7dd3fc", "#bae6fd"]
-    : ["#f0f9ff", "#bae6fd", "#7dd3fc", "#38bdf8", "#0284c7", "#0c4a6e"];
-
-  function heatColor(count) {
-    const intensity = maxCount > 0 ? count / maxCount : 0;
-    if (intensity < 0.15) return heatScale[0];
-    if (intensity < 0.3) return heatScale[1];
-    if (intensity < 0.5) return heatScale[2];
-    if (intensity < 0.7) return heatScale[3];
-    if (intensity < 0.85) return heatScale[4];
-    return heatScale[5];
-  }
-
-  // Build grid
+  // D v2 heatmap: one grid (24px day label + 24 hour cells), intensity by opacity.
+  const grid = document.createElement("div");
+  grid.className = "dash-peaks";
   days.forEach((day, dayIdx) => {
-    const row = document.createElement("div");
-    row.className = "peak-row";
-
     const label = document.createElement("span");
-    label.className = "peak-day-label";
+    label.className = "dash-peaks-day";
     label.textContent = day;
-    row.appendChild(label);
+    grid.appendChild(label);
 
     for (let h = 0; h < 24; h++) {
-      const cell = data.find((d) => d.dayIndex === dayIdx && d.hour === h);
-      const count = cell ? cell.count : 0;
-      const div = document.createElement("div");
-      div.className = "peak-cell";
-      div.style.background = heatColor(count);
-      div.title = `${day} ${h}:00 — ${fmt(count)} visitors`;
-      row.appendChild(div);
+      const count = byKey[`${dayIdx}:${h}`] || 0;
+      const intensity = maxCount > 0 ? count / maxCount : 0;
+      const cell = document.createElement("div");
+      cell.className = "dash-peaks-cell";
+      cell.style.opacity = (0.08 + intensity * 0.92).toFixed(2);
+      cell.title = `${day} ${h}:00 — ${fmt(count)} visitors`;
+      grid.appendChild(cell);
     }
-    container.appendChild(row);
   });
+  container.appendChild(grid);
 
-  // Hour labels (every 3 hours)
-  const hourLabels = document.createElement("div");
-  hourLabels.className = "peak-hour-labels";
-  for (let h = 0; h < 24; h++) {
-    const lbl = document.createElement("span");
-    lbl.className = "peak-hour-label";
-    lbl.textContent = h % 3 === 0 ? `${h}h` : "";
-    hourLabels.appendChild(lbl);
-  }
-  container.appendChild(hourLabels);
-
-  // Legend
-  const legend = document.createElement("div");
-  legend.className = "peak-legend";
-  legend.innerHTML = '<span>Less</span><div class="peak-legend-bar"></div><span>More</span>';
-  const bar = legend.querySelector(".peak-legend-bar");
-  heatScale.forEach((c) => {
-    const cell = document.createElement("div");
-    cell.className = "peak-legend-cell";
-    cell.style.background = c;
-    bar.appendChild(cell);
+  const foot = document.createElement("div");
+  foot.className = "dash-peaks-foot";
+  ["00:00", "06:00", "12:00", "18:00", "23:00"].forEach((t) => {
+    const span = document.createElement("span");
+    span.textContent = t;
+    foot.appendChild(span);
   });
-  container.appendChild(legend);
+  container.appendChild(foot);
 }
 
 /* ========== Render: Content Performance ========== */
@@ -1641,9 +1869,9 @@ function renderContentScoring(navPaths, topPages) {
 
   const maxScore = scored[0].score;
   const colors = {
-    "/pricing": "#f97316",
-    "/signup": "#10b981",
-    "/checkout": "#8b5cf6",
+    "/pricing": getCSSVar("--warning"),
+    "/signup": getCSSVar("--success"),
+    "/checkout": colorWithAlpha(getCSSVar("--accent"), 0.65),
   };
 
   scored.forEach((item) => {
@@ -1661,7 +1889,7 @@ function renderContentScoring(navPaths, topPages) {
     const bar = document.createElement("div");
     bar.className = "content-bar";
     bar.style.width = (maxScore > 0 ? (item.score / maxScore) * 100 : 0) + "%";
-    bar.style.background = colors[item.mainTarget] || "#3b82f6";
+    bar.style.background = colors[item.mainTarget] || getCSSVar("--accent");
     bar.textContent = `${fmt(item.score)} \u2192 ${item.mainTarget}`;
     barBg.appendChild(bar);
     row.appendChild(barBg);
@@ -1700,11 +1928,20 @@ function renderFilterBar() {
   chips.innerHTML = "";
   activeFilters.forEach((f) => {
     const chip = document.createElement("span");
-    chip.className = "filter-chip";
-    chip.innerHTML = `<span>${f.param}=${f.value}</span>`;
+    chip.className = "dash-filterchip";
+    const key = document.createElement("span");
+    key.className = "dash-filterchip-key";
+    key.textContent = f.param;
+    const val = document.createElement("span");
+    val.className = "dash-filterchip-val";
+    val.textContent = f.value;
+    chip.appendChild(key);
+    chip.appendChild(val);
     const removeBtn = document.createElement("button");
-    removeBtn.className = "filter-chip-remove";
+    removeBtn.className = "dash-filterchip-x";
+    removeBtn.type = "button";
     removeBtn.textContent = "\u00D7";
+    removeBtn.setAttribute("aria-label", `Remove filter ${f.param}=${f.value}`);
     removeBtn.addEventListener("click", () => removeFilter(f.param, f.value));
     chip.appendChild(removeBtn);
     chips.appendChild(chip);
@@ -1881,20 +2118,13 @@ function renderReferrerChart(data) {
 
   destroyChart("referrer");
   const ctx = document.getElementById("referrerChart").getContext("2d");
-  const sourceColors = {
-    "Direct": "#3b82f6",
-    "Organic Search": "#10b981",
-    "Referral": "#f59e0b",
-    "Social": "#8b5cf6",
-    "Email": "#06b6d4",
-  };
   charts.referrer = new Chart(ctx, {
     type: "doughnut",
     data: {
       labels: items.map((i) => i.source),
       datasets: [{
         data: items.map((i) => i.count),
-        backgroundColor: items.map((i) => sourceColors[i.source] || CHART_COLORS[0]),
+        backgroundColor: chartPalette(items.length),
         borderWidth: 0,
         hoverOffset: 6,
       }],
@@ -1951,62 +2181,57 @@ function renderFunnel(navPaths, topPages) {
   }
 
   const maxCount = funnelSteps[0].count;
-  const colors = ["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444"];
 
   funnelSteps.forEach((step, i) => {
-    const widthPct = Math.max(15, (step.count / maxCount) * 100);
+    const pct = (step.count / maxCount) * 100;
 
-    // Step bar
-    const stepEl = document.createElement("div");
-    stepEl.className = "funnel-step";
+    const row = document.createElement("div");
+    row.className = "dash-funnel-row";
 
-    const barWrapper = document.createElement("div");
-    barWrapper.className = "funnel-bar-wrapper";
-
-    const bar = document.createElement("div");
-    bar.className = "funnel-bar";
-    bar.style.width = widthPct + "%";
-    bar.style.background = colors[i % colors.length];
-
+    const head = document.createElement("div");
+    head.className = "dash-funnel-head";
     const labelSpan = document.createElement("span");
-    labelSpan.className = "funnel-bar-label";
-    labelSpan.textContent = step.label;
-    bar.appendChild(labelSpan);
+    labelSpan.innerHTML = `<strong>${step.label}</strong>`;
+    const metaSpan = document.createElement("span");
+    metaSpan.className = "dash-funnel-head-meta";
+    metaSpan.textContent = `${fmt(step.count)} \u00B7 ${pct.toFixed(1)}%`;
+    head.appendChild(labelSpan);
+    head.appendChild(metaSpan);
+    row.appendChild(head);
 
-    const countSpan = document.createElement("span");
-    countSpan.className = "funnel-bar-count";
-    countSpan.textContent = fmt(step.count);
-    bar.appendChild(countSpan);
+    const barBg = document.createElement("div");
+    barBg.className = "dash-funnel-bar";
+    const fill = document.createElement("div");
+    fill.className = "dash-funnel-bar-fill";
+    fill.style.width = Math.max(8, pct) + "%";
+    barBg.appendChild(fill);
+    row.appendChild(barBg);
 
-    barWrapper.appendChild(bar);
-    stepEl.appendChild(barWrapper);
-
-    const meta = document.createElement("span");
-    meta.className = "funnel-meta";
-    meta.textContent = ((step.count / maxCount) * 100).toFixed(0) + "%";
-    stepEl.appendChild(meta);
-
-    container.appendChild(stepEl);
-
-    // Drop-off indicator between steps
-    if (i < funnelSteps.length - 1) {
-      const next = funnelSteps[i + 1];
-      const dropPct = ((1 - next.count / step.count) * 100).toFixed(1);
-      const dropEl = document.createElement("div");
-      dropEl.className = "funnel-drop";
-      dropEl.innerHTML = `<span class="funnel-drop-arrow">\u25BC</span> <span class="funnel-drop-pct">-${dropPct}%</span> drop-off`;
-      container.appendChild(dropEl);
+    // Drop-off from the previous step.
+    if (i > 0) {
+      const prev = funnelSteps[i - 1];
+      const drop = ((1 - step.count / prev.count) * 100);
+      if (drop > 0) {
+        const dropEl = document.createElement("div");
+        dropEl.className = "dash-funnel-drop";
+        dropEl.textContent = `\u2193 ${drop.toFixed(1)}% drop-off`;
+        row.appendChild(dropEl);
+      }
     }
+
+    container.appendChild(row);
   });
 }
 
 /* ========== Render: Sankey User Flow ========== */
-const SANKEY_GROUP_COLORS = {
-  funnel: "#f97316",
-  info: "#3b82f6",
-  other: "#94a3b8",
-  exit: "#fbbf80",
-};
+function sankeyGroupColors() {
+  return {
+    funnel: getCSSVar("--warning"),
+    info: getCSSVar("--accent"),
+    other: getCSSVar("--text-muted"),
+    exit: colorWithAlpha(getCSSVar("--warning"), 0.6),
+  };
+}
 const SANKEY_LINK_COLOR = "rgba(148,163,184,0.25)";
 const SANKEY_LINK_HOVER = "rgba(148,163,184,0.45)";
 
@@ -2148,6 +2373,7 @@ function renderSankeyFlow(flowData) {
   svg.appendChild(linkGroup);
 
   // Draw nodes
+  const groupColors = sankeyGroupColors();
   const nodeGroup = document.createElementNS(svgNS, "g");
   nodeMap.forEach((node) => {
     const rect = document.createElementNS(svgNS, "rect");
@@ -2156,7 +2382,7 @@ function renderSankeyFlow(flowData) {
     rect.setAttribute("width", nodeWidth);
     rect.setAttribute("height", Math.max(4, node.h));
     rect.setAttribute("rx", 3);
-    rect.setAttribute("fill", SANKEY_GROUP_COLORS[node.group] || "#94a3b8");
+    rect.setAttribute("fill", groupColors[node.group] || getCSSVar("--text-muted"));
     rect.style.cursor = "pointer";
 
     rect.addEventListener("mouseenter", (e) => {
@@ -2214,7 +2440,7 @@ function renderSankeyFlow(flowData) {
   ].forEach((item) => {
     const span = document.createElement("span");
     span.className = "sankey-legend-item";
-    span.innerHTML = `<span class="sankey-legend-dot" style="background:${SANKEY_GROUP_COLORS[item.group]}"></span>${item.label}`;
+    span.innerHTML = `<span class="sankey-legend-dot" style="background:${groupColors[item.group]}"></span>${item.label}`;
     legend.appendChild(span);
   });
   container.appendChild(legend);
@@ -2337,12 +2563,14 @@ function renderReadinessScore(readinessScore, readiness) {
 
   const { score, percentage, breakdown, grade } = readinessScore;
 
-  // Score ring
+  // Score ring — D v2 keeps a single gradient stroke (url(#krDashScoreGrad)),
+  // so the fill colour is grade-independent; only the arc length varies.
   const circumference = 2 * Math.PI * 52; // r=52
   const offset = circumference - (percentage / 100) * circumference;
   const ring = document.getElementById("scoreRingFill");
+  ring.style.strokeDasharray = `${circumference}`;
   ring.style.strokeDashoffset = offset;
-  ring.className = `score-ring-fill grade-${grade.toLowerCase()}`;
+  ring.setAttribute("class", "dash-score-ring-fill");
 
   // Score number
   document.getElementById("scoreValue").textContent = score;
@@ -2357,10 +2585,10 @@ function renderReadinessScore(readinessScore, readiness) {
   };
   document.getElementById("scoreGradeText").textContent = gradeTexts[grade] || "";
 
-  // Mini badge in tab
+  // Mini badge in the Readiness sub-tab
   const miniBadge = document.getElementById("scoreMiniBadge");
   miniBadge.textContent = `${score}`;
-  miniBadge.className = `score-mini-badge grade-${grade.toLowerCase()}`;
+  miniBadge.className = "dash-subtab-num";
   miniBadge.classList.remove("hidden");
 
   // Status badge
@@ -2629,6 +2857,7 @@ function renderMarketingKpis(d) {
     if (untrackedSession) comparison.sessions = null;
   }
   renderKpiComparison({ comparison });
+  wireKpiDrill(document.querySelector('[data-card="marketingKpis"]'));
 }
 
 function renderTechnicalKpis(d) {
@@ -2651,6 +2880,7 @@ function renderTechnicalKpis(d) {
   } else {
     errorCard.style.borderLeft = "3px solid var(--success)";
   }
+  wireKpiDrill(document.querySelector('[data-card="technicalKpis"]'));
 }
 
 function renderDailyTrendCard(d) {
@@ -3046,6 +3276,7 @@ async function init() {
         if (servicesResp.selectedResourceId !== target.resourceId) {
           await selectResourceApi(target);
         }
+        setD2Route(true);
         showSelectedResource(route.service);
         activateTab(route.tab, { updateUrl: false });
         router.replace({ page: "dashboard", service: route.service, tab: route.tab });
@@ -3069,6 +3300,7 @@ async function init() {
       const only = services[0];
       await selectResourceApi(only);
       if (only.status === "ready") {
+        setD2Route(true);
         showSelectedResource(only.appInsightsName);
         router.replace({ page: "dashboard", service: only.appInsightsName, tab: "marketing" });
         await loadDashboard(rangeSelect.value);
@@ -3119,7 +3351,7 @@ window.addEventListener("popstate", async () => {
 
   if (route.page === "dashboard" && route.service) {
     resourcePanel.classList.add("hidden");
-    setD2Route(false);
+    setD2Route(true);
     previewBanner.classList.add("hidden");
     hideLanding();
     isPreviewMode = false;
