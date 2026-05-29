@@ -1,0 +1,866 @@
+/* Dashboard — D v2 visual language extension.
+   Adds: sub-tabs, KPI cards (dense + spark-wrap), insights row,
+   chart panels, simple data tables, peak heatmap, donut, funnel,
+   score gauge, signal breakdown, session timeline, range segmented. */
+
+/* ───── Sub-tab bar (Marketing / Technical / Readiness) ───── */
+.kr-dash-subtabs {
+  display: flex; align-items: center; gap: 0;
+  border-bottom: 1px solid var(--kr-border);
+  margin: -4px -4px 24px;
+  padding: 0 4px;
+}
+.kr-dash-subtab {
+  font-family: 'Geist Mono', monospace; font-size: 11.5px;
+  letter-spacing: 0.4px;
+  color: var(--kr-text-muted);
+  padding: 10px 14px;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  display: inline-flex; align-items: center; gap: 8px;
+  cursor: pointer;
+}
+.kr-dash-subtab.is-active {
+  color: var(--kr-text);
+  border-bottom-color: var(--kr-text);
+}
+.kr-dash-subtab-num {
+  font-size: 9.5px;
+  padding: 1px 5px;
+  border: 1px solid var(--kr-border); border-radius: 3px;
+  color: var(--kr-text-muted);
+}
+.kr-dash-subtab.is-active .kr-dash-subtab-num {
+  color: var(--kr-accent); border-color: var(--kr-accent-soft-hi); background: var(--kr-accent-soft);
+}
+.kr-dash-subtab-meta {
+  margin-left: auto;
+  font-family: 'Geist Mono', monospace; font-size: 11px;
+  color: var(--kr-text-muted);
+  display: inline-flex; align-items: center; gap: 12px;
+  padding: 10px 4px;
+}
+
+/* ───── Time range segmented control (header right) ───── */
+.kr-dash-range {
+  display: inline-flex; align-items: stretch;
+  border: 1px solid var(--kr-border); border-radius: 8px;
+  background: var(--kr-surface);
+  overflow: hidden;
+}
+.kr-dash-range-btn {
+  font-family: 'Geist Mono', monospace; font-size: 11px;
+  letter-spacing: 0.4px;
+  padding: 7px 12px;
+  color: var(--kr-text-muted);
+  background: transparent;
+  border: none; border-right: 1px solid var(--kr-border);
+  cursor: pointer;
+}
+.kr-dash-range-btn:last-child { border-right: none; }
+.kr-dash-range-btn.is-active {
+  color: var(--kr-text);
+  background: var(--kr-surface-2);
+}
+
+/* ───── Narration — Variation A (editorial) ───── */
+.kr-dash-narr-a {
+  display: grid; gap: 18px;
+  grid-template-columns: 1fr;
+  padding: 18px 22px 20px;
+  background: var(--kr-surface);
+  border: 1px solid var(--kr-border);
+  border-radius: 14px;
+  margin-bottom: 20px;
+}
+.kr-dash-narr-a--desktop { grid-template-columns: auto 1fr; gap: 28px; align-items: flex-start; }
+.kr-dash-narr-a-tag {
+  font-family: 'Geist Mono', monospace;
+  font-size: 10.5px; letter-spacing: 0.8px; text-transform: uppercase;
+  color: var(--kr-accent);
+  background: var(--kr-accent-soft);
+  padding: 4px 10px; border-radius: 999px;
+  display: inline-flex; align-items: center; gap: 6px;
+  align-self: flex-start;
+}
+.kr-dash-narr-a-body { font-size: 14.5px; color: var(--kr-text); line-height: 1.6; letter-spacing: -0.1px; }
+.kr-dash-narr-a-body strong { font-weight: 600; }
+.kr-dash-narr-a-meta {
+  margin-top: 12px;
+  font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: 0.4px;
+  color: var(--kr-text-muted);
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+}
+.kr-dash-narr-a-meta-dot { width: 3px; height: 3px; border-radius: 50%; background: currentColor; opacity: 0.5; }
+
+/* ───── Narration — Variation B (condensed strip) ───── */
+.kr-dash-narr-b {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 16px;
+  border: 1px solid var(--kr-border);
+  border-radius: 10px;
+  background: var(--kr-surface);
+  margin-bottom: 18px;
+  font-size: 13px; color: var(--kr-text-dim);
+}
+.kr-dash-narr-b-tag {
+  font-family: 'Geist Mono', monospace; font-size: 9.5px;
+  letter-spacing: 0.8px; text-transform: uppercase;
+  color: var(--kr-accent); padding: 3px 7px; border-radius: 4px;
+  background: var(--kr-accent-soft);
+}
+.kr-dash-narr-b-text { flex: 1; }
+.kr-dash-narr-b-text strong { color: var(--kr-text); font-weight: 600; }
+.kr-dash-narr-b-cta {
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+  color: var(--kr-text-muted);
+  display: inline-flex; align-items: center; gap: 4px;
+}
+
+/* ───── KPI grid (4-col on desktop, 2-col on mobile) ───── */
+.kr-dash-kpis {
+  display: grid; gap: 10px;
+  grid-template-columns: 1fr 1fr;
+  margin-bottom: 20px;
+}
+.kr-dash-kpis--desktop { grid-template-columns: repeat(4, 1fr); }
+
+/* Variation A — dense KPI (label / value / delta inline, no spark) */
+.kr-dash-kpi-a {
+  background: var(--kr-surface);
+  border: 1px solid var(--kr-border);
+  border-radius: 12px;
+  padding: 14px 16px 14px;
+  display: flex; flex-direction: column; gap: 8px;
+  min-height: 96px;
+  position: relative;
+}
+.kr-dash-kpi-a-label {
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+  letter-spacing: 0.8px; text-transform: uppercase;
+  color: var(--kr-text-muted);
+}
+.kr-dash-kpi-a-row { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.kr-dash-kpi-a-value {
+  font-size: 28px; font-weight: 500;
+  letter-spacing: -1px; color: var(--kr-text);
+  line-height: 1;
+}
+.kr-dash-kpi-a-unit {
+  font-family: 'Geist Mono', monospace; font-size: 11px;
+  color: var(--kr-text-muted); letter-spacing: 0.4px;
+}
+.kr-dash-kpi-a-delta {
+  font-family: 'Geist Mono', monospace; font-size: 11px;
+  padding: 2px 7px; border-radius: 999px;
+  letter-spacing: 0.2px;
+}
+.kr-dash-kpi-a-delta.is-up { color: var(--kr-ok); background: var(--kr-ok-soft); }
+.kr-dash-kpi-a-delta.is-down { color: var(--kr-warn); background: var(--kr-warn-soft); }
+.kr-dash-kpi-a-compare {
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+  color: var(--kr-text-muted); margin-top: auto;
+}
+
+/* Variation B — spark-wrap KPI (label + value + sparkline panel) */
+.kr-dash-kpi-b {
+  background: var(--kr-surface);
+  border: 1px solid var(--kr-border);
+  border-radius: 12px;
+  padding: 14px 14px 12px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.kr-dash-kpi-b-head {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+}
+.kr-dash-kpi-b-label {
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+  letter-spacing: 0.8px; text-transform: uppercase;
+  color: var(--kr-text-muted);
+}
+.kr-dash-kpi-b-delta {
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+  letter-spacing: 0.2px;
+}
+.kr-dash-kpi-b-delta.is-up { color: var(--kr-ok); }
+.kr-dash-kpi-b-delta.is-down { color: var(--kr-warn); }
+.kr-dash-kpi-b-row { display: flex; align-items: baseline; gap: 6px; }
+.kr-dash-kpi-b-value {
+  font-size: 26px; font-weight: 500;
+  letter-spacing: -0.8px; color: var(--kr-text); line-height: 1;
+}
+.kr-dash-kpi-b-unit { font-family: 'Geist Mono', monospace; font-size: 11px; color: var(--kr-text-muted); }
+.kr-dash-kpi-b-spark {
+  background: var(--kr-surface-2);
+  border-radius: 6px;
+  padding: 8px 10px 6px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.kr-dash-kpi-b-spark-meta {
+  font-family: 'Geist Mono', monospace; font-size: 9.5px;
+  color: var(--kr-text-muted); letter-spacing: 0.4px;
+  display: flex; justify-content: space-between;
+}
+.kr-dash-kpi-b-spark-svg { height: 24px; width: 100%; color: var(--kr-accent); display: block; }
+
+/* ───── Insights chips (between KPIs and first chart) ───── */
+.kr-dash-insights {
+  display: grid; gap: 10px;
+  grid-template-columns: 1fr;
+  margin-bottom: 20px;
+}
+.kr-dash-insights--desktop { grid-template-columns: repeat(3, 1fr); }
+.kr-dash-insight {
+  border: 1px solid var(--kr-border);
+  background: var(--kr-surface);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex; align-items: flex-start; gap: 10px;
+  font-size: 12.5px; color: var(--kr-text);
+  line-height: 1.5;
+}
+.kr-dash-insight-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  margin-top: 8px; flex: none;
+}
+.kr-dash-insight--ok .kr-dash-insight-dot { background: var(--kr-ok); box-shadow: 0 0 0 3px var(--kr-ok-soft); }
+.kr-dash-insight--up .kr-dash-insight-dot { background: var(--kr-accent); box-shadow: 0 0 0 3px var(--kr-accent-soft); }
+.kr-dash-insight--warn .kr-dash-insight-dot { background: var(--kr-warn); box-shadow: 0 0 0 3px var(--kr-warn-soft); }
+.kr-dash-insight strong { font-weight: 600; }
+
+/* ───── Generic panel (chart container, table container) ───── */
+.kr-dash-panel {
+  background: var(--kr-surface);
+  border: 1px solid var(--kr-border);
+  border-radius: 14px;
+  padding: 18px 20px 18px;
+  display: flex; flex-direction: column; gap: 14px;
+  margin-bottom: 12px;
+}
+.kr-dash-panel-head {
+  display: flex; justify-content: space-between; align-items: flex-end; gap: 12px;
+}
+.kr-dash-panel-title { font-size: 14px; font-weight: 600; letter-spacing: -0.2px; margin: 0; }
+.kr-dash-panel-meta {
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+  color: var(--kr-text-muted); letter-spacing: 0.4px;
+  display: inline-flex; align-items: center; gap: 10px;
+}
+
+.kr-dash-grid-2 { display: grid; gap: 12px; grid-template-columns: 1fr; }
+.kr-dash-grid-2--desktop { grid-template-columns: 1fr 1fr; }
+.kr-dash-grid-3 { display: grid; gap: 12px; grid-template-columns: 1fr; }
+.kr-dash-grid-3--desktop { grid-template-columns: repeat(3, 1fr); }
+
+/* ───── Trend line chart placeholder ───── */
+.kr-dash-trend { display: block; width: 100%; height: 200px; }
+.kr-dash-trend--lg { height: 240px; }
+.kr-dash-trend-path-fill { fill: var(--kr-accent-soft); opacity: 1; }
+.kr-dash-trend-path-line { fill: none; stroke: var(--kr-accent); stroke-width: 1.6; stroke-linejoin: round; }
+.kr-dash-trend-grid line { stroke: var(--kr-border); stroke-width: 1; }
+.kr-dash-trend-axis-label {
+  font-family: 'Geist Mono', monospace; font-size: 9.5px;
+  fill: var(--kr-text-muted); letter-spacing: 0.4px;
+}
+
+/* ───── Simple data table ───── */
+.kr-dash-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.kr-dash-table thead th {
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+  text-transform: uppercase; letter-spacing: 0.6px;
+  color: var(--kr-text-muted); font-weight: 500;
+  text-align: left; padding: 8px 8px; border-bottom: 1px solid var(--kr-border);
+}
+.kr-dash-table thead th.is-num { text-align: right; }
+.kr-dash-table tbody td {
+  padding: 9px 8px; border-bottom: 1px solid var(--kr-border);
+  color: var(--kr-text);
+}
+.kr-dash-table tbody tr:last-child td { border-bottom: none; }
+.kr-dash-table tbody td.is-num {
+  font-family: 'Geist Mono', monospace; font-size: 12.5px;
+  text-align: right; color: var(--kr-text);
+}
+.kr-dash-table tbody td.is-mono { font-family: 'Geist Mono', monospace; font-size: 12.5px; }
+.kr-dash-table tbody td.is-dim { color: var(--kr-text-muted); }
+.kr-dash-table-bar {
+  position: relative; height: 6px; border-radius: 3px;
+  background: var(--kr-surface-2); overflow: hidden; min-width: 60px;
+}
+.kr-dash-table-bar-fill {
+  position: absolute; left: 0; top: 0; bottom: 0; background: var(--kr-accent);
+  border-radius: 3px; opacity: 0.85;
+}
+.kr-dash-table-bar-cell { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
+.kr-dash-table-bar-pct {
+  font-family: 'Geist Mono', monospace; font-size: 11.5px;
+  color: var(--kr-text-muted); min-width: 44px; text-align: right;
+}
+
+/* ───── Geo placeholder (list with bars; map placeholder above) ───── */
+.kr-dash-geo {
+  display: grid; gap: 18px;
+  grid-template-columns: 1fr;
+}
+.kr-dash-geo--desktop { grid-template-columns: 1.2fr 1fr; align-items: stretch; }
+.kr-dash-geo-map {
+  position: relative;
+  background:
+    radial-gradient(ellipse at 28% 38%, var(--kr-accent-soft) 0%, transparent 22%),
+    radial-gradient(ellipse at 52% 36%, var(--kr-accent-soft) 0%, transparent 12%),
+    radial-gradient(ellipse at 68% 42%, var(--kr-accent-soft) 0%, transparent 10%),
+    radial-gradient(ellipse at 75% 58%, var(--kr-accent-soft) 0%, transparent 8%),
+    var(--kr-surface-2);
+  background-size: cover;
+  border-radius: 10px;
+  min-height: 240px;
+  overflow: hidden;
+}
+.kr-dash-geo-map-grid {
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(to right, var(--kr-border) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--kr-border) 1px, transparent 1px);
+  background-size: 24px 24px;
+  opacity: 0.4;
+}
+.kr-dash-geo-map-pin {
+  position: absolute; width: 10px; height: 10px; border-radius: 50%;
+  background: var(--kr-accent);
+  box-shadow: 0 0 0 3px var(--kr-accent-soft-hi), 0 0 0 8px var(--kr-accent-soft);
+  transform: translate(-50%, -50%);
+}
+.kr-dash-geo-map-pin--lg { width: 14px; height: 14px; }
+.kr-dash-geo-map-label {
+  position: absolute; transform: translate(-50%, -50%);
+  font-family: 'Geist Mono', monospace; font-size: 10px;
+  color: var(--kr-text-dim);
+  margin-top: 14px; white-space: nowrap;
+  letter-spacing: 0.4px;
+}
+
+/* ───── Peak hours heatmap ───── */
+.kr-dash-peaks {
+  display: grid;
+  grid-template-columns: 24px repeat(24, 1fr);
+  gap: 2px;
+  align-items: center;
+}
+.kr-dash-peaks-day {
+  font-family: 'Geist Mono', monospace; font-size: 9.5px;
+  color: var(--kr-text-muted); letter-spacing: 0.4px;
+  text-align: right; padding-right: 4px;
+}
+.kr-dash-peaks-cell {
+  aspect-ratio: 1 / 1;
+  background: var(--kr-accent);
+  border-radius: 2px;
+}
+.kr-dash-peaks-foot {
+  display: flex; justify-content: space-between;
+  font-family: 'Geist Mono', monospace; font-size: 9.5px;
+  color: var(--kr-text-muted); padding: 4px 0 0 28px;
+}
+
+/* ───── Donut chart (browser / OS / device) ───── */
+.kr-dash-donut {
+  display: flex; align-items: center; gap: 18px;
+  min-height: 160px;
+}
+.kr-dash-donut-svg { flex: none; width: 120px; height: 120px; }
+.kr-dash-donut-legend { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.kr-dash-donut-row {
+  display: grid; grid-template-columns: 12px 1fr auto;
+  align-items: center; gap: 8px;
+  font-size: 12px;
+}
+.kr-dash-donut-swatch { width: 10px; height: 10px; border-radius: 2px; }
+.kr-dash-donut-name { color: var(--kr-text); }
+.kr-dash-donut-pct {
+  font-family: 'Geist Mono', monospace; font-size: 11.5px;
+  color: var(--kr-text-muted);
+}
+.kr-dash-donut-swatch--a { background: var(--kr-accent); }
+.kr-dash-donut-swatch--b { background: var(--kr-accent); opacity: 0.7; }
+.kr-dash-donut-swatch--c { background: var(--kr-accent); opacity: 0.45; }
+.kr-dash-donut-swatch--d { background: var(--kr-accent); opacity: 0.28; }
+.kr-dash-donut-swatch--e { background: var(--kr-text-muted); opacity: 0.45; }
+
+/* ───── Funnel ───── */
+.kr-dash-funnel { display: flex; flex-direction: column; gap: 10px; }
+.kr-dash-funnel-row { display: flex; flex-direction: column; gap: 6px; }
+.kr-dash-funnel-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 12.5px;
+}
+.kr-dash-funnel-head strong { font-weight: 600; }
+.kr-dash-funnel-head-meta {
+  font-family: 'Geist Mono', monospace; font-size: 11px;
+  color: var(--kr-text-muted);
+}
+.kr-dash-funnel-bar {
+  height: 24px; border-radius: 4px;
+  background: var(--kr-surface-2);
+  position: relative; overflow: hidden;
+}
+.kr-dash-funnel-bar-fill {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  background: var(--kr-accent); opacity: 0.85; border-radius: 4px;
+}
+.kr-dash-funnel-drop {
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+  color: var(--kr-warn); margin-top: 4px;
+}
+
+/* ───── Session timeline ───── */
+.kr-dash-sessions { display: flex; flex-direction: column; gap: 12px; }
+.kr-dash-session {
+  border: 1px solid var(--kr-border); border-radius: 10px;
+  padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.kr-dash-session-head {
+  display: flex; align-items: center; gap: 12px;
+  font-size: 12.5px;
+}
+.kr-dash-session-id {
+  font-family: 'Geist Mono', monospace; font-size: 12px;
+  color: var(--kr-text);
+}
+.kr-dash-session-meta {
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+  color: var(--kr-text-muted); letter-spacing: 0.4px;
+}
+.kr-dash-session-status {
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+  padding: 2px 8px; border-radius: 999px;
+  margin-left: auto;
+}
+.kr-dash-session-status.is-ok { color: var(--kr-ok); background: var(--kr-ok-soft); }
+.kr-dash-session-status.is-bad { color: var(--kr-warn); background: var(--kr-warn-soft); }
+.kr-dash-session-track {
+  display: flex; align-items: center; gap: 0; overflow: hidden;
+  flex-wrap: wrap; row-gap: 6px;
+}
+.kr-dash-session-step {
+  font-family: 'Geist Mono', monospace; font-size: 11px;
+  padding: 3px 7px; border: 1px solid var(--kr-border); border-radius: 4px;
+  color: var(--kr-text-dim);
+  background: var(--kr-surface);
+  white-space: nowrap;
+}
+.kr-dash-session-step.is-error { color: var(--kr-warn); border-color: var(--kr-warn-soft); background: var(--kr-warn-soft); }
+.kr-dash-session-step-sep {
+  font-family: 'Geist Mono', monospace; color: var(--kr-text-muted);
+  padding: 0 4px; font-size: 10px;
+}
+
+/* ───── Readiness score hero ───── */
+.kr-dash-score-hero {
+  background: var(--kr-surface);
+  border: 1px solid var(--kr-border);
+  border-radius: 14px;
+  padding: 26px 28px;
+  display: grid; gap: 24px;
+  grid-template-columns: 1fr;
+  margin-bottom: 20px;
+}
+.kr-dash-score-hero--desktop { grid-template-columns: auto 1fr; align-items: center; gap: 36px; }
+.kr-dash-score-ring {
+  width: 130px; height: 130px; position: relative;
+}
+.kr-dash-score-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.kr-dash-score-ring-bg { fill: none; stroke: var(--kr-surface-2); stroke-width: 10; }
+.kr-dash-score-ring-fill {
+  fill: none; stroke: url(#krDashScoreGrad); stroke-width: 10; stroke-linecap: round;
+}
+.kr-dash-score-ring-label {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.kr-dash-score-num {
+  font-size: 42px; font-weight: 600; letter-spacing: -1.6px; color: var(--kr-text); line-height: 1;
+}
+.kr-dash-score-of {
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+  color: var(--kr-text-muted); margin-top: 2px; letter-spacing: 0.8px;
+}
+.kr-dash-score-meta { display: flex; flex-direction: column; gap: 10px; }
+.kr-dash-score-grade {
+  font-size: 22px; font-weight: 600; letter-spacing: -0.4px; margin: 0;
+}
+.kr-dash-score-grade strong { color: var(--kr-ok); }
+.kr-dash-score-desc { font-size: 13.5px; color: var(--kr-text-dim); margin: 0; line-height: 1.5; max-width: 560px; }
+.kr-dash-score-bar {
+  display: flex; gap: 4px;
+  margin-top: 6px;
+}
+.kr-dash-score-bar-cell {
+  flex: 1; height: 6px; border-radius: 2px;
+  background: var(--kr-surface-2);
+}
+.kr-dash-score-bar-cell.is-on { background: var(--kr-accent); }
+.kr-dash-score-bar-cell.is-on-ok { background: var(--kr-ok); }
+.kr-dash-score-bar-cell.is-off { background: var(--kr-surface-2); }
+.kr-dash-score-bar-foot {
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+  color: var(--kr-text-muted); letter-spacing: 0.4px;
+  display: flex; justify-content: space-between; margin-top: 4px;
+}
+
+/* ───── Readiness — signal breakdown ───── */
+.kr-dash-signals {
+  display: grid; gap: 8px;
+  grid-template-columns: 1fr;
+}
+.kr-dash-signals--desktop { grid-template-columns: 1fr 1fr; }
+.kr-dash-signal {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--kr-border); border-radius: 10px;
+  background: var(--kr-surface);
+}
+.kr-dash-signal--miss { background: var(--kr-warn-soft); border-color: transparent; }
+.kr-dash-signal-name { font-size: 13px; font-weight: 500; color: var(--kr-text); }
+.kr-dash-signal-score {
+  font-family: 'Geist Mono', monospace; font-size: 12px;
+  color: var(--kr-text);
+}
+.kr-dash-signal-score-num { font-weight: 600; }
+.kr-dash-signal-score-weight { color: var(--kr-text-muted); }
+.kr-dash-signal-sub {
+  grid-column: 1 / -1;
+  font-size: 11.5px; color: var(--kr-text-muted);
+  display: flex; align-items: center; gap: 8px;
+}
+.kr-dash-signal--miss .kr-dash-signal-score-num { color: var(--kr-warn); }
+.kr-dash-signal-miss-tag {
+  font-family: 'Geist Mono', monospace; font-size: 9.5px;
+  padding: 1px 5px; border-radius: 3px;
+  background: var(--kr-warn-soft); color: var(--kr-warn);
+  letter-spacing: 0.6px; text-transform: uppercase;
+}
+.kr-dash-signal--miss .kr-dash-signal-sub { color: var(--kr-warn); opacity: 0.8; }
+
+/* ───── Readiness — improve list (re-uses find-improve-* tokens) ───── */
+/* none — we reuse .kr-d-find-improve from existing CSS */
+
+/* ───── Range cell inside command bar ───── */
+.kr-d2-cmdbar-range {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: 'Geist Mono', monospace; font-size: 11px;
+  color: var(--kr-text-muted);
+}
+.kr-d2-cmdbar-range-here { color: var(--kr-text); }
+
+/* ═════════════════════════════════════════════════════════════════════
+   INTERACTIONS — hover tooltips, filter bar, command palette, drill drawer,
+   row selection / hover states. Same D v2 tokens, layered overlays.
+   ═════════════════════════════════════════════════════════════════════ */
+
+/* Tooltip card (used by trend chart, heatmap, donut) */
+.kr-dash-tip {
+  position: absolute;
+  background: var(--kr-surface);
+  border: 1px solid var(--kr-border-strong);
+  border-radius: 8px;
+  padding: 10px 12px;
+  box-shadow: 0 18px 36px -22px rgba(0,0,0,0.45);
+  min-width: 180px;
+  font-size: 12px;
+  z-index: 30;
+  pointer-events: none;
+}
+.kr-dash-tip-head {
+  font-family: 'Geist Mono', monospace; font-size: 10px;
+  letter-spacing: 0.6px; text-transform: uppercase;
+  color: var(--kr-text-muted);
+  margin-bottom: 6px;
+}
+.kr-dash-tip-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 18px; padding: 2px 0;
+}
+.kr-dash-tip-label { color: var(--kr-text); display: flex; align-items: center; gap: 6px; }
+.kr-dash-tip-swatch { width: 8px; height: 2px; background: var(--kr-accent); }
+.kr-dash-tip-value {
+  font-family: 'Geist Mono', monospace; font-size: 12.5px;
+  color: var(--kr-text); font-weight: 500;
+}
+.kr-dash-tip-delta {
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+  color: var(--kr-ok);
+}
+.kr-dash-tip-foot {
+  margin-top: 8px; padding-top: 8px;
+  border-top: 1px solid var(--kr-border);
+  font-family: 'Geist Mono', monospace; font-size: 10px;
+  color: var(--kr-text-muted); letter-spacing: 0.4px;
+  display: flex; align-items: center; gap: 6px;
+}
+
+/* Trend chart guide line + dot */
+.kr-dash-trend-guide { stroke: var(--kr-text); stroke-width: 1; stroke-dasharray: 2 3; opacity: 0.35; }
+.kr-dash-trend-dot { fill: var(--kr-bg); stroke: var(--kr-accent); stroke-width: 2.5; }
+
+/* Heatmap focused cell */
+.kr-dash-peaks-cell.is-focused {
+  outline: 2px solid var(--kr-text);
+  outline-offset: 1px;
+  border-radius: 3px;
+}
+
+/* Donut focused segment (lift via stroke ring) */
+.kr-dash-donut-row.is-focused {
+  background: var(--kr-surface-2);
+  margin: 0 -8px; padding: 4px 8px; border-radius: 6px;
+}
+
+/* Filter chip bar (below sub-tabs when filters are active) */
+.kr-dash-filterbar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 18px;
+  padding: 10px 14px;
+  background: var(--kr-accent-soft);
+  border: 1px solid var(--kr-accent-soft-hi);
+  border-radius: 10px;
+  font-size: 12.5px;
+}
+.kr-dash-filterbar-label {
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+  letter-spacing: 0.6px; text-transform: uppercase;
+  color: var(--kr-accent);
+}
+.kr-dash-filterchip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 4px 4px 10px;
+  border-radius: 999px;
+  background: var(--kr-surface);
+  border: 1px solid var(--kr-accent-soft-hi);
+  color: var(--kr-text);
+  font-size: 12px;
+}
+.kr-dash-filterchip-key {
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+  color: var(--kr-text-muted);
+}
+.kr-dash-filterchip-val { font-weight: 500; }
+.kr-dash-filterchip-x {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--kr-surface-2);
+  font-family: 'Geist Mono', monospace; font-size: 10px;
+  color: var(--kr-text-muted); cursor: pointer;
+}
+.kr-dash-filterbar-impact {
+  margin-left: auto;
+  font-family: 'Geist Mono', monospace; font-size: 11px;
+  color: var(--kr-accent); letter-spacing: 0.2px;
+}
+.kr-dash-filterbar-clear {
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+  color: var(--kr-text-muted);
+  background: none; border: none; cursor: pointer;
+  text-decoration: underline; text-underline-offset: 2px;
+}
+
+/* Panel-level "filtered" badge */
+.kr-dash-panel-filterbadge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: 'Geist Mono', monospace; font-size: 10px;
+  letter-spacing: 0.6px; text-transform: uppercase;
+  color: var(--kr-accent);
+  padding: 2px 7px; border-radius: 4px;
+  background: var(--kr-accent-soft);
+}
+.kr-dash-panel-filterbadge-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--kr-accent);
+}
+
+/* Table row hover + selected */
+.kr-dash-table tbody tr.is-hover td { background: var(--kr-surface-2); }
+.kr-dash-table tbody tr.is-selected td {
+  background: var(--kr-accent-soft);
+  color: var(--kr-text);
+}
+.kr-dash-table tbody tr.is-selected td:first-child {
+  box-shadow: inset 3px 0 0 var(--kr-accent);
+}
+
+/* KPI hover affordance (subtle outline, mono pin button on focus) */
+.kr-dash-kpi-a.is-hover, .kr-dash-kpi-b.is-hover { border-color: var(--kr-border-strong); }
+.kr-dash-kpi-a.is-active, .kr-dash-kpi-b.is-active {
+  border-color: var(--kr-accent);
+  box-shadow: 0 0 0 3px var(--kr-accent-soft);
+}
+.kr-dash-kpi-a-action, .kr-dash-kpi-b-action {
+  position: absolute; right: 10px; top: 10px;
+  font-family: 'Geist Mono', monospace; font-size: 9.5px;
+  padding: 1px 5px; border: 1px solid var(--kr-border);
+  border-radius: 4px;
+  color: var(--kr-text-muted);
+  background: var(--kr-bg);
+}
+.kr-dash-kpi-b { position: relative; }
+
+/* Command palette overlay */
+.kr-dash-cmdk-scrim {
+  position: absolute; inset: 0;
+  background: rgba(0, 0, 0, 0.32);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding-top: 96px;
+  z-index: 40;
+  backdrop-filter: blur(2px);
+}
+.kr-screen[data-theme="light"] .kr-dash-cmdk-scrim { background: rgba(15, 12, 8, 0.18); }
+.kr-dash-cmdk {
+  width: 640px; max-width: calc(100% - 80px);
+  background: var(--kr-surface);
+  border: 1px solid var(--kr-border-strong);
+  border-radius: 14px;
+  box-shadow: 0 24px 60px -20px rgba(0,0,0,0.45);
+  overflow: hidden;
+}
+.kr-dash-cmdk-input {
+  display: flex; align-items: center; gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--kr-border);
+  font-size: 15px;
+  color: var(--kr-text);
+}
+.kr-dash-cmdk-input-prefix {
+  font-family: 'Geist Mono', monospace; font-size: 12px;
+  color: var(--kr-text-muted);
+}
+.kr-dash-cmdk-input-text { color: var(--kr-text); flex: 1; }
+.kr-dash-cmdk-input-caret {
+  display: inline-block; width: 1.5px; height: 16px;
+  background: var(--kr-accent);
+  animation: krCaretBlink 1s steps(2) infinite;
+}
+@keyframes krCaretBlink { 50% { opacity: 0; } }
+.kr-dash-cmdk-input-esc {
+  font-family: 'Geist Mono', monospace; font-size: 10px;
+  padding: 2px 7px; border: 1px solid var(--kr-border); border-radius: 4px;
+  color: var(--kr-text-muted);
+}
+.kr-dash-cmdk-group {
+  padding: 10px 6px 12px;
+}
+.kr-dash-cmdk-group + .kr-dash-cmdk-group { border-top: 1px solid var(--kr-border); }
+.kr-dash-cmdk-group-label {
+  font-family: 'Geist Mono', monospace; font-size: 9.5px;
+  letter-spacing: 1px; text-transform: uppercase;
+  color: var(--kr-text-muted);
+  padding: 4px 14px 6px;
+}
+.kr-dash-cmdk-item {
+  display: grid; grid-template-columns: 18px 1fr auto auto;
+  gap: 12px; align-items: center;
+  padding: 8px 14px;
+  font-size: 13px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--kr-text);
+}
+.kr-dash-cmdk-item.is-active { background: var(--kr-accent-soft); }
+.kr-dash-cmdk-item-glyph {
+  font-family: 'Geist Mono', monospace; font-size: 11px;
+  color: var(--kr-text-muted); width: 18px; text-align: center;
+}
+.kr-dash-cmdk-item-meta {
+  font-family: 'Geist Mono', monospace; font-size: 11px;
+  color: var(--kr-text-muted);
+}
+.kr-dash-cmdk-item-kbd {
+  font-family: 'Geist Mono', monospace; font-size: 10px;
+  padding: 2px 6px; border: 1px solid var(--kr-border); border-radius: 4px;
+  color: var(--kr-text-muted);
+}
+.kr-dash-cmdk-item.is-active .kr-dash-cmdk-item-kbd {
+  border-color: var(--kr-accent-soft-hi); color: var(--kr-accent);
+}
+.kr-dash-cmdk-foot {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 16px;
+  background: var(--kr-surface-2);
+  border-top: 1px solid var(--kr-border);
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+  color: var(--kr-text-muted); letter-spacing: 0.4px;
+}
+.kr-dash-cmdk-foot-cell { display: inline-flex; align-items: center; gap: 6px; }
+
+/* Drill drawer — right-side slide-in panel */
+.kr-dash-drill {
+  position: absolute; top: 0; right: 0; bottom: 0;
+  width: 520px;
+  background: var(--kr-surface);
+  border-left: 1px solid var(--kr-border-strong);
+  box-shadow: -24px 0 48px -16px rgba(0,0,0,0.35);
+  display: flex; flex-direction: column;
+  z-index: 45;
+}
+.kr-dash-drill-head {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--kr-border);
+  gap: 12px;
+}
+.kr-dash-drill-h {
+  display: flex; flex-direction: column; gap: 6px;
+}
+.kr-dash-drill-eyebrow {
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+  letter-spacing: 0.8px; text-transform: uppercase;
+  color: var(--kr-text-muted);
+}
+.kr-dash-drill-title {
+  font-size: 22px; font-weight: 600; letter-spacing: -0.4px; margin: 0;
+  display: flex; align-items: baseline; gap: 10px;
+}
+.kr-dash-drill-delta {
+  font-family: 'Geist Mono', monospace; font-size: 12px;
+  color: var(--kr-ok); background: var(--kr-ok-soft);
+  padding: 2px 8px; border-radius: 999px;
+}
+.kr-dash-drill-close {
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+  padding: 4px 8px; border: 1px solid var(--kr-border); border-radius: 6px;
+  background: transparent; color: var(--kr-text-muted); cursor: pointer;
+}
+.kr-dash-drill-body {
+  padding: 16px 20px; display: flex; flex-direction: column; gap: 18px;
+  overflow-y: auto; flex: 1;
+}
+.kr-dash-drill-section {
+  display: flex; flex-direction: column; gap: 10px;
+}
+.kr-dash-drill-section-h {
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+  letter-spacing: 0.6px; text-transform: uppercase;
+  color: var(--kr-text-muted);
+}
+.kr-dash-drill-mini-trend { height: 100px; width: 100%; }
+
+/* Scrim behind drill drawer (just a soft dim, not a hard modal) */
+.kr-dash-drill-scrim {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,0.18);
+  z-index: 44;
+}
+.kr-screen[data-theme="light"] .kr-dash-drill-scrim { background: rgba(15, 12, 8, 0.08); }
+
+/* ───── Section divider title (Marketing only — between groups) ───── */
+.kr-dash-section-h {
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+  letter-spacing: 1px; text-transform: uppercase;
+  color: var(--kr-text-muted);
+  display: flex; align-items: center; gap: 10px;
+  margin: 28px 0 12px;
+}
+.kr-dash-section-h::after {
+  content: ""; flex: 1; height: 1px; background: var(--kr-border);
+}
