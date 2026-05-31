@@ -56,6 +56,8 @@
     resourceName: null,    // for the breadcrumb / scan tree title
     scanStepIdx: 0,        // active pipeline stage (0-based) for the cmdbar scope
     scanComplete: false,   // gates the "Continue" CTA on the scanning step
+    advancedMapping: false, // deep-link (?mode=mapping): jump straight to the
+                            // technical mapping editor, skipping scan + findings
   };
 
   // ── DOM helpers ───────────────────────────────────────────────
@@ -87,7 +89,7 @@
   const PROGRESS = [
     { label: "Scanning", num: "01" },
     { label: "AI findings", num: "02" },
-    { label: "Validate", num: "03" },
+    { label: "Confirm", num: "03" },
     { label: "Save", num: "04" },
   ];
 
@@ -135,6 +137,9 @@
     const res = state.resourceName || "resource";
     const curIdx = STEPS.indexOf(step);
     progress.innerHTML = renderProgress(curIdx);
+    // The deep-link mapping editor skips the scan/findings steps, so the
+    // 4-step strip would misrepresent progress — hide it.
+    progress.style.display = state.advancedMapping ? "none" : "";
 
     if (step === "scanning") {
       header.classList.remove("hidden");
@@ -165,6 +170,12 @@
 
     if (step === "findings") {
       const c = computeFindingCounts();
+      // When the AI is confident on every canonical field, the mapping step
+      // adds no value — the CTA saves the proposed mapping and goes straight
+      // to the dashboard. A low-confidence field is the one case where the
+      // user's input matters, so we route to the focused confirm screen.
+      const needsConfirm = lowConfidenceFields().length > 0;
+      const proceedLabel = needsConfirm ? "Review fields →" : "Build my dashboard →";
       header.classList.remove("hidden");
       header.innerHTML = `
         <div class="d2-pageheader-l">
@@ -179,13 +190,13 @@
         </div>
         <div class="d2-pageheader-r">
           ${headerAction("findingsBack", "← Re-scan", false)}
-          ${headerAction("findingsContinue", "Review & save →", true)}
+          ${headerAction("findingsContinue", proceedLabel, true)}
         </div>`;
       $("findingsBack").addEventListener("click", () => startStep1());
-      $("findingsContinue").addEventListener("click", () => gotoValidate());
+      $("findingsContinue").addEventListener("click", () => proceedFromFindings());
       bar.innerHTML = cmdbar("setup · findings · 02 / 04",
-        { id: "cmdReview", label: "Review & save →", accent: true });
-      $("cmdReview").addEventListener("click", () => gotoValidate());
+        { id: "cmdReview", label: proceedLabel, accent: true });
+      $("cmdReview").addEventListener("click", () => proceedFromFindings());
       return;
     }
 
@@ -209,9 +220,57 @@
     return `<button type="button" class="d2-headeraction${accent ? " d2-headeraction--accent" : ""}" id="${id}"${disabled ? " disabled" : ""}>${label}</button>`;
   }
 
+  const CANONICAL_FIELDS = [
+    "canonicalUserId", "canonicalSessionId", "canonicalPagePath", "canonicalReferrer",
+  ];
+
+  // Canonical fields the AI flagged as low-confidence in the current findings.
+  function lowConfidenceFields() {
+    const effective = Array.isArray(state.findings?.effectiveMapping)
+      ? state.findings.effectiveMapping
+      : [];
+    return effective
+      .filter((r) => CANONICAL_FIELDS.includes(r.canonical) && r.confidence === "low")
+      .map((r) => r.canonical);
+  }
+
+  // Findings CTA: skip the mapping step entirely when the AI is confident,
+  // otherwise drop into the focused confirm screen.
+  function proceedFromFindings() {
+    if (lowConfidenceFields().length > 0) {
+      gotoValidate();
+    } else {
+      submitValidation("accept_all");
+    }
+  }
+
   function gotoValidate() {
     renderValidate();
+    if (state.advancedMapping) {
+      const heading = document.querySelector("#step-validate .setup-h2");
+      const sub = document.querySelector("#step-validate .setup-subtitle");
+      if (heading) heading.textContent = "Edit field mapping";
+      if (sub) {
+        sub.textContent =
+          "Override how each canonical field maps to your telemetry, then save. " +
+          "Your dashboard re-renders with the new mapping.";
+      }
+    }
     show("validate");
+  }
+
+  // Deep-link entry (?mode=mapping): edit an already-configured resource's
+  // mapping without re-running the scan. Falls back to a full scan if the
+  // resource has no findings yet.
+  async function startMappingEditor() {
+    try {
+      await loadFindings();
+    } catch {
+      state.advancedMapping = false;
+      startStep1();
+      return;
+    }
+    gotoValidate();
   }
 
   // ── SSE reveal queue ──────────────────────────────────────────
@@ -768,12 +827,10 @@
   function renderValidate() {
     const f = state.findings;
     const effective = Array.isArray(f?.effectiveMapping) ? f.effectiveMapping : [];
-    const fields = ["canonicalUserId", "canonicalSessionId", "canonicalPagePath", "canonicalReferrer"];
+    const fields = CANONICAL_FIELDS;
     const byCanonical = Object.fromEntries(effective.map((r) => [r.canonical, r]));
 
-    const lowConf = effective
-      .filter((r) => fields.includes(r.canonical) && r.confidence === "low")
-      .map((r) => r.canonical);
+    const lowConf = lowConfidenceFields();
     const warn = $("validateWarning");
     const disclosure = $("mappingDisclosure");
     if (lowConf.length > 0) {
@@ -786,7 +843,9 @@
       disclosure.open = true;
     } else {
       warn.classList.add("hidden");
-      disclosure.open = false;
+      // Advanced editor lands here on purpose, so reveal the table; in the
+      // in-flow confirm path with full confidence we keep it collapsed.
+      disclosure.open = state.advancedMapping;
     }
 
     const tbody = $("validateBody");
@@ -882,7 +941,16 @@
   async function init() {
     // Validate-step buttons live in static markup; the rest of the chrome
     // (header + command bar) is wired per render in renderChrome().
-    $("validateBack").addEventListener("click", () => show("findings"));
+    $("validateBack").addEventListener("click", () => {
+      if (state.advancedMapping) {
+        const resName =
+          state.findings?.selectedResource?.appInsightsName ||
+          state.findings?.selectedResource?.name;
+        window.location.href = resName ? `/service/${encodeURIComponent(resName)}` : "/";
+        return;
+      }
+      show("findings");
+    });
     $("validateAcceptAll").addEventListener("click", () => submitValidation("accept_all"));
     $("validateSaveOverrides").addEventListener("click", () => submitValidation("override"));
 
@@ -903,7 +971,13 @@
     } catch {
       state.csrfToken = null;
     }
-    startStep1();
+    const mode = new URLSearchParams(window.location.search).get("mode");
+    if (mode === "mapping") {
+      state.advancedMapping = true;
+      startMappingEditor();
+    } else {
+      startStep1();
+    }
   }
 
   if (document.readyState === "loading") {
