@@ -86,6 +86,31 @@ coverage in [`tests/setupApi.test.js`](../../tests/setupApi.test.js) —
 "dashboard render reuses the config snapshot — no re-scan per load" and
 "dashboard load with no config returns SETUP_REQUIRED".
 
+### Confidence-gated mapping + advanced editor (2026-05-31)
+
+Dogfooding feedback: the dedicated **step 3 ("Save your mapping")** read as
+friction. In the common case the AI is confident on all four canonical
+fields, the technical table is already collapsed behind a `<details>`, and
+the user just clicks "Save" — so the step earns its place only when the AI is
+*unsure* and the user's input actually changes the outcome. The canonical
+field names + KQL expressions are also opaque to non-technical users, so
+forcing them into the happy path added jargon for no decision.
+
+The mapping step is now **pulled out of the happy path** and kept in the two
+places where it has value — as a confidence exception, and as an on-demand
+advanced editor:
+
+| Area | Change | Code |
+|------|--------|------|
+| Findings CTA | Was "Review & save →" → always routed to the validate step. Now `proceedFromFindings()`: when **every** canonical field is high/medium confidence the CTA reads **"Build my dashboard →"** and saves directly (`submitValidation("accept_all")`), skipping the validate step. Only a **low-confidence** field routes to the (reframed "Confirm") step. | `lowConfidenceFields` / `proceedFromFindings` / `renderChrome` in [`setup.js`](../../public/setup.js) |
+| Advanced editor | The full technical mapping table is now reachable any time from the dashboard resource pill ("Mapping" link → `/setup?mode=mapping`). `startMappingEditor()` loads the selected resource's findings **without re-running the scan** and opens the validate table directly (disclosure forced open, progress strip hidden, heading reframed "Edit field mapping", Back returns to the service dashboard). Falls back to a full scan if the resource has no findings yet. | `startMappingEditor` + `?mode=mapping` dispatch in [`setup.js`](../../public/setup.js); `editMappingButton` in [`index.html`](../../public/index.html) |
+
+No server-side change: the `accept_all` snapshot in `/api/setup/validate`
+(the 2026-05-12 bugfix) still runs, the `/api/setup/*` contracts are
+untouched, and the 4-step state machine is intact — the validate step is now
+**conditionally** visited rather than removed. Progress label "Validate" →
+"Confirm" to reflect its new role.
+
 ### Design intent vs. what shipped
 
 The original narrative below describes the **end-state** experience —
