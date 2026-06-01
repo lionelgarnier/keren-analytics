@@ -162,7 +162,7 @@ function SelectD2({ viewport, theme, toggleTheme }) {
   const Frame = viewport === 'mobile' ? MobileFrame : DesktopFrame;
   const desktop = viewport === 'desktop';
   return (
-    <Frame theme={theme} url="analytics.keren.run/services">
+    <Frame theme={theme} url="keren.run/services">
       <div className="kr-d-frame">
         <TopbarD2 active="Services" />
         <div className={`kr-d-body ${desktop ? 'kr-d-body--desktop' : ''}`} style={{ paddingBottom: 24 }}>
@@ -220,7 +220,7 @@ function ScanD2({ viewport, theme, toggleTheme }) {
   const desktop = viewport === 'desktop';
 
   return (
-    <Frame theme={theme} url="analytics.keren.run/setup">
+    <Frame theme={theme} url="keren.run/setup">
       <div className="kr-d-frame">
         <TopbarD2 active="Setup" />
         <div className={`kr-d-body ${desktop ? 'kr-d-body--desktop' : ''}`}>
@@ -369,7 +369,7 @@ function FindingsD2({ viewport, theme, toggleTheme }) {
   const sparkMap = { traffic: 'rising', pages: 'flat', perf: 'spiky', geo: 'flat', tech: 'rising' };
 
   return (
-    <Frame theme={theme} url="analytics.keren.run/setup">
+    <Frame theme={theme} url="keren.run/setup">
       <div className="kr-d-frame">
         <TopbarD2 active="Setup" />
         <div className={`kr-d-body ${desktop ? 'kr-d-body--desktop' : ''}`}>

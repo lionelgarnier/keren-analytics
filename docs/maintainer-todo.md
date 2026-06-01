@@ -45,7 +45,7 @@ links to the agent-side work that depends on it.
   Europe** (`keren-analytics-prod`), provisioned by `infra/main.bicep`
   via `.github/workflows/deploy-azure.yml`. The `render.yaml` blueprint
   remains in-repo as a self-host hint but is no longer the demo target.
-  URL: `https://analytics.keren.run` (DNS step below).
+  URL: `https://keren.run` (DNS step below).
 - **Status**: TODO.
 
 ### Launch-week scaling policy (`minReplicas=1`, `maxReplicas=1`)
@@ -69,7 +69,7 @@ links to the agent-side work that depends on it.
   in the workflow / Bicep outputs. Never commit values.
 - **Status**: TODO.
 
-### CNAME `analytics.keren.run` → Container App FQDN
+### CNAME `keren.run` → Container App FQDN
 - **Why**: the managed certificate for the custom domain only provisions
   once the CNAME already resolves.
 - **When**: after the first successful Azure deploy, before launch.
@@ -80,7 +80,7 @@ links to the agent-side work that depends on it.
   redirect URI override were applied directly on the live Container
   App. None of this lives in [`infra/main.bicep`](../infra/main.bicep)
   yet — see the follow-up entry below.
-- **Status**: DONE — `https://analytics.keren.run` serves the app with
+- **Status**: DONE — `https://keren.run` serves the app with
   a valid TLS cert.
 
 ### Bicep ↔ prod drift on custom domain + redirect URI
@@ -89,10 +89,10 @@ links to the agent-side work that depends on it.
   production Container App that were **not represented** in
   [`infra/main.bicep`](../infra/main.bicep):
   1. `properties.configuration.ingress.customDomains[0]` — binding for
-     `analytics.keren.run` to managed cert
+     `keren.run` to managed cert
      `mc-cae-keren-anal-analytics-keren--4208`.
   2. The managed cert resource itself on the Container Apps environment.
-  3. `AZURE_REDIRECT_URI=https://analytics.keren.run/auth/callback` env
+  3. `AZURE_REDIRECT_URI=https://keren.run/auth/callback` env
      var.
 - **Risk that existed**: anyone running `./deploy/azure-deploy.sh`
   against prod regressed OAuth + broke the custom domain. The image-only
@@ -101,7 +101,7 @@ links to the agent-side work that depends on it.
 - **Status**: DONE — 2026-05-13 — option 1 (lift into Bicep) shipped.
   Changes:
   - Two new params on `infra/main.bicep`: `customDomainName` (defaults
-    to `analytics.keren.run` via `infra/main.parameters.json`) and
+    to `keren.run` via `infra/main.parameters.json`) and
     `customDomainCertificateName` (defaults to
     `mc-cae-keren-anal-analytics-keren--4208`). The cert is referenced
     by name rather than created (cert provisioning depends on DNS
@@ -123,7 +123,7 @@ links to the agent-side work that depends on it.
     so future scripts / CI can introspect the binding without re-querying.
 - **Re-run safety**: confirmed via inspection — re-running
   `./deploy/azure-deploy.sh` against prod with the default params will
-  preserve `AZURE_REDIRECT_URI=https://analytics.keren.run/auth/callback`
+  preserve `AZURE_REDIRECT_URI=https://keren.run/auth/callback`
   and the custom-domain binding. A what-if dry-run before the next deploy
   is still good hygiene.
 
@@ -139,7 +139,7 @@ These need a human to click through `Settings` on
 - **Status**: DONE — 2026-05-10. Description :
   *"Plug-and-play Marketing & Technical dashboards for Azure App Insights —
   AI-mapped schema, KQL-only, MIT."* (102 chars). Homepage :
-  `https://analytics.keren.run`. Topics (10) : `analytics`,
+  `https://keren.run`. Topics (10) : `analytics`,
   `application-insights`, `azure`, `dashboard`, `express`, `kql`,
   `marketing-analytics`, `nodejs`, `oss`, `self-hosted`. Tout posé via
   `gh repo edit` + `gh api` ; modifiable au besoin.
@@ -563,23 +563,23 @@ az storage blob download --account-name "$STORAGE_ACCOUNT" \
 - **Status**: workflow file en place 2026-05-10 ; reste les 2 actions
   maintainer (script CI + secrets) avant le premier run automatique.
 
-### DNS `analytics.keren.run` pointé sur Azure
+### DNS `keren.run` pointé sur Azure
 - **Why**: ADR 0002 § 7 (DNS maintenu par ADR 0004 § Decision 5) — l'URL
-  canonique `https://analytics.keren.run` reste en place, seul l'endpoint
+  canonique `https://keren.run` reste en place, seul l'endpoint
   cible change.
 - **When**: déblocable depuis le 2026-05-10 — l'infra Azure est en place, le
   FQDN provisoire est `ca-keren-analytics.happyrock-d99ade88.francecentral.azurecontainerapps.io`.
 - **How**:
   1. Récupérer le FQDN Azure Container Apps après déploiement (forme
      `<app>.<env>.francecentral.azurecontainerapps.io`).
-  2. Chez le registrar de `keren.run`, créer un `CNAME analytics` → FQDN
-     Azure. Vérifier le record `asuid.analytics` requis par Azure pour
-     l'attache du custom domain.
+  2. Chez le registrar de `keren.run`, pointer l'apex `keren.run` vers le
+     FQDN Azure (A/ALIAS ou CNAME flatten selon le registrar). Vérifier le
+     record `asuid.keren.run` requis par Azure pour l'attache du custom
+     domain.
   3. Activer le **managed certificate** Azure Container Apps pour
-     `analytics.keren.run` (Let's Encrypt managé).
-  4. Configurer la redirection apex `keren.run` → `analytics.keren.run`
-     (chez le registrar si possible, sinon via un Cloudflare Worker
-     gratuit ou un Azure Front Door Standard).
+     `keren.run` (Let's Encrypt managé).
+  4. `keren.run` est désormais le domaine canonique servi directement —
+     aucune redirection apex à configurer.
 - **Status**: TODO.
 
 ### Mettre à jour `CLAUDE.md` après Phase A

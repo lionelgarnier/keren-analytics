@@ -256,7 +256,7 @@ Next steps:
        ./deploy/azure-app-registration.sh --redirect-uri "${REDIRECT_URI}"
      (Re-run safely; it dedupes redirect URIs.)
   2. Visit https://${APP_FQDN} and sign in to confirm OAuth works.
-  3. (Later) configure custom domain analytics.keren.run — see
-     docs/maintainer-todo.md § "DNS analytics.keren.run".
+  3. (Later) configure custom domain keren.run — see
+     docs/maintainer-todo.md § "DNS keren.run".
 
 EOF

@@ -118,5 +118,5 @@ jobs:
             echo
             echo "- Image: \`${ACR_NAME}.azurecr.io/${IMAGE_NAME}:${{ steps.tag.outputs.value }}\`"
             echo "- FQDN: \`${FQDN}\`"
-            echo "- Custom domain: https://analytics.keren.run"
+            echo "- Custom domain: https://keren.run"
           } >> "$GITHUB_STEP_SUMMARY"

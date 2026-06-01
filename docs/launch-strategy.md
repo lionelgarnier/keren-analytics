@@ -14,7 +14,7 @@
 >   ADR 0001) — no SaaS-track. The same numerical signals are now used as
 >   a qualitative heuristic to decide whether to trigger V2 multi-cloud
 >   (Scaleway port + article), per ADR 0004.
-> - **Project rename to `keren-analytics` and demo URL `analytics.keren.run`
+> - **Project rename to `keren-analytics` and demo URL `keren.run`
 >   apply to all launch artifacts** (README, landing, OG image, posts).
 >
 > **Audience.** Founder + future agents working on this repo. Read this before

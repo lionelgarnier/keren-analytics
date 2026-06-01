@@ -166,12 +166,12 @@ L'ADR 0003 prévoyait `terraform/{scaleway,azure,aws,gcp}/`. **Réduit à V1** :
 - L'ADR 0003 dans son ensemble est **archivée pour V1** — sa logique reste
   valable pour V2+, on la ressortira à ce moment-là.
 
-### 5. Domaine : `analytics.keren.run` maintenu
+### 5. Domaine : `keren.run` maintenu
 
-Décision DNS d'ADR 0002 § 7 maintenue : `https://analytics.keren.run`
+Décision DNS d'ADR 0002 § 7 maintenue : `https://keren.run`
 pointe sur la démo, peu importe le cloud d'hébergement. Seul l'enregistrement
-DNS change : `CNAME analytics` → endpoint Azure Container Apps (au lieu de
-Scaleway).
+DNS de l'apex `keren.run` change : il pointe désormais sur l'endpoint Azure
+Container Apps (au lieu de Scaleway).
 
 ### 6. `launch-strategy.md` : tactiques restaurées, gates SaaS toujours hors-sujet
 
@@ -224,7 +224,7 @@ distinction.
 ### Neutres
 
 - Renommage `keren-analytics` maintenu.
-- Domaine `analytics.keren.run` maintenu.
+- Domaine `keren.run` maintenu.
 - Refacto `src/azure/` → `src/providers/azure/` maintenu (bénéfice de clarté
   immédiat, pas un coût significatif).
 
@@ -238,7 +238,7 @@ distinction.
 | Refacto provider | `src/azure/` → `src/providers/azure/`, formaliser interface | Reporté V2 (cf. ADR 0001) |
 | Hébergement Azure | Bicep `infra/main.bicep` + script `deploy/azure-deploy.sh` | DONE 2026-05-10 (manuel) |
 | GH Actions OIDC `deploy-azure.yml` | Automatiser le déploiement | À faire |
-| DNS `analytics.keren.run` | CNAME → FQDN Azure Container Apps + managed cert | À faire |
+| DNS `keren.run` | CNAME → FQDN Azure Container Apps + managed cert | À faire |
 | Hard launch | Show HN, awesome-azure, Reddit, MS DevRel outreach | Phase B (post-Phase A stabilisée) |
 | **GATE** : signaux de traction | ≥ qq centaines stars, issues utilisateurs réelles, inbound | T+90 |
 | Adapter Scaleway + article portage | Conditionnel à la gate | V2 si gate passée |

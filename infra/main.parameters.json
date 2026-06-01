@@ -12,9 +12,7 @@
     "customDomainName": { "value": "keren.run" },
     "customDomainCertificateName": { "value": "keren.run-cae-kere-260601132645" },
     "additionalCustomDomains": {
-      "value": [
-        { "name": "analytics.keren.run", "certificateName": "mc-cae-keren-anal-analytics-keren--4208" }
-      ]
+      "value": []
     },
     "backupEnabled": { "value": true },
     "backupIntervalHours": { "value": 1 },

@@ -6,7 +6,7 @@
 ## Contexte one-liner
 
 Phase A (infra Azure + CI/CD + custom domain) est terminée et en prod sur
-`https://analytics.keren.run`. La prochaine étape est **Track F (AI-first
+`https://keren.run`. La prochaine étape est **Track F (AI-first
 setup wizard, ~15 jours focus)** — ré-scopée pre-launch par
 [ADR 0005](adr/0005-ai-first-scope.md) parce que le pitch "AI-mapped /
 AI explains" était de l'AI-washing (aucun LLM wiré dans le code).
@@ -92,7 +92,7 @@ AI explains" était de l'AI-washing (aucun LLM wiré dans le code).
 ## Liens utiles pour la nouvelle session
 
 - Repo : <https://github.com/lionelgarnier/keren-analytics>
-- Démo prod : <https://analytics.keren.run>
+- Démo prod : <https://keren.run>
 - Azure Portal RG : `keren-analytics-prod` (France Central)
 - Subscription : `0a3afaae-8849-4b27-8e43-dad3ba80ce58`
 - Container App : `ca-keren-analytics`

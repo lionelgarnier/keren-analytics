@@ -1,0 +1,15 @@
+# Keren Analytics — https://keren.run
+User-agent: *
+Allow: /$
+Allow: /privacy
+Disallow: /auth/
+Disallow: /api/
+Disallow: /setup
+Disallow: /services
+Disallow: /preview/
+Disallow: /dashboard/
+Disallow: /readiness
+Disallow: /recommendations
+Disallow: /prompts
+
+Sitemap: https://keren.run/sitemap.xml

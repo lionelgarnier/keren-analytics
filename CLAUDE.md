@@ -12,7 +12,7 @@ deployment, zero raw data storage, KQL-only.
 Status: **Phase 1 + Phase 2 + Phase A + Track F DONE**.
 
 - **Phase A (Azure-first hosting)** shipped 2026-05-10/11: Azure Container
-  Apps France Central, custom domain `https://analytics.keren.run` with
+  Apps France Central, custom domain `https://keren.run` with
   managed TLS cert, OAuth real mode validated against production App
   Insights, CI/CD via OIDC (`.github/workflows/deploy-azure.yml`) — see
   ADR 0004.

@@ -235,7 +235,7 @@ function MobileFrame({ theme = 'light', tone = 'tight', children }) {
   );
 }
 
-function DesktopFrame({ theme = 'light', url = 'analytics.keren.run/services', children }) {
+function DesktopFrame({ theme = 'light', url = 'keren.run/services', children }) {
   return (
     <div className="kr-screen" data-theme={theme}>
       <div className="kr-browserchrome">
