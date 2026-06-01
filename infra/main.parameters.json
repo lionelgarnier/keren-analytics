@@ -9,8 +9,13 @@
     "aiProvider": { "value": "azure-foundry" },
     "azureFoundryEndpoint": { "value": "https://keren-analytics-prod-foundry.services.ai.azure.com/api/projects/keren-analytics-prod/openai/v1/responses" },
     "azureFoundryDeployment": { "value": "gpt-5.4-mini" },
-    "customDomainName": { "value": "analytics.keren.run" },
-    "customDomainCertificateName": { "value": "mc-cae-keren-anal-analytics-keren--4208" },
+    "customDomainName": { "value": "keren.run" },
+    "customDomainCertificateName": { "value": "keren.run-cae-kere-260601132645" },
+    "additionalCustomDomains": {
+      "value": [
+        { "name": "analytics.keren.run", "certificateName": "mc-cae-keren-anal-analytics-keren--4208" }
+      ]
+    },
     "backupEnabled": { "value": true },
     "backupIntervalHours": { "value": 1 },
     "backupMaxSnapshots": { "value": 24 }
