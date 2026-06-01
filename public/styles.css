@@ -3936,13 +3936,8 @@ body {
   background: var(--bg);
 }
 .d2-topbar-l, .d2-topbar-r { display: flex; align-items: center; gap: 14px; }
-.d2-mark { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; letter-spacing: -0.2px; }
-.d2-mark-glyph {
-  width: 22px; height: 22px; border-radius: 6px;
-  background: var(--accent); color: #fff;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 13px; font-weight: 700;
-}
+.d2-mark { display: flex; align-items: center; font-weight: 600; font-size: 16px; letter-spacing: -0.2px; }
+.d2-mark-dot { color: var(--accent); }
 .d2-mark-tag {
   font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 10px;
   letter-spacing: 1px; text-transform: uppercase;
