@@ -421,9 +421,20 @@ connectButton.addEventListener("click", () => {
   window.location.href = "/auth/login";
 });
 
-logoutButton.addEventListener("click", async () => {
+async function logout() {
   await apiFetch("/auth/logout", { method: "POST" });
   window.location.href = "/";
+}
+
+logoutButton.addEventListener("click", logout);
+
+// Operator-console topbar tabs are re-rendered with the services hub, so the
+// Logout tab is wired through a delegated listener rather than a direct bind.
+document.addEventListener("click", (event) => {
+  const trigger = event.target.closest('[data-action="logout"]');
+  if (!trigger) return;
+  event.preventDefault();
+  logout();
 });
 
 rangeSelect.addEventListener("change", () => {
@@ -755,12 +766,12 @@ function renderResources(resources) {
   resourcePanel.innerHTML = `
     <div class="d2-topbar">
       <div class="d2-topbar-l">
-        <span class="d2-mark"><span class="d2-mark-glyph">K</span>Keren<span class="d2-mark-tag">VIKL</span></span>
+        <span class="d2-mark">Keren<span class="d2-mark-dot">.</span></span>
         <div class="d2-tabs">
           <a class="d2-tab is-active" href="/services">Services</a>
           <a class="d2-tab" href="/setup">Setup</a>
-          <a class="d2-tab" href="#">Audit</a>
-          <a class="d2-tab" href="#">Settings</a>
+          <a class="d2-tab" href="/docs">Docs</a>
+          <a class="d2-tab" href="/auth/logout" data-action="logout">Logout</a>
         </div>
       </div>
       <div class="d2-topbar-r">

@@ -3936,13 +3936,8 @@ body {
   background: var(--bg);
 }
 .d2-topbar-l, .d2-topbar-r { display: flex; align-items: center; gap: 14px; }
-.d2-mark { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; letter-spacing: -0.2px; }
-.d2-mark-glyph {
-  width: 22px; height: 22px; border-radius: 6px;
-  background: var(--accent); color: #fff;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 13px; font-weight: 700;
-}
+.d2-mark { display: flex; align-items: center; font-weight: 600; font-size: 16px; letter-spacing: -0.2px; }
+.d2-mark-dot { color: var(--accent); }
 .d2-mark-tag {
   font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 10px;
   letter-spacing: 1px; text-transform: uppercase;
@@ -4455,33 +4450,39 @@ body.d2-route #resourcePanel.d2-page { margin: 0; }
 
 /* ───── Sub-tab bar (Marketing / Technical / Readiness) ───── */
 .dash-subtabs {
-  display: flex; align-items: center; gap: 0;
-  border-bottom: 1px solid var(--border);
-  margin: -4px -4px 24px;
-  padding: 0 4px;
+  display: inline-flex; align-items: center; gap: 2px;
+  margin: 0 0 24px;
+  padding: 3px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
 }
 .dash-subtab {
-  font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 11.5px;
-  letter-spacing: 0.4px;
-  color: var(--text-muted);
-  padding: 10px 14px;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  display: inline-flex; align-items: center; gap: 8px;
+  appearance: none; -webkit-appearance: none;
+  font-family: inherit; font-size: 13px; font-weight: 500;
+  letter-spacing: 0;
+  color: var(--text-secondary);
+  background: none; border: none;
+  padding: 7px 16px;
+  border-radius: var(--radius-sm);
+  display: inline-flex; align-items: center; gap: 7px;
   cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
+.dash-subtab:hover { color: var(--text-primary); background: var(--border-light); }
 .dash-subtab.is-active {
   color: var(--text-primary);
-  border-bottom-color: var(--text-primary);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
 }
+.dash-subtab.is-active:hover { background: var(--surface); }
 .dash-subtab-num {
-  font-size: 9.5px;
-  padding: 1px 5px;
-  border: 1px solid var(--border); border-radius: 3px;
-  color: var(--text-muted);
-}
-.dash-subtab.is-active .dash-subtab-num {
-  color: var(--accent); border-color: var(--accent-border); background: var(--accent-bg);
+  font-family: ui-monospace, "JetBrains Mono", monospace;
+  font-size: 10px; font-weight: 600;
+  min-width: 16px; padding: 1px 5px; text-align: center;
+  border-radius: 999px;
+  color: var(--accent); background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
 }
 .dash-subtab-meta {
   margin-left: auto;
