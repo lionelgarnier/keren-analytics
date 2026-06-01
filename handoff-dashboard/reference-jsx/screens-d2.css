@@ -1,0 +1,204 @@
+/* Direction D v2 — Console SaaS with tree-meta + global command bar.
+   Borrowed: tree `┌├└` hierarchy from E, command bar from C.
+   Plus a few polish moves: keyboard shortcuts visible, hover affordances. */
+
+/* ───── Tree-style meta in cards ───── */
+.kr-d2-tree {
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+  color: var(--kr-text-muted); line-height: 1.65;
+  display: flex; flex-direction: column;
+}
+.kr-d2-tree-line {
+  display: grid; grid-template-columns: 14px 64px 1fr;
+  gap: 4px; align-items: baseline;
+}
+.kr-d2-tree-glyph { color: var(--kr-text-muted); opacity: 0.5; }
+.kr-d2-tree-key { color: var(--kr-text-muted); letter-spacing: 0.4px; }
+.kr-d2-tree-val { color: var(--kr-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kr-d2-tree-val-mute { color: var(--kr-text-dim); }
+
+/* ───── Resource card v2 (richer; subtle hover) ───── */
+.kr-d2-rescard {
+  background: var(--kr-surface);
+  border: 1px solid var(--kr-border);
+  border-radius: 14px;
+  padding: 18px 20px;
+  display: flex; flex-direction: column; gap: 14px;
+  position: relative;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.kr-d2-rescard:hover { border-color: var(--kr-border-strong); }
+.kr-d2-rescard-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.kr-d2-rescard-name {
+  font-size: 15px; font-weight: 600; letter-spacing: -0.2px;
+  display: flex; align-items: center; gap: 8px;
+}
+.kr-d2-rescard-namekey {
+  font-family: 'Geist Mono', monospace; font-size: 9.5px;
+  letter-spacing: 1px; color: var(--kr-text-muted);
+  padding: 1px 5px; border: 1px solid var(--kr-border); border-radius: 3px;
+}
+.kr-d2-rescard-sub {
+  font-size: 11.5px; color: var(--kr-text-muted);
+  margin-top: 4px; display: flex; align-items: center; gap: 6px;
+}
+
+.kr-d2-spark-wrap {
+  background: var(--kr-surface-2);
+  border-radius: 8px;
+  padding: 10px 12px 12px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.kr-d2-spark-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-family: 'Geist Mono', monospace; font-size: 10px;
+  color: var(--kr-text-muted); letter-spacing: 0.6px; text-transform: uppercase;
+}
+.kr-d2-spark-val { font-family: 'Geist', sans-serif; font-size: 15px; color: var(--kr-text); font-weight: 500; letter-spacing: -0.3px; text-transform: none; }
+.kr-d2-spark-val-mute { color: var(--kr-text-muted); }
+
+.kr-d2-spark {
+  height: 36px;
+  display: flex; align-items: flex-end; gap: 2px;
+}
+.kr-d2-spark-bar {
+  flex: 1; background: var(--kr-accent);
+  border-radius: 1.5px;
+  opacity: 0.9;
+}
+.kr-d2-rescard--unconfigured .kr-d2-spark-bar {
+  background: var(--kr-surface-3);
+  opacity: 0.8;
+}
+.kr-d2-rescard--unconfigured .kr-d2-spark-val { color: var(--kr-text-muted); }
+.kr-d2-rescard--incomplete .kr-d2-spark-bar { background: var(--kr-warn); opacity: 0.85; }
+
+.kr-d2-cardcta {
+  display: flex; justify-content: space-between; align-items: center;
+  padding-top: 12px; border-top: 1px solid var(--kr-border);
+}
+.kr-d2-cta-link {
+  font-size: 13px; font-weight: 500; color: var(--kr-text);
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.kr-d2-cta-link.is-warn { color: var(--kr-warn); }
+.kr-d2-cta-link.is-mute { color: var(--kr-text-dim); font-weight: 400; }
+.kr-d2-cta-secondary {
+  font-size: 11.5px; padding: 5px 10px; border-radius: 6px;
+  background: transparent; border: 1px solid var(--kr-border);
+  color: var(--kr-text-dim); cursor: pointer;
+}
+.kr-d2-cta-kbd {
+  font-family: 'Geist Mono', monospace; font-size: 9.5px;
+  padding: 1px 5px; border: 1px solid var(--kr-border); border-radius: 4px;
+  color: var(--kr-text-muted); margin-left: 6px;
+}
+
+/* ───── Global command bar (persistent across all v2 screens) ───── */
+.kr-d2-cmdbar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 24px;
+  border-top: 1px solid var(--kr-border);
+  background: var(--kr-surface);
+  font-size: 11.5px; color: var(--kr-text-muted);
+}
+.kr-d2-cmdbar-l, .kr-d2-cmdbar-r {
+  display: flex; align-items: center; gap: 16px;
+}
+.kr-d2-cmdbar-cell { display: inline-flex; align-items: center; gap: 6px; }
+.kr-d2-cmdbar-kbd {
+  font-family: 'Geist Mono', monospace; font-size: 10px;
+  padding: 2px 6px; border: 1px solid var(--kr-border); border-radius: 4px;
+  color: var(--kr-text); background: var(--kr-bg);
+}
+.kr-d2-cmdbar-sep { opacity: 0.4; }
+.kr-d2-cmdbar-status {
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.kr-d2-cmdbar-status-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--kr-ok);
+  box-shadow: 0 0 0 2px var(--kr-ok-soft);
+}
+.kr-d2-cmdbar-action {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 10px; border-radius: 6px;
+  background: var(--kr-text); color: var(--kr-bg);
+  font-size: 11.5px; font-weight: 500;
+  border: none; cursor: pointer;
+}
+.kr-d2-cmdbar-action-accent { background: var(--kr-accent); color: #fff; }
+
+/* ───── Hero card head with breadcrumb + status badge inline ───── */
+.kr-d2-pageheader {
+  display: flex; justify-content: space-between; align-items: flex-end;
+  gap: 24px; margin-bottom: 28px;
+}
+.kr-d2-pageheader-l { display: flex; flex-direction: column; gap: 8px; max-width: 640px; }
+.kr-d2-pageheader-r { display: flex; align-items: center; gap: 10px; }
+
+.kr-d2-breadcrumb {
+  display: flex; align-items: center; gap: 6px;
+  font-family: 'Geist Mono', monospace; font-size: 11px;
+  color: var(--kr-text-muted); letter-spacing: 0.2px;
+  flex-wrap: wrap;
+}
+.kr-d2-breadcrumb-here { color: var(--kr-text); }
+.kr-d2-breadcrumb-sep { opacity: 0.5; }
+.kr-d2-breadcrumb-tag {
+  font-family: 'Geist Mono', monospace; font-size: 9.5px;
+  padding: 1px 5px; border: 1px solid var(--kr-border); border-radius: 3px;
+  color: var(--kr-ok); border-color: var(--kr-ok-soft); background: var(--kr-ok-soft);
+  letter-spacing: 0.8px;
+}
+.kr-d2-h1 {
+  font-size: 28px; font-weight: 600; letter-spacing: -0.6px;
+  line-height: 1.15; margin: 0;
+}
+.kr-d2-h1--xl { font-size: 36px; letter-spacing: -1px; }
+.kr-d2-sub { font-size: 14px; color: var(--kr-text-dim); margin: 0; max-width: 640px; line-height: 1.5; }
+
+.kr-d2-headeraction {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px; border-radius: 8px;
+  font-size: 13px; font-weight: 500;
+  background: transparent; border: 1px solid var(--kr-border); color: var(--kr-text); cursor: pointer;
+}
+.kr-d2-headeraction-accent { background: var(--kr-accent); color: #fff; border-color: var(--kr-accent); }
+
+/* ───── Scanning: cleaner left/right split, tree visible ───── */
+.kr-d2-scan-tree {
+  background: var(--kr-surface);
+  border: 1px solid var(--kr-border);
+  border-radius: 14px;
+  padding: 18px 20px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.kr-d2-scan-tree-head {
+  display: flex; justify-content: space-between; align-items: center;
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+  letter-spacing: 0.8px; text-transform: uppercase; color: var(--kr-text-muted);
+}
+.kr-d2-scan-tree-body {
+  font-family: 'Geist Mono', monospace; font-size: 12px;
+  line-height: 1.75;
+  display: flex; flex-direction: column;
+}
+.kr-d2-scan-tree-row {
+  display: grid; grid-template-columns: 14px 1fr auto;
+  gap: 8px; align-items: baseline;
+}
+.kr-d2-scan-tree-row.is-active {
+  background: var(--kr-accent-soft); margin: 0 -10px; padding: 2px 10px; border-radius: 4px;
+}
+.kr-d2-scan-tree-row.is-active .kr-d2-scan-tree-text { color: var(--kr-accent); }
+.kr-d2-scan-tree-glyph { color: var(--kr-text-muted); opacity: 0.5; }
+.kr-d2-scan-tree-text { color: var(--kr-text); }
+.kr-d2-scan-tree-text-mute { color: var(--kr-text-muted); }
+.kr-d2-scan-tree-count {
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+  color: var(--kr-text-muted);
+}
+.kr-d2-scan-tree-count.is-ok { color: var(--kr-ok); }
+.kr-d2-scan-tree-count.is-active { color: var(--kr-accent); }
+.kr-d2-scan-tree-pad { padding-left: 16px; }
+.kr-d2-scan-tree-pad2 { padding-left: 32px; }
