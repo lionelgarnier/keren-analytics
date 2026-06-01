@@ -79,7 +79,7 @@ Le renommage couvre :
 - `name` dans `package.json`
 - titres dans `README.md`, `public/index.html`, landing page
 - références dans tous les docs (`docs/**/*.md`)
-- domaine de démo : `analytics.keren.run` (cf. ADR 0002)
+- domaine de démo : `keren.run` (cf. ADR 0002)
 
 Le renommage est **traité dans une PR séparée**, pas dans cette ADR. Il est
 suffisamment large pour ne pas être bundlé avec un changement d'architecture.

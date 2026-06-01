@@ -508,10 +508,12 @@ async function loadStargazers() {
       const data = await resp.json();
       if (typeof data.stargazers_count === "number") {
         countEl.textContent = data.stargazers_count.toLocaleString();
+        // Only reveal the count once we have a real number from GitHub — never
+        // show a fabricated fallback (the span ships empty on purpose).
+        countEl.classList.add("is-loaded");
       }
     }
-  } catch { /* keep static fallback */ }
-  countEl.classList.add("is-loaded");
+  } catch { /* leave the counter hidden rather than show a fake number */ }
 }
 
 document.getElementById("onboardingDismiss").addEventListener("click", () => {

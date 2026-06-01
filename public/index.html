@@ -3,17 +3,49 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Keren Analytics turns Azure App Insights into Marketing and Technical dashboards in under 2 minutes." />
-    <meta property="og:title" content="Keren Analytics" />
-    <meta property="og:description" content="Azure App Insights -> Marketing and Technical dashboards in 2 minutes." />
+    <title>Keren Analytics — Azure App Insights dashboards in 2 minutes</title>
+    <meta name="description" content="Turn Azure Application Insights into Marketing & Technical dashboards in under 2 minutes. Open-source, MIT-licensed, no agent to deploy, no raw data leaving your tenant." />
+    <link rel="canonical" href="https://keren.run/" />
+    <meta name="theme-color" content="#2d6cf2" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+    <meta property="og:site_name" content="Keren Analytics" />
+    <meta property="og:title" content="Keren Analytics — Azure App Insights dashboards in 2 minutes" />
+    <meta property="og:description" content="Marketing & Technical dashboards on top of Application Insights in 2 minutes. Open-source, MIT, no agent, nothing raw leaves your tenant." />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://keren.run/" />
-    <meta property="og:image" content="https://keren.run/docs/assets/og-image.png" />
+    <meta property="og:image" content="https://keren.run/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Keren Analytics dashboard — Azure App Insights, Marketing & Technical views" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Keren Analytics" />
-    <meta name="twitter:description" content="Azure App Insights -> Marketing and Technical dashboards in 2 minutes." />
-    <meta name="twitter:image" content="https://keren.run/docs/assets/og-image.png" />
-    <title>Keren Analytics</title>
+    <meta name="twitter:title" content="Keren Analytics — Azure App Insights dashboards in 2 minutes" />
+    <meta name="twitter:description" content="Marketing & Technical dashboards on top of Application Insights in 2 minutes. Open-source, MIT, nothing raw leaves your tenant." />
+    <meta name="twitter:image" content="https://keren.run/og-image.png" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Keren Analytics",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Docker, Linux, Azure Container Apps",
+        "url": "https://keren.run/",
+        "description": "Plug-and-play analytics dashboard that turns Azure Application Insights telemetry into Marketing, Technical and Readiness views in under 2 minutes. Open-source, KQL-only, no raw data storage.",
+        "license": "https://opensource.org/licenses/MIT",
+        "softwareVersion": "0.1.0",
+        "isAccessibleForFree": true,
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "author": {
+          "@type": "Person",
+          "name": "Lionel Garnier"
+        },
+        "codeRepository": "https://github.com/lionelgarnier/keren-analytics"
+      }
+    </script>
     <link rel="stylesheet" href="/styles.css" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -57,12 +89,12 @@
           </div>
           <div class="lv2-nav-links">
             <a href="#product">Product</a>
-            <a href="#how">How it works</a>
+            <a href="#security">Security</a>
+            <a href="#faq">FAQ</a>
             <a href="/docs">Docs</a>
-            <a href="#pricing">Pricing</a>
           </div>
           <div class="lv2-nav-right">
-            <a href="https://github.com/lionelgarnier/keren-analytics" id="lv2Stars" class="lv2-nav-muted" target="_blank" rel="noopener">★ <span id="lv2StarsCount" class="lv2-stars-count">412</span></a>
+            <a href="https://github.com/lionelgarnier/keren-analytics" id="lv2Stars" class="lv2-nav-muted" target="_blank" rel="noopener">★ <span id="lv2StarsCount" class="lv2-stars-count"></span></a>
             <a href="/auth/login" class="lv2-nav-muted" style="margin-left:8px; margin-right:12px;">Sign in</a>
             <button id="themeToggleNav" class="theme-toggle" aria-label="Toggle dark mode" title="Toggle theme">
               <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
@@ -189,7 +221,7 @@
         </section>
 
         <!-- ── FEATURES ──────────────────────────────────────────────────── -->
-        <section class="lv2-features">
+        <section id="product" class="lv2-features">
           <div class="lv2-features-head">
             <span class="lv2-tag">Three views</span>
             <h2 class="lv2-features-title">
@@ -365,7 +397,7 @@
         </section>
 
         <!-- ── PRIVACY ───────────────────────────────────────────────────── -->
-        <section class="lv2-privacy">
+        <section id="security" class="lv2-privacy">
           <div class="lv2-privacy-grid">
             <div>
               <span class="lv2-tag">Privacy &amp; security</span>
@@ -424,7 +456,7 @@
         </section>
 
         <!-- ── FAQ ───────────────────────────────────────────────────────── -->
-        <section class="lv2-faq">
+        <section id="faq" class="lv2-faq">
           <span class="lv2-tag">FAQ</span>
           <h2 class="lv2-faq-title">Common questions.</h2>
 

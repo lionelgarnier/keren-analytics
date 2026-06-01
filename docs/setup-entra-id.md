@@ -84,7 +84,7 @@ redirect target:
 ```
 
 Re-run safely (it dedupes), so the localhost redirect stays in place for
-local development. When the custom domain `analytics.keren.run` ships, run
+local development. When the custom domain `keren.run` ships, run
 the script once more with that URI.
 
 If the very first `azure-deploy.sh` errored with *"Subscription is not

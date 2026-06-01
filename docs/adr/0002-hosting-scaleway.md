@@ -114,12 +114,12 @@ dans `docs/setup-entra-id.md`. Le même principe s'appliquera aux adapters AWS
 
 - Domaine racine : **`keren.run`** (déjà détenu par le mainteneur, dédié à
   ce projet — cf. ADR 0001).
-- URL canonique de la démo : **`https://analytics.keren.run`**.
-- Racine `https://keren.run` : redirige vers `analytics.keren.run` en V1
+- URL canonique de la démo : **`https://keren.run`**.
+- La racine `https://keren.run` sert directement l'application en V1
   (page d'accueil dédiée optionnelle plus tard si le portfolio s'élargit).
 - Certificat TLS via Let's Encrypt géré par Scaleway.
-- DNS chez le registrar actuel de `keren.run` ; enregistrement `CNAME`
-  `analytics` → endpoint Scaleway Serverless Container.
+- DNS chez le registrar actuel de `keren.run` ; enregistrement pointant
+  l'apex `keren.run` vers l'endpoint Scaleway Serverless Container.
 
 ## Consequences
 

@@ -69,7 +69,7 @@ create`. Bootstrapped once via [`deploy/azure-ci-setup.sh`](../deploy/azure-ci-s
 (creates a CI-only Entra app + OIDC federated credential + minimal RBAC:
 `AcrPush` on the registry, `Contributor` on the Container App).
 
-## Custom domain (`analytics.keren.run`)
+## Custom domain (`keren.run`)
 
 Custom-domain binding is a manual one-shot, not part of the template (Container
 Apps managed certificates require the CNAME to resolve before the binding
@@ -77,15 +77,16 @@ succeeds, and Bicep does not handle the wait gracefully):
 
 1. After the first deploy, get the FQDN:
    `az containerapp show -n ca-keren-analytics -g keren-analytics-prod --query properties.configuration.ingress.fqdn -o tsv`
-2. Add `CNAME analytics → <FQDN>` and `TXT asuid.analytics → <validation-hash>`
+2. Point the apex `keren.run` at `<FQDN>` (A/ALIAS or CNAME-flatten,
+   per registrar) and add `TXT asuid.keren.run → <validation-hash>`
    at the registrar (the validation hash is printed by
-   `az containerapp hostname add ... --hostname analytics.keren.run`).
-3. Wait for propagation (`dig @8.8.8.8 asuid.analytics.keren.run TXT`).
+   `az containerapp hostname add ... --hostname keren.run`).
+3. Wait for propagation (`dig @8.8.8.8 asuid.keren.run TXT`).
 4. `az containerapp hostname add` then `az containerapp hostname bind` (managed
    cert is provisioned automatically by Let's Encrypt via Azure).
 5. Update the Entra app registration with the production redirect URI:
-   `./deploy/azure-app-registration.sh --redirect-uri "https://analytics.keren.run/auth/callback"`
-6. Update the Container App env: `az containerapp update --set-env-vars AZURE_REDIRECT_URI=https://analytics.keren.run/auth/callback`.
+   `./deploy/azure-app-registration.sh --redirect-uri "https://keren.run/auth/callback"`
+6. Update the Container App env: `az containerapp update --set-env-vars AZURE_REDIRECT_URI=https://keren.run/auth/callback`.
 
 ## Re-runs
 

@@ -87,7 +87,7 @@ function ReadinessTabContent({ desktop, variant }) {
 function DashboardD2({ viewport, theme, tab = 'marketing', variant = 'a', interaction }) {
   const Frame = viewport === 'mobile' ? MobileFrame : DesktopFrame;
   const desktop = viewport === 'desktop';
-  const url = `analytics.keren.run/services/vikl-app-service-prd/${tab}`;
+  const url = `keren.run/services/vikl-app-service-prd/${tab}`;
   const serviceName = 'vikl-web-prd';
 
   const scopeLabel = interaction === 'filter'

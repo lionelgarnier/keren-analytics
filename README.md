@@ -15,7 +15,7 @@ HERO GIF placeholder (A3 — see docs/maintainer-todo.md).
 Replace this block with: ![hero](docs/assets/hero.gif)
 -->
 
-**Live demo** · [analytics.keren.run](https://analytics.keren.run) — sample
+**Live demo** · [keren.run](https://keren.run) — sample
 dataset, sign in with any Microsoft work/school account to point it at your
 own Application Insights resource.
 
