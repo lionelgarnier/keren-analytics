@@ -92,6 +92,7 @@ body {
   letter-spacing: -0.3px;
   flex-shrink: 0;
 }
+.doc-logo-dot { color: var(--accent); }
 
 .doc-topnav {
   display: flex;

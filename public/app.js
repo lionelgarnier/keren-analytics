@@ -437,6 +437,62 @@ document.addEventListener("click", (event) => {
   logout();
 });
 
+// Lightweight confirm dialog. Resolves true on confirm, false on cancel/Esc/
+// outside-click. Built on demand (no static markup), CSP-safe (no inline JS).
+function krConfirm({ title, body, confirmText = "Continue", cancelText = "Cancel" }) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "kr-confirm-scrim";
+    overlay.innerHTML = `
+      <div class="kr-confirm" role="dialog" aria-modal="true" aria-labelledby="krConfirmTitle">
+        <h3 id="krConfirmTitle" class="kr-confirm-title"></h3>
+        <p class="kr-confirm-body"></p>
+        <div class="kr-confirm-actions">
+          <button type="button" class="kr-confirm-cancel"></button>
+          <button type="button" class="kr-confirm-ok"></button>
+        </div>
+      </div>`;
+    overlay.querySelector(".kr-confirm-title").textContent = title;
+    overlay.querySelector(".kr-confirm-body").textContent = body;
+    const cancelBtn = overlay.querySelector(".kr-confirm-cancel");
+    const okBtn = overlay.querySelector(".kr-confirm-ok");
+    cancelBtn.textContent = cancelText;
+    okBtn.textContent = confirmText;
+
+    function close(result) {
+      document.removeEventListener("keydown", onKey);
+      overlay.remove();
+      resolve(result);
+    }
+    function onKey(e) {
+      if (e.key === "Escape") close(false);
+    }
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) close(false); });
+    cancelBtn.addEventListener("click", () => close(false));
+    okBtn.addEventListener("click", () => close(true));
+    document.addEventListener("keydown", onKey);
+    document.body.appendChild(overlay);
+    okBtn.focus();
+  });
+}
+
+// Setup re-scans the telemetry and re-runs the AI mapping from scratch, which
+// replaces the saved configuration. Guard the tab so a mis-click can't trigger
+// that — navigate only after explicit confirmation.
+document.addEventListener("click", async (event) => {
+  const trigger = event.target.closest('[data-action="confirm-setup"]');
+  if (!trigger) return;
+  event.preventDefault();
+  const href = trigger.getAttribute("href") || "/setup";
+  const ok = await krConfirm({
+    title: "Re-run setup for this service?",
+    body: "Setup re-scans your telemetry and re-runs the AI mapping. The current configuration for this service will be replaced. You can't undo this.",
+    confirmText: "Re-run setup",
+    cancelText: "Stay here",
+  });
+  if (ok) window.location.href = href;
+});
+
 rangeSelect.addEventListener("change", () => {
   if (isPreviewMode) {
     enterPreviewMode();
@@ -685,6 +741,132 @@ async function gotoService(resource, card, destination) {
   }
 }
 
+/* ========== Service switcher (dashboard header, in-place switch) ========== */
+
+// Switch the dashboard to another service without leaving the page. A ready
+// service loads its dashboard in place; an unconfigured/incomplete one routes
+// to setup (no saved config to lose there, so no extra confirmation needed).
+function switchService(resource) {
+  const status = SERVICE_STATUS_META[resource.status] ? resource.status : "unconfigured";
+  if (status !== "ready") {
+    selectResourceApi(resource)
+      .then(() => { window.location.href = "/setup"; })
+      .catch((err) => setStatus(err.message || "Selection failed.", "error"));
+    return;
+  }
+  setStatus(`Connecting to ${resource.appInsightsName}…`);
+  selectResourceApi(resource)
+    .then(() => {
+      resourcePanel.classList.add("hidden");
+      setD2Route(true);
+      showSelectedResource(resource.appInsightsName);
+      router.push({ page: "dashboard", service: resource.appInsightsName, tab: "marketing" });
+      return loadDashboard(rangeSelect.value);
+    })
+    .catch((err) => setStatus(err.message || "Selection failed.", "error"));
+}
+
+(function initServiceSwitcher() {
+  const trigger = document.getElementById("svcSwitchBtn");
+  const menu = document.getElementById("svcSwitchMenu");
+  if (!trigger || !menu) return;
+
+  const STATUS_DOT = { ready: "is-ready", incomplete: "is-incomplete", unconfigured: "" };
+  let focusIdx = -1;
+
+  const itemsEls = () => [...menu.querySelectorAll(".svc-switch-item")];
+
+  function buildMenu(filter = "") {
+    const resources = lastDiscoveredResources || [];
+    const current = (selectedResourceName.textContent || "").trim();
+    const f = filter.trim().toLowerCase();
+    const matches = resources.filter(
+      (r) =>
+        !f ||
+        (r.appInsightsName || "").toLowerCase().includes(f) ||
+        (r.resourceGroup || "").toLowerCase().includes(f)
+    );
+    const showFilter = resources.length > 7;
+
+    const rows = matches
+      .map((r) => {
+        const env = detectEnvironment(r);
+        const status = SERVICE_STATUS_META[r.status] ? r.status : "unconfigured";
+        const isCurrent = r.appInsightsName === current;
+        const envBadge = env.short ? `<span class="svc-switch-env">${escapeHtmlApp(env.short)}</span>` : "";
+        const check = isCurrent
+          ? '<svg class="svc-switch-check" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>'
+          : "";
+        return `<button type="button" class="svc-switch-item${isCurrent ? " is-current" : ""}" role="option" aria-selected="${isCurrent}" data-name="${escapeHtmlApp(r.appInsightsName)}">
+            <span class="svc-switch-dot ${STATUS_DOT[status]}"></span>
+            <span class="svc-switch-name">${escapeHtmlApp(r.appInsightsName)}</span>
+            ${envBadge}${check}
+          </button>`;
+      })
+      .join("");
+
+    menu.innerHTML = `
+      ${showFilter ? '<input type="text" class="svc-switch-filter" id="svcSwitchFilter" placeholder="Filter services…" autocomplete="off" />' : ""}
+      <div class="svc-switch-list">${rows || '<div class="svc-switch-empty">No services match.</div>'}</div>
+      <div class="svc-switch-foot"><a href="/services">Manage all services →</a></div>`;
+
+    itemsEls().forEach((el) => {
+      el.addEventListener("click", () => {
+        const r = (lastDiscoveredResources || []).find((x) => x.appInsightsName === el.dataset.name);
+        close();
+        if (r) switchService(r);
+      });
+    });
+    const filterEl = menu.querySelector("#svcSwitchFilter");
+    if (filterEl) {
+      filterEl.addEventListener("input", () => {
+        buildMenu(filterEl.value);
+        const again = menu.querySelector("#svcSwitchFilter");
+        if (again) { again.value = filterEl.value; again.focus(); }
+      });
+    }
+    focusIdx = -1;
+  }
+
+  function open() {
+    buildMenu();
+    menu.classList.remove("hidden");
+    trigger.setAttribute("aria-expanded", "true");
+    document.addEventListener("keydown", onKey);
+    setTimeout(() => document.addEventListener("click", onOutside), 0);
+    const filterEl = menu.querySelector("#svcSwitchFilter");
+    if (filterEl) filterEl.focus();
+  }
+  function close() {
+    menu.classList.add("hidden");
+    trigger.setAttribute("aria-expanded", "false");
+    document.removeEventListener("keydown", onKey);
+    document.removeEventListener("click", onOutside);
+  }
+  function onOutside(e) {
+    if (!menu.contains(e.target) && !trigger.contains(e.target)) close();
+  }
+  function setFocus(i) {
+    const els = itemsEls();
+    if (!els.length) return;
+    focusIdx = (i + els.length) % els.length;
+    els.forEach((el, idx) => el.classList.toggle("is-focus", idx === focusIdx));
+    els[focusIdx].scrollIntoView({ block: "nearest" });
+  }
+  function onKey(e) {
+    if (e.key === "Escape") { close(); trigger.focus(); }
+    else if (e.key === "ArrowDown") { e.preventDefault(); setFocus(focusIdx + 1); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setFocus(focusIdx - 1); }
+    else if (e.key === "Enter" && focusIdx >= 0) { e.preventDefault(); itemsEls()[focusIdx]?.click(); }
+  }
+
+  trigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (menu.classList.contains("hidden")) open();
+    else close();
+  });
+})();
+
 /* ========== D v2 service hub ========== */
 
 // Toggle the operator-console chrome (topbar replaces .navbar, full-bleed
@@ -771,7 +953,7 @@ function renderResources(resources) {
         <span class="d2-mark">Keren<span class="d2-mark-dot">.</span></span>
         <div class="d2-tabs">
           <a class="d2-tab is-active" href="/services">Services</a>
-          <a class="d2-tab" href="/setup">Setup</a>
+          <a class="d2-tab" href="/setup" data-action="confirm-setup">Setup</a>
           <a class="d2-tab" href="/docs">Docs</a>
           <a class="d2-tab" href="/auth/logout" data-action="logout">Logout</a>
         </div>
@@ -3391,4 +3573,8 @@ window.addEventListener("popstate", async () => {
   }
 });
 
-init();
+// Reveal the chrome only once the route is resolved: by now the correct view
+// has set body.landing-active / body.d2-route (which keep the navbar hidden in
+// those modes), or an edge state (auth error, no services) legitimately needs
+// the legacy navbar — so removing "booting" shows it.
+init().finally(() => document.documentElement.classList.remove("booting"));

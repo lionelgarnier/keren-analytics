@@ -167,6 +167,64 @@
   color: var(--lv2-text-muted); font-size: 12.5px;
 }
 
+/* ── Hero product carousel ───────────────────────────────────────────────── */
+.lv2-hero-carousel {
+  margin-top: 80px;
+  border-radius: 20px;
+  border: 1px solid var(--lv2-border);
+  background: var(--lv2-surface);
+  box-shadow: 0 1px 0 rgba(15, 12, 8, 0.04), 0 20px 40px -24px rgba(15, 12, 8, 0.10);
+  overflow: hidden;
+}
+.lv2-carousel-viewport {
+  position: relative;
+  aspect-ratio: 1280 / 533;
+  background: var(--lv2-surface);
+}
+.lv2-carousel-slide {
+  position: absolute; inset: 0; margin: 0;
+  opacity: 0; visibility: hidden;
+  transition: opacity 0.6s ease;
+}
+.lv2-carousel-slide.is-active { opacity: 1; visibility: visible; }
+.lv2-carousel-slide img {
+  width: 100%; height: 100%;
+  object-fit: cover; object-position: top center;
+  display: block;
+}
+.lv2-carousel-cap {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  display: flex; align-items: center; gap: 12px;
+  padding: 30px 24px 18px;
+  font-size: 14px; color: #fff;
+  background: linear-gradient(to top, rgba(8, 10, 16, 0.82), rgba(8, 10, 16, 0));
+}
+.lv2-carousel-step {
+  font-family: var(--lv2-mono); font-size: 12px;
+  letter-spacing: 0.5px; color: var(--lv2-accent);
+  padding: 4px 10px; border-radius: 999px;
+  background: rgba(45, 108, 242, 0.18); white-space: nowrap;
+}
+.lv2-carousel-dots {
+  display: flex; gap: 8px; justify-content: center;
+  padding: 16px 0 18px;
+  border-top: 1px solid var(--lv2-border);
+}
+.lv2-carousel-dot {
+  width: 8px; height: 8px; padding: 0; border: none; cursor: pointer;
+  border-radius: 999px; background: var(--lv2-border);
+  transition: width 0.3s ease, background 0.3s ease;
+}
+.lv2-carousel-dot.is-active { width: 26px; background: var(--lv2-accent); }
+.lv2-carousel-dot:hover { background: var(--lv2-text-muted); }
+@media (prefers-reduced-motion: reduce) {
+  .lv2-carousel-slide { transition: none; }
+}
+@media (max-width: 768px) {
+  .lv2-hero-carousel { margin-top: 48px; }
+  .lv2-carousel-cap { padding: 18px 16px 14px; font-size: 12.5px; gap: 8px; flex-wrap: wrap; }
+}
+
 /* ── Big stats ───────────────────────────────────────────────────────────── */
 .lv2-stats {
   padding: 120px 64px 100px; max-width: 1280px; margin: 0 auto;
