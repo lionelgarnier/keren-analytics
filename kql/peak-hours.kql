@@ -1,3 +1,4 @@
+// Session volume by weekday and hour for the Marketing peak-hours heatmap
 let start={{timeStart}};
 let end={{timeEnd}};
 {{tableName}}

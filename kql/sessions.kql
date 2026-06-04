@@ -1,3 +1,4 @@
+// Total distinct sessions for the selected range
 let start={{timeStart}};
 let end={{timeEnd}};
 {{tableName}}
