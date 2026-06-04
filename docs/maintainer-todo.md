@@ -10,15 +10,15 @@ Format: each item has **what**, **why**, **when needed**, **how**, and
 links to the agent-side work that depends on it.
 
 > **Audit live 2026-06-04** (Azure CLI + `gh`, sub
-> `0a3afaae-8849-4b27-8e43-dad3ba80ce58`). Plusieurs items marqués TODO
-> étaient en fait faits — statuts recoupés contre la prod et corrigés.
-> **Reste réellement ouvert et actionnable** : (1) ⚠️ scaling
-> `0/3` → passer en `1/1` (sessions + SQLite + restore supposent
-> single-replica) ; (2) branch protection sur `main` (repo déjà public,
-> non protégé) ; (3) homepage GitHub périmée (`analytics.keren.run` mort
-> → `keren.run`) ; (4) contenus voix-auteur (Hero GIF, OG image, Show HN,
-> Reddit, outreach, Plausible). Le reste de l'infra Azure/CI/Foundry/backup
-> est en place et vérifié.
+> `0a3afaae-8849-4b27-8e43-dad3ba80ce58`) — **maj après corrections
+> maintainer**. Statuts recoupés contre la prod. **Reste réellement
+> ouvert** : (1) ⚠️ `maxReplicas` encore à **3** — `minReplicas` est passé
+> à 1 (plus de cold start) mais le scale-out reste possible et casse
+> l'hypothèse single-replica (sessions + SQLite + restore) ; passer
+> `maxReplicas=1` ; (2) contenus voix-auteur (Hero GIF, OG image, Show HN,
+> Reddit, outreach, Plausible). **Réglés depuis l'audit** : homepage
+> `keren.run`, branch protection (ruleset actif), `minReplicas=1`. Le reste
+> de l'infra Azure/CI/Foundry/backup est en place et vérifié.
 
 ---
 
@@ -73,13 +73,14 @@ links to the agent-side work that depends on it.
 - **How**: keep `infra/main.parameters.json` at `minReplicas=1`,
   `maxReplicas=1` for the launch deployment. After launch, if you re-enable
   scale-out, ship a shared session store first.
-- **Status**: TODO — ⚠️ **NON appliqué**. Vérifié 2026-06-04 : l'app tourne
-  en `minReplicas=0, maxReplicas=3`, pas `1/1`. Sous scale-out (spike Show
-  HN), les sessions in-memory + le SQLite mono-fichier + le restore-on-boot
-  (2026-06-04) divergeraient entre replicas. À corriger avant launch :
+- **Status**: PARTIEL — `minReplicas=1` appliqué par le maintainer (plus de
+  cold start, vérifié 2026-06-04) mais `maxReplicas` est **toujours à 3**.
+  C'est `max>1` qui pose le risque : sous charge l'app peut scaler à
+  plusieurs replicas → sessions in-memory + SQLite mono-fichier +
+  restore-on-boot divergeraient. Reste à faire avant launch :
   ```bash
   az containerapp update -n ca-keren-analytics -g keren-analytics-prod \
-    --min-replicas 1 --max-replicas 1
+    --max-replicas 1
   ```
   + aligner `infra/main.parameters.json` pour que le prochain deploy Bicep
   ne ré-écrase pas.
@@ -175,10 +176,9 @@ These need a human to click through `Settings` on
   `marketing-analytics`, `nodejs`, `oss`, `self-hosted`. Tout posé via
   `gh repo edit` + `gh api` ; modifiable au besoin.
 
-- ⚠️ **Homepage périmée — vérifié 2026-06-04** : le champ Website live
-  pointe sur `https://analytics.keren.run`, domaine **retiré** (HTTP 000,
-  cf. commit SEO/domain-cleanup du 01/06). À recorriger en `keren.run` :
-  `gh repo edit lionelgarnier/keren-analytics --homepage https://keren.run`.
+- **Homepage** — corrigée 2026-06-04 par le maintainer : le champ Website
+  pointe désormais sur `https://keren.run` (vérifié `gh repo view`).
+  Auparavant sur le domaine retiré `analytics.keren.run`.
 
 ### Pin v0.1.0 release with notes
 - **Why**: the right-hand sidebar's "Releases: v0.1.0" is a strong
@@ -214,8 +214,13 @@ These need a human to click through `Settings` on
   }
   JSON
   ```
-- **Status**: TODO — repo déjà public, à activer. Vérifié 2026-06-04 :
-  `main` n'est **pas** protégée (`gh api …/branches/main/protection` → 404).
+- **Status**: DONE — vérifié 2026-06-04. Protection posée par le maintainer
+  via un **ruleset** GitHub (`main`, enforcement *active*, règles
+  `non_fast_forward` + `deletion`) — d'où le 404 de l'endpoint classique
+  `/branches/main/protection`, qui ne voit pas les rulesets. Force-push et
+  suppression de `main` sont bloqués. Pas de gating `required_status_checks`
+  (Tests / Security audit) dans le ruleset — optionnel, à ajouter si tu veux
+  exiger la CI verte avant merge.
 
 ---
 
