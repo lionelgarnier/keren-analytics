@@ -71,15 +71,20 @@ param cpuCores string = '0.5'
 @description('Memory per replica.')
 param memorySize string = '1Gi'
 
-@description('Minimum replicas. Set to 0 for scale-to-zero (cheaper, slower cold start).')
+// The app REQUIRES a single replica: sessions are in-memory, the SQLite DB
+// is a single file, and restore-on-boot assumes no concurrent writers.
+// Defaults are therefore 1/1 — do NOT raise maxReplicas without shipping a
+// shared session store + shared/replicated DB first (Phase 3). Scale-to-zero
+// (minReplicas=0) is also avoided so cold starts don't drop the warmed cache.
+@description('Minimum replicas. Keep at 1 (single-replica invariant — see Phase 3).')
 @minValue(0)
 @maxValue(10)
-param minReplicas int = 0
+param minReplicas int = 1
 
-@description('Maximum replicas.')
+@description('Maximum replicas. Keep at 1 (single-replica invariant — see Phase 3).')
 @minValue(1)
 @maxValue(30)
-param maxReplicas int = 3
+param maxReplicas int = 1
 
 @description('AI provider for the setup-wizard / mapping analysis. "none" disables LLM calls; "azure-foundry" wires the Foundry Responses API. ADR 0005 + Track F3.')
 @allowed([

@@ -12,13 +12,10 @@ links to the agent-side work that depends on it.
 > **Audit live 2026-06-04** (Azure CLI + `gh`, sub
 > `0a3afaae-8849-4b27-8e43-dad3ba80ce58`) — **maj après corrections
 > maintainer**. Statuts recoupés contre la prod. **Reste réellement
-> ouvert** : (1) ⚠️ `maxReplicas` encore à **3** — `minReplicas` est passé
-> à 1 (plus de cold start) mais le scale-out reste possible et casse
-> l'hypothèse single-replica (sessions + SQLite + restore) ; passer
-> `maxReplicas=1` ; (2) contenus voix-auteur (Hero GIF, OG image, Show HN,
-> Reddit, outreach, Plausible). **Réglés depuis l'audit** : homepage
-> `keren.run`, branch protection (ruleset actif), `minReplicas=1`. Le reste
-> de l'infra Azure/CI/Foundry/backup est en place et vérifié.
+> ouvert** : contenus voix-auteur (Hero GIF, OG image, Show HN, Reddit,
+> outreach, Plausible). **Réglés depuis l'audit** : homepage `keren.run`,
+> branch protection (ruleset actif), scaling `1/1` (live + défauts Bicep).
+> Toute l'infra Azure/CI/Foundry/backup est en place et vérifiée.
 
 ---
 
@@ -73,17 +70,14 @@ links to the agent-side work that depends on it.
 - **How**: keep `infra/main.parameters.json` at `minReplicas=1`,
   `maxReplicas=1` for the launch deployment. After launch, if you re-enable
   scale-out, ship a shared session store first.
-- **Status**: PARTIEL — `minReplicas=1` appliqué par le maintainer (plus de
-  cold start, vérifié 2026-06-04) mais `maxReplicas` est **toujours à 3**.
-  C'est `max>1` qui pose le risque : sous charge l'app peut scaler à
-  plusieurs replicas → sessions in-memory + SQLite mono-fichier +
-  restore-on-boot divergeraient. Reste à faire avant launch :
-  ```bash
-  az containerapp update -n ca-keren-analytics -g keren-analytics-prod \
-    --max-replicas 1
-  ```
-  + aligner `infra/main.parameters.json` pour que le prochain deploy Bicep
-  ne ré-écrase pas.
+- **Status**: DONE — vérifié 2026-06-04. Le maintainer a posé
+  `minReplicas=maxReplicas=1` sur le Container App (confirmé via
+  `az containerapp show`). L'hypothèse single-replica est garantie :
+  sessions in-memory, SQLite mono-fichier et restore-on-boot sont tous
+  cohérents. Anti-drift : `infra/main.parameters.json` est déjà à `1/1`
+  **et** les défauts de `infra/main.bicep` ont été passés de `0/3` à `1/1`
+  (commit 2026-06-04), donc même un Bicep lancé sans fichier de params ne
+  régressera plus.
 
 ### First Azure deploy + Key Vault secret seeding
 - **Why**: the Bicep template provisions an empty Key Vault. The Container
