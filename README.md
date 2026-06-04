@@ -168,11 +168,29 @@ Selected API surface (full list in [`src/server.js`](src/server.js)):
 
 ## Contributing
 
-PRs welcome. Read [CLAUDE.md](CLAUDE.md) first — it documents the
-invariants (mock parity, no raw log persistence, KQL substitution-only,
-range whitelist, OAuth secret handling) that PRs must respect. Short
-[`CONTRIBUTING.md`](CONTRIBUTING.md) has the dev-loop and the
-file-an-issue paths.
+**MIT — here's the architecture, PRs and good-first-issues welcome.**
+
+The repo runs in mock mode with no Azure account, so you can be poking at
+real data flows within a couple of minutes:
+
+```bash
+git clone https://github.com/lionelgarnier/keren-analytics.git
+cd keren-analytics && npm install && npm run dev   # http://localhost:3000
+```
+
+- **New here?** [`ARCHITECTURE.md`](ARCHITECTURE.md) maps the code for a
+  human — the request flow, where mock mode / readiness score / LLM
+  prompts live.
+- **Looking for a first task?**
+  [`docs/good-first-issues.md`](docs/good-first-issues.md) lists starter
+  tasks anchored in real files, from 30-minute cosmetics to small
+  features. They're also filed as
+  [`good first issue`](https://github.com/lionelgarnier/keren-analytics/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+  on the tracker.
+- **Opening a PR?** [`CONTRIBUTING.md`](CONTRIBUTING.md) has the dev loop
+  and what we expect; [`CLAUDE.md`](CLAUDE.md) documents the invariants
+  PRs must respect (mock parity, no raw log persistence, KQL
+  substitution-only, range whitelist, OAuth secret handling).
 
 Code of conduct: [Contributor Covenant 2.1](CODE_OF_CONDUCT.md).
 

@@ -9,14 +9,54 @@ backlog files under [`docs/backlog/`](docs/backlog/).
 ## Quick start
 
 ```bash
+git clone https://github.com/lionelgarnier/keren-analytics.git
+cd keren-analytics
 npm install
+npm run dev                   # mock mode → open http://localhost:3000
+```
+
+That's the whole loop: clone, install, run, open the browser. The dev server
+boots in **mock mode** — a deterministic sample dataset — so you need no Azure
+account and no `.env` to click around the real data flows. New to the codebase?
+[`ARCHITECTURE.md`](ARCHITECTURE.md) is the human-oriented map.
+
+The other commands you'll use:
+
+```bash
 npm test                      # 180 tests, native node:test runner
-npm run dev                   # mock mode by default
 npm run audit:security        # repeats the launch-time security checks
 ```
 
-The dev server runs in `mock` mode without any Azure credentials. Real
-Azure mode is documented in [`docs/setup-entra-id.md`](docs/setup-entra-id.md).
+## Mock mode vs real Azure mode
+
+Behaviour is driven by environment variables. Copy the template and edit:
+
+```bash
+cp .env.example .env
+```
+
+- **`AZURE_MODE=mock`** (the default) — sample data, no credentials. This is
+  what tests run against and what you should develop against unless you're
+  specifically touching the live Azure client.
+- **`AZURE_MODE=real`** — OAuth against your own Entra ID app and Application
+  Insights resource. The three-command setup lives in
+  [`docs/setup-entra-id.md`](docs/setup-entra-id.md). You only need this to work
+  on `src/providers/azure/realClient.js` or the OAuth flow.
+
+[`.env.example`](.env.example) documents every variable (`SESSION_SECRET`,
+`AI_PROVIDER`, the Azure OAuth/Foundry keys, the mock toggles). The
+[`mockClient`](src/providers/azure/mockClient.js) and
+[`realClient`](src/providers/azure/realClient.js) expose the same surface — keep
+them in sync (the "mock parity" invariant).
+
+## Finding a first task
+
+[`docs/good-first-issues.md`](docs/good-first-issues.md) lists starter tasks
+anchored in real files — difficulty ranges from 30-minute cosmetics to small
+self-contained features, each with the files to touch and acceptance criteria.
+The same tasks are filed on the tracker under the
+[`good first issue`](https://github.com/lionelgarnier/keren-analytics/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+label. Comment on the issue to claim it before you start so we don't double up.
 
 ## Filing issues
 
