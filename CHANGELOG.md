@@ -11,6 +11,40 @@ Pre-launch sprint work that has landed on `main` since v0.1.0 — see
 for the per-track status.
 
 ### Added
+- **AI-first setup wizard (Track F, ADR 0005)** at `/setup` — scans the
+  tenant's Application Insights telemetry, asks the model "what dashboards
+  can we credibly render for you", and persists a validated column
+  mapping. Backed by:
+  - **SQLite persistence (F1)** via Node 22 native `node:sqlite`
+    (`data/keren.db`, schema in `src/core/db.js`, accessed through
+    `src/core/metadataStore.js`). Legacy `data/store.json` auto-migrates
+    on first boot.
+  - **Enriched schema scan (F2)** — `src/core/schemaScan.js`: event
+    volumes, top custom-dimension keys with cardinality + PII-scrubbed
+    samples, gap detection. Persisted per `(tenant, resourceId)`.
+  - **AI mapping + recommendations (F3)** on **Azure AI Foundry**
+    (`src/ai/azureFoundry.js`, deployment `gpt-5.4-mini`, Managed-Identity
+    auth, no API keys). Provider abstraction
+    `AI_PROVIDER=none|ollama|azure-foundry`; daily EUR quota guard with a
+    deterministic fallback; scan→output cached in SQLite.
+  - **Wizard UI (F4)** with live SSE scan narration, AI findings cards
+    (✓ Ready / ! Needs instrumentation), and copy-paste `code_prompt`s
+    for missing signals (`public/setup.{html,js}`).
+- **Per-resource setup state + service hub** — `scans`/`validations` keyed
+  by `(tenant, resourceId)`; a post-login hub lists every App Insights
+  resource with a config status. Config/render split: `runSetupScan`
+  (config, once) vs `runOverviewPipeline` (render, every load — no
+  re-scan, no LLM call).
+- **Azure-first hosting (Phase A, ADR 0004)** — production on **Azure
+  Container Apps** (France Central) via Bicep (`infra/main.bicep` +
+  `deploy/azure-deploy.sh`), custom domain **https://keren.run** with
+  managed TLS, and image-only CI/CD through OIDC
+  (`.github/workflows/deploy-azure.yml`). Render blueprint kept as a
+  self-host fallback only.
+- **Durable persistence across redeploys** — hourly in-process SQLite →
+  Azure Blob backup (`src/core/backupScheduler.js`), plus **restore-on-boot**
+  and a final snapshot on `SIGTERM`, so the Container App's ephemeral
+  filesystem no longer loses wizard config on redeploy (single-replica).
 - Landing page on `/` rewritten as a launch one-pager — tagline, three
   CTAs (Try the demo / Connect your Azure / ★ Star on GitHub),
   comparison table (Keren Analytics vs Azure Portal / Datadog / Power
@@ -52,7 +86,19 @@ for the per-track status.
 - License + Node-version badges in the README next to the existing
   security-audit badge.
 
+### Changed
+- **Setup wizard streamlined to ~1 click** — after the scan the wizard
+  auto-advances to the AI findings, and "Build my dashboard" always saves
+  the proposed mapping directly. The technical mapping editor is no longer
+  a forced step: it's reachable on demand via the dashboard's "Mapping"
+  link (`/setup?mode=mapping`). Low-confidence fields are flagged inline
+  rather than forcing a detour. (See `docs/backlog/ai-setup-wizard.md`
+  § "Two-click wizard".)
+
 ### Security
+- **CSRF tokens** enforced on every mutating route (`verifyCsrf` in
+  `src/server.js`; token issued via `/auth/session`, sent as
+  `X-CSRF-Token`). Closes the previous "no CSRF" gap.
 - `SESSION_SECRET` is now required in production: `src/config.js` throws
   at boot when `NODE_ENV=production` and the value is missing or set to
   a known placeholder (`dev-secret-change-me`,

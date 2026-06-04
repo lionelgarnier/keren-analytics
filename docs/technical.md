@@ -123,12 +123,21 @@ TTL:
 - 7d/30d: 15 minutes
 
 ## Data Storage
-MVP uses a JSON file in `data/store.json` for metadata only:
+Persistence uses **SQLite** (Node 22 native `node:sqlite`) in
+`data/keren.db` for metadata only:
 - tenant selection
 - mapping
-- schema profile
+- schema profile + schema scans
 - readiness report
+- AI mapping proposals + per-resource validations
 - state transitions
+
+Setup state is keyed per `(tenant, resourceId)`. An hourly `VACUUM INTO`
+snapshot is uploaded to Azure Blob (`src/core/backupScheduler.js`); on
+boot the latest snapshot is restored when `data/keren.db` is absent, and
+a final snapshot is taken on `SIGTERM`, so config survives Container App
+redeploys (single-replica). A legacy `data/store.json` is auto-migrated
+to SQLite on first boot.
 
 No raw logs are stored.
 
@@ -139,7 +148,7 @@ No raw logs are stored.
 - Unit tests for Azure error categorization and response normalization
 - Integration test for API flow with mock client
 
-Total: 28 tests (14 suites)
+Total: 180 tests across 24 files (native `node:test` runner, all mock mode)
 
 Run with:
 ```

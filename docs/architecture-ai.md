@@ -165,6 +165,13 @@ Same pattern as `getAzureClient()`. Selection via
 `AI_PROVIDER=none|ollama|azure-openai`. Tests force `AI_PROVIDER=none` the
 same way they force `azureMode=mock`.
 
+> **Shipped divergence (see Status above).** The implemented provider is
+> `azure-foundry` (`src/ai/azureFoundry.js` — Foundry project Responses API
+> + Managed Identity), not `azure-openai`. Throughout the draft sections
+> below, read `azure-openai` / `AZURE_OPENAI_ENDPOINT` / `gpt-4o-mini` as
+> the original proposal; the live equivalents are `azure-foundry` /
+> `AZURE_FOUNDRY_ENDPOINT` / `gpt-5.4-mini`.
+
 ## Provider Interface
 
 ```js

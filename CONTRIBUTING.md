@@ -10,7 +10,7 @@ backlog files under [`docs/backlog/`](docs/backlog/).
 
 ```bash
 npm install
-npm test                      # 51 tests, native node:test runner
+npm test                      # 180 tests, native node:test runner
 npm run dev                   # mock mode by default
 npm run audit:security        # repeats the launch-time security checks
 ```
@@ -33,8 +33,10 @@ Azure mode is documented in [`docs/setup-entra-id.md`](docs/setup-entra-id.md).
    that PRs must not break (mock parity, no raw log persistence,
    state-machine transitions, KQL templating, cache keys, range
    whitelist, OAuth secret handling).
-2. **Branch off `main`.** `main` is the deployed branch (Render auto-deploys),
-   so PRs are reviewed and merged rather than pushed directly.
+2. **Branch off `main`.** `main` is the deployed branch — pushes trigger
+   the Azure Container Apps deploy via
+   [`.github/workflows/deploy-azure.yml`](.github/workflows/deploy-azure.yml)
+   (OIDC) — so PRs are reviewed and merged rather than pushed directly.
 3. **Add a test.** New routes get at least one supertest case in
    `tests/api.test.js`; new KQL templates get a render test in
    `tests/kql.test.js`; new readiness signals get coverage in
@@ -57,7 +59,6 @@ The project deliberately defers a few categories of work — listed in
 opportunistically inside an unrelated PR:
 
 - Database / Redis (Phase 3 territory).
-- CSRF tokens (relies on `sameSite=lax` for now).
 - Frontend bundling / minification.
 - Multi-cloud connectors (Phase 4).
 

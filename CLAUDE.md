@@ -56,9 +56,12 @@ together replace the original SaaS-track gate logic.
   `tenants / state_transitions / scans / mappings / signals /
   validations` in [`src/core/db.js`](src/core/db.js); accessed through
   [`src/core/metadataStore.js`](src/core/metadataStore.js). Hourly
-  backup via `npm run backup:sqlite` (VACUUM INTO, keeps 24
-  snapshots). See ADR 0005. Multi-tenant Postgres deferred to Phase 3.
-- AI inference : **Azure AI Foundry** (Hub + Project + `gpt-4o-mini`
+  in-process backup to Azure Blob (`src/core/backupScheduler.js`, VACUUM
+  INTO, keeps 24 snapshots) with **restore-on-boot** + a final snapshot
+  on `SIGTERM`, so config survives Container App redeploys; the
+  `npm run backup:sqlite` script is the manual/local equivalent. See ADR
+  0005. Multi-tenant Postgres deferred to Phase 3.
+- AI inference : **Azure AI Foundry** (Hub + Project + `gpt-5.4-mini`
   deployment). Provider abstraction (`AI_PROVIDER=none|ollama|azure-foundry`)
   per `docs/architecture-ai.md`. Auth via Managed Identity (no API keys in
   env vars). Quota guard: 10 €/day cap with deterministic fallback.
@@ -75,7 +78,7 @@ together replace the original SaaS-track gate logic.
 ```bash
 npm install            # install deps (supertest is required for api/rbac tests)
 npm run dev            # start server on :3000 (mock mode by default)
-npm test               # node --env-file=.env.test --test (29 tests)
+npm test               # node --env-file=.env.test --test (180 tests)
 docker compose up --build
 ```
 
@@ -130,11 +133,11 @@ src/
     dashboard.js         # builds dashboard payload from KQL results
     timeRange.js
     audit.js
-kql/                     # 25 versioned .kql templates (Azure-specific; relocation
+kql/                     # 26 versioned .kql templates (Azure-specific; relocation
                          # to queries/azure/ deferred to V2 with second adapter)
 public/                  # static SPA (index.html, app.js, styles.css)
                          # + setup.html / setup.js (F4 wizard, /setup route)
-tests/                   # 9 test files, native node:test runner
+tests/                   # 24 test files, native node:test runner
 infra/                   # canonical Bicep + parameters
   main.bicep                 # Container Apps + ACR + Log Analytics + MI
   main.parameters.json
@@ -191,14 +194,18 @@ These are **intentionally** deferred and tracked in `docs/backlog/phase-3.md`:
 - `metadataStore` is now SQLite-backed (`data/keren.db`, since Track F1)
   but cache stays in-memory and the DB itself is single-file with no
   replication — multi-instance deployments would still see inconsistent
-  state. Single-replica is enforced de facto on Azure Container Apps
-  for now. Multi-tenant Postgres is the Phase 3 target.
-- No CSRF token (relies on `sameSite=lax` cookie only).
+  state. The DB now survives Container App redeploys via restore-on-boot
+  + a `SIGTERM` snapshot (`src/core/backupScheduler.js`), but that assumes
+  a **single replica**: keep `minReplicas=maxReplicas=1` until a shared
+  store ships (cf. `docs/maintainer-todo.md` § scaling). Multi-tenant
+  Postgres is the Phase 3 target.
 - Frontend `public/app.js` shipped raw (~92 KB), no bundling/minification.
 - CSP allows `cdn.jsdelivr.net` and `unpkg.com` (supply-chain risk).
 
 Note: rate limiting (`src/core/rateLimit.js`) shipped with the launch-readiness
 E1 track. `SESSION_SECRET` now fails loud in production (see `src/config.js`).
+CSRF tokens are enforced on every mutating route (`verifyCsrf` in
+`src/server.js`, token issued via `/auth/session`) — no longer a gap.
 
 If a task explicitly asks to harden one of these, do it. Otherwise leave alone.
 
