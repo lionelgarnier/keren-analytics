@@ -1,4 +1,4 @@
-# Easy Analytics — Strategy & Product Bundle
+# Keren Analytics — Strategy & Product Bundle
 
 > **Generated artifact** — do not edit by hand. Regenerate with
 > `npm run docs:bundle` or `./scripts/build-strategy-bundle.sh`.
@@ -30,16 +30,16 @@
 # Source file: `README.md`
 =====================================================================
 
-# Easy Analytics
+# Keren Analytics
 
-[![Tests](https://github.com/lionelgarnier/easy-analytics-for-azure/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/lionelgarnier/easy-analytics-for-azure/actions/workflows/tests.yml)
-[![Security audit](https://github.com/lionelgarnier/easy-analytics-for-azure/actions/workflows/security-audit.yml/badge.svg?branch=main)](https://github.com/lionelgarnier/easy-analytics-for-azure/actions/workflows/security-audit.yml)
+[![Tests](https://github.com/lionelgarnier/keren-analytics/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/lionelgarnier/keren-analytics/actions/workflows/tests.yml)
+[![Security audit](https://github.com/lionelgarnier/keren-analytics/actions/workflows/security-audit.yml/badge.svg?branch=main)](https://github.com/lionelgarnier/keren-analytics/actions/workflows/security-audit.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node 22+](https://img.shields.io/badge/node-%3E%3D22-brightgreen.svg)](package.json)
 
 > Turn Azure Application Insights into shareable **Marketing & Technical
 > dashboards in under 2 minutes** — AI-mapped schema, deterministic KQL,
-> nothing raw ever leaves your tenant. MIT.
+> no raw telemetry persistence outside your tenant. MIT.
 
 <!--
 HERO GIF placeholder (A3 — see docs/maintainer-todo.md).
@@ -47,8 +47,9 @@ HERO GIF placeholder (A3 — see docs/maintainer-todo.md).
 Replace this block with: ![hero](docs/assets/hero.gif)
 -->
 
-**Live demo** · _coming with the public launch — see
-[docs/maintainer-todo.md](docs/maintainer-todo.md)._
+**Live demo** · [keren.run](https://keren.run) — sample
+dataset, sign in with any Microsoft work/school account to point it at your
+own Application Insights resource.
 
 ---
 
@@ -58,20 +59,27 @@ The Azure portal can answer "how many requests came in last hour?", but
 turning App Insights into a *Marketing* dashboard (campaigns, geo,
 funnels) or a clean *Technical* view (top slow endpoints, error rate
 trends) means hand-writing KQL and rebuilding the same charts every
-project. Easy Analytics gives you both views, plus a readiness score
+project. Keren Analytics gives you both views, plus a readiness score
 that tells you which signals are missing before you ask.
 
 ## Try it now
 
 ```bash
-git clone https://github.com/lionelgarnier/easy-analytics-for-azure.git
-cd easy-analytics-for-azure
+git clone https://github.com/lionelgarnier/keren-analytics.git
+cd keren-analytics
 docker compose up --build
 ```
 
 Then open `http://localhost:3000`. The default mode is **mock** — a
 deterministic sample dataset that lets you click around with no Azure
 account at all.
+
+For production-like local runs, set a real session secret first:
+
+```bash
+SESSION_SECRET=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))") \
+NODE_ENV=production docker compose up --build
+```
 
 For real Azure mode, see [Setup: Entra ID](docs/setup-entra-id.md). Three
 commands and one `.env` file.
@@ -81,7 +89,7 @@ commands and one `.env` file.
 > register their own Azure app, do **not** create a client secret, and
 > do **not** manage permissions. They click *"Connect your Azure"* on
 > the landing page and sign in with their normal Microsoft account —
-> same flow as Slack / Loom / Notion. The token Easy Analytics receives
+> same flow as Slack / Loom / Notion. The token Keren Analytics receives
 > is *delegated*, so the app reads only what the user already had access
 > to. Tenant admins may see a one-time consent screen the first time
 > someone from their org signs in; that's a single click.
@@ -97,8 +105,8 @@ One image per group below would let the bullet list breathe.
   campaigns), Technical (latency percentiles, error rate, top slow
   endpoints), Readiness (telemetry coverage 0–100 + AI prompts).
 - **AI-style "Environment analysis" panel** that narrates your data in
-  plain English from the same numbers the dashboard shows — no LLM call
-  required at v0.1; real Azure OpenAI integration is post-launch.
+  plain English from the same numbers the dashboard shows — deterministic
+  by default, with optional Azure Foundry-backed mapping in setup.
 - **First-run banner** that surfaces the two highest-leverage telemetry
   improvements (e.g. *"Add user identity (+15)"*) and scrolls you to the
   matching prompt card on the Readiness tab.
@@ -107,23 +115,23 @@ One image per group below would let the bullet list breathe.
   windows.
 - **Schema auto-mapping** — alias table + regex pattern matching covers
   ~80% of real-world custom dimension naming (`uid`, `visitor_id`,
-  `accountId`, etc.) with zero config; LLM-assisted mapping is an
-  opt-in post-launch layer.
-- **22 versioned KQL templates** rendered server-side with strict
+  `accountId`, etc.) with zero config; optional Azure Foundry mapping
+  can refine proposals in setup.
+- **26 versioned KQL templates** rendered server-side with strict
   parameter substitution. Tenant identifiers never reach a query
   string.
 - **MIT-licensed, single binary** — Node 22, Express 5, Helmet,
-  in-memory cache. No DB, no Redis, no agent to deploy on your apps.
+  in-memory query cache, SQLite setup state. No agent to deploy on your apps.
 
 ## How it compares
 
-| | **Easy Analytics** | Azure Portal | Datadog | Power BI |
+| | **Keren Analytics** | Azure Portal | Datadog | Power BI |
 |---|---|---|---|---|
 | Time to first dashboard          | **~2 min** (Docker) | 30+ min (write KQL) | 1–2h (agent + setup) | hours (data prep) |
 | Marketing vs Technical separation| Built-in            | Manual workbook     | Add-on                | Manual report      |
 | Readiness scoring + AI prompts   | **0–100, LLM-ready prompts** | No        | Limited                | No                 |
 | Custom-dimension auto-mapping    | Alias + regex (LLM optional) | Manual    | Manual                | Manual             |
-| Data residency                   | **No raw data leaves your tenant** | Native | New endpoint   | New endpoint       |
+| Data residency                   | **No raw telemetry rows are persisted outside your tenant** | Native | New endpoint   | New endpoint       |
 | License / cost                   | **MIT, free**       | Included w/ Azure   | Per-host $$$          | Per-user $$        |
 | Self-hostable                    | Yes (`docker compose up`) | N/A           | No (SaaS)             | Limited            |
 
@@ -133,11 +141,12 @@ mature and have features we don't.
 
 ## Privacy & security
 
-The product promise is that **user telemetry rows never leave your
-Azure tenant via this service**. Only **aggregated metrics** (counts,
-percentiles, geo / browser distributions, top-N pages) and **setup
-metadata** (mapping, schema profile, dashboard payload) ever cross the
-wire to the browser or hit disk on the server.
+The product promise is that **raw telemetry rows are not persisted
+outside your Azure tenant**. The service stores setup metadata and
+aggregated dashboard outputs in SQLite. Most browser payloads are
+aggregated metrics (counts, percentiles, geo/browser distributions,
+top-N pages); a few setup/technical surfaces can include scrubbed,
+bounded event-level snippets (for example recent session timelines).
 
 That promise is encoded as automated checks in
 [`scripts/security-audit.mjs`](scripts/security-audit.mjs). Seven
@@ -158,7 +167,7 @@ Security policy and reporting path: [`SECURITY.md`](SECURITY.md).
 - **v0.1.x** — what's on `main` and the launch-readiness sprint
   ([docs/backlog/launch-readiness.md](docs/backlog/launch-readiness.md))
 - **Phase 3** — multi-tenant SaaS, persistence, real Azure OpenAI
-  integration. Gated on traction signals
+  hardening and broader AI surfaces. Gated on traction signals
   ([docs/launch-strategy.md](docs/launch-strategy.md) §3).
 - **Phase 4** — multi-cloud (AWS CloudWatch, GCP Cloud Logging) via
   the provider interface in
@@ -176,7 +185,9 @@ Set in `.env` (copy from `.env.example`):
 |----------------------------|-------------|-----------------------------------------------------------------------|
 | `AZURE_MODE`               | `mock`      | `mock` for the sample dataset, `real` for OAuth + your Azure tenant.  |
 | `SESSION_SECRET`           | _required_  | 32+ random bytes in production; app refuses to boot otherwise.        |
+| `AI_PROVIDER`              | `none`      | `none` (deterministic mapping) or `azure-foundry` (LLM-assisted setup). |
 | `AZURE_CLIENT_ID` / `_SECRET` / `_REDIRECT_URI` / `_TENANT_ID` | — | Entra ID app registration; see [docs/setup-entra-id.md](docs/setup-entra-id.md). |
+| `AZURE_FOUNDRY_ENDPOINT` / `_DEPLOYMENT` | — | Required only when `AI_PROVIDER=azure-foundry`. |
 | `MOCK_RESOURCES=multiple`  | _unset_     | Mock mode toggle to simulate multiple App Insights resources.         |
 
 Selected API surface (full list in [`src/server.js`](src/server.js)):
@@ -213,12 +224,26 @@ If this saves you a Tuesday afternoon of writing KQL by hand, please
 
 # OSS-First Launch Strategy
 
+> **STATUS — 2026-05-09: Tactics ACTIVE, traction-gate logic superseded.**
+> Updated after [ADR 0004](adr/0004-azure-first-reversal.md).
+>
+> - **Sections 1, 2, 4-12 (OSS hard launch, Azure ecosystem pickup,
+>   Show HN, awesome-azure, Reddit, dev.to, runbook) are the active V1
+>   plan.** Project is Azure-first, hosted on Azure Container Apps (with
+>   Microsoft for Startups credits), pitched as "plug-and-play 2-min
+>   analytics for Azure App Insights". Distribution leverages the MS
+>   ecosystem.
+> - **Section 3 traction gates (T+90 decide to switch to hosted SaaS) are
+>   neutralized.** The project pivoted to a portfolio/showcase angle (cf.
+>   ADR 0001) — no SaaS-track. The same numerical signals are now used as
+>   a qualitative heuristic to decide whether to trigger V2 multi-cloud
+>   (Scaleway port + article), per ADR 0004.
+> - **Project rename to `keren-analytics` and demo URL `keren.run`
+>   apply to all launch artifacts** (README, landing, OG image, posts).
+>
 > **Audience.** Founder + future agents working on this repo. Read this before
 > shipping anything that affects the public surface of the product (README,
 > demo, landing, docs).
->
-> **Status.** Draft — adopted as the working strategy, pending the founder's
-> explicit go for the launch sprint.
 
 ## 1. Thesis
 
@@ -282,7 +307,7 @@ We commit to **one** binary decision after 90 days. No drift.
 
 - ≥ 500 GitHub stars
 - ≥ 100 detected self-host installs (proxied by Docker pulls + signed-up
-  beta tenants on `demo.easy-analytics.dev` + GitHub forks with commits)
+  beta tenants on `demo.keren-analytics.dev` + GitHub forks with commits)
 - ≥ 5 inbound enterprise inquiries (any company asking for a contract, SLA,
   or self-host support package)
 - ≥ 3 design partners committed to a paid pilot
@@ -353,7 +378,7 @@ One Tuesday. We do not re-launch.
 
 | Time (PT)  | Action |
 |------------|--------|
-| 06:00      | Show HN post (title format: "Show HN: Easy Analytics — 2-min Azure App Insights dashboards, MIT-licensed"). |
+| 06:00      | Show HN post (title format: "Show HN: Keren Analytics — 2-min Azure App Insights dashboards, MIT-licensed"). |
 | 06:30      | Reply to the first comment yourself with the technical context (depth signal for HN ranking). |
 | 09:00      | r/azure post (different angle: "I built an OSS alternative to the Azure portal analytics — feedback welcome"). |
 | 11:00      | r/devops post if first ones gain traction. |
@@ -521,11 +546,16 @@ constraints. Anyone changing direction should re-read section 1 first.
 
 ## Summary
 
-Easy Analytics is a plug-and-play analytics platform that transforms existing cloud
+Keren Analytics is a plug-and-play analytics platform that transforms existing cloud
 telemetry into actionable dashboards in under 2 minutes. Starting with Azure
 Application Insights and Log Analytics, it provides a GA-like experience with zero
 agent deployment, zero raw data storage, and intelligent recommendations to
 continuously improve telemetry coverage.
+
+An **AI setup wizard** sits at the front door: it scans the tenant's telemetry,
+maps the schema to a canonical model, and shows — up front — which dashboards it
+can credibly render for you, before you commit. The happy path is a single click
+("Build my dashboard"); the mapping stays editable on demand.
 
 The product targets two audiences through a single entry point:
 - **Marketing / Product teams** : instant behavioral analytics without SDK work
@@ -536,7 +566,10 @@ See `docs/vision.md` for the full product vision and strategy.
 ## Goals
 - Connect via SSO (Entra ID) and show a dashboard within 60 to 120 seconds.
 - Use existing telemetry only. No agent deployment required.
-- Provide deterministic mapping and fallbacks when signals are missing.
+- Run an AI-assisted setup that scans telemetry, proposes a schema mapping
+  with confidence, and shows what each dashboard can render — in one click.
+- Provide deterministic mapping and fallbacks when signals are missing (and
+  when the AI provider is `none` or over its quota).
 - Store only metadata and aggregated results (no raw logs).
 - Provide clear readiness feedback, improvement steps, and LLM-ready prompts.
 - Design architecture for multi-cloud expansion (AWS, GCP) from day one.
@@ -584,11 +617,21 @@ See `docs/vision.md` for the full product vision and strategy.
 ## Dashboard (Overview)
 
 ### Marketing View
+Top-of-tab:
+- **Environment analysis** panel — an AI-style narration of what the
+  telemetry looks like (visitors, sessions, top campaign source, peak hour,
+  error band, identity mapping). Real LLM in `azure-foundry` mode;
+  deterministic generator otherwise.
+- **First-run banner** — readiness score + top quick wins as clickable chips
+  that jump to the matching Readiness signal (dismissable, persisted).
+
 KPIs:
 - Unique visitors (user or session based)
 - Sessions
 - Page views
 - Avg pages per session
+- **Period-over-period delta chips** on the top 3 KPIs (green/red/neutral
+  vs. the previous period, e.g. "vs last week")
 - KPI sparklines with anomaly detection (derived from daily trends)
 
 Charts and tables:
@@ -629,11 +672,40 @@ Session analysis:
 ## User Journey
 1. Connect Azure tenant (OAuth SSO via Entra ID).
 2. Discover App Insights resources and linked workspaces.
-3. Auto-select if only one candidate exists.
-4. Run readiness probes and schema profiling.
-5. Build on-the-fly mappings and run dashboard queries.
-6. Show overview dashboard and readiness panel.
-7. Display recommendations with actionable prompts.
+3. **Service hub** — land on a per-resource hub that tags each App Insights
+   as Ready / Incomplete / Unconfigured. Single-resource tenants skip the
+   hub and go straight to setup.
+4. **AI setup wizard** (per resource, see below) — scan → AI findings →
+   one-click build.
+5. Show the overview dashboard (Marketing / Technical / Readiness) reusing
+   the validated config snapshot — no re-scan or LLM call per load.
+6. Display recommendations with actionable, copy-paste prompts.
+
+## AI Setup Wizard
+
+The wizard is the configuration step; the dashboard is pure rendering
+afterwards. Setup state is **per resource** (`tenant + resourceId`), so a
+tenant with several App Insights resources configures each independently.
+
+1. **Scan** — reads custom dimensions, counts event types, detects identity /
+   session / page-path fields, and runs readiness probes. Streams live
+   narration (SSE). Auto-advances when done — no manual "Continue".
+2. **AI findings** — "what we can render for you" as graph-level cards
+   (✓ Ready / ! Needs instrumentation), a readiness gauge, and a copy-paste
+   `code_prompt` for each missing signal (paste into Copilot / Cursor /
+   Claude Code). Powered by Azure AI Foundry; falls back to a deterministic
+   alias/regex mapping when the AI provider is `none`, degraded, or over its
+   daily quota.
+3. **Build** — "Build my dashboard" saves the proposed mapping and lands on
+   the dashboard. The technical field-mapping editor is **optional**:
+   reachable any time from the dashboard's "Mapping" link
+   (`/setup?mode=mapping`); a low-confidence field is flagged inline rather
+   than forcing a detour. A "Re-scan" action re-runs step 1 when new event
+   types appear.
+
+The validated mapping persists in SQLite (`data/keren.db`), is backed up
+hourly to Azure Blob, and is restored on boot — so configuring once survives
+service redeploys.
 
 ## Readiness Score
 
@@ -701,11 +773,11 @@ Auth:
 # Source file: `docs/vision.md`
 =====================================================================
 
-# Vision Produit - Easy Analytics
+# Vision Produit - Keren Analytics
 
 ## TL;DR
 
-Easy Analytics transforme la telemetrie cloud existante en dashboards actionnables
+Keren Analytics transforme la telemetrie cloud existante en dashboards actionnables
 en moins de 2 minutes, sans agent, sans instrumentation supplementaire, et sans
 stocker aucune donnee brute. Le produit devient le point d'entree unique pour les
 equipes marketing (analyse produit et comportement utilisateur) et techniques
@@ -740,7 +812,7 @@ comprendre les metriques cles de son application sans lire de documentation.
 | **Pas de PII** | Les resultats sont toujours des comptages, jamais des listes d'utilisateurs |
 | **Ephemere par design** | Les resultats caches expirent (5-15 min TTL) |
 
-**Message confiance** : "Vos donnees restent dans votre tenant Azure. Easy Analytics
+**Message confiance** : "Vos donnees restent dans votre tenant Azure. Keren Analytics
 ne stocke que la structure et les comptages, jamais les donnees brutes."
 
 ### 1.3 Multi-cloud ("Cloud-Agnostic by Design")
@@ -751,7 +823,7 @@ fondation de la strategie multi-cloud :
 
 ```
                     +-------------------+
-                    |   Easy Analytics  |
+                    |   Keren Analytics  |
                     |   (Core Engine)   |
                     +--------+----------+
                              |
@@ -851,7 +923,7 @@ Apres l'analyse de readiness, le systeme identifie les signaux manquants et gene
 Quand les `pageViews` sont manquantes et que le schema detecte une stack React :
 
 ```
-Prompt genere par Easy Analytics :
+Prompt genere par Keren Analytics :
 ---
 Je dois ajouter le tracking Application Insights dans mon application React.
 
@@ -874,7 +946,7 @@ Genere le code complet avec les fichiers a modifier.
 ### 3.3 Avantages de cette approche
 
 - **Pas besoin de lire la codebase** : le prompt suffit pour le LLM
-- **Personnalise** : le prompt inclut le contexte specifique detecte par Easy Analytics
+- **Personnalise** : le prompt inclut le contexte specifique detecte par Keren Analytics
 - **Actionnable** : copier-coller le prompt => obtenir du code fonctionnel
 - **Boucle vertueuse** : plus de telemetrie => meilleur dashboard => plus de valeur
 - **Zero friction** : pas de documentation a lire, pas d'expertise requise
@@ -896,7 +968,7 @@ Genere le code complet avec les fichiers a modifier.
 
 La telemetrie cloud contient bien plus que des metriques de trafic ou de performance.
 Les memes donnees, vues sous un angle different, servent d'autres equipes. C'est la
-clef pour transformer Easy Analytics d'un outil d'equipe en une plateforme d'entreprise.
+clef pour transformer Keren Analytics d'un outil d'equipe en une plateforme d'entreprise.
 
 ### 4.2 Departements cibles
 
@@ -910,7 +982,7 @@ clef pour transformer Easy Analytics d'un outil d'equipe en une plateforme d'ent
 
 ### 4.3 Comment ca marche techniquement ?
 
-Les donnees sont deja la dans Application Insights / Log Analytics. Easy Analytics
+Les donnees sont deja la dans Application Insights / Log Analytics. Keren Analytics
 ajoute des "lenses" (vues) par departement :
 
 ```
@@ -1122,6 +1194,14 @@ items off.
 Format: each item has **what**, **why**, **when needed**, **how**, and
 links to the agent-side work that depends on it.
 
+> **Audit live 2026-06-04** (Azure CLI + `gh`, sub
+> `0a3afaae-8849-4b27-8e43-dad3ba80ce58`) — **maj après corrections
+> maintainer**. Statuts recoupés contre la prod. **Reste réellement
+> ouvert** : contenus voix-auteur (Hero GIF, OG image, Show HN, Reddit,
+> outreach, Plausible). **Réglés depuis l'audit** : homepage `keren.run`,
+> branch protection (ruleset actif), scaling `1/1` (live + défauts Bicep).
+> Toute l'infra Azure/CI/Foundry/backup est en place et vérifiée.
+
 ---
 
 ## 1. Production environment & secrets
@@ -1129,12 +1209,14 @@ links to the agent-side work that depends on it.
 ### `SESSION_SECRET` (production)
 - **Why**: `src/config.js` now throws at boot if `NODE_ENV=production`
   and `SESSION_SECRET` is missing or set to a known placeholder.
-- **When**: before the demo URL goes live.
-- **How**: generate with
-  `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
-  and set it on the deploy target (Render env var, or `docker run -e`,
-  etc.). Never commit it.
-- **Status**: TODO.
+- **How (effectif sur Azure)** : `deploy/azure-deploy.sh` génère un secret
+  (32 bytes hex via `openssl rand`) et le persiste dans
+  `deploy/.session-secret` (gitignoré). Re-déploiements réutilisent ce
+  fichier, donc les sessions actives ne sont pas invalidées. Pour rotater :
+  supprimer `deploy/.session-secret` et relancer le script. Le secret est
+  passé au Bicep en `@secure() param` puis au Container App en `secret`
+  chiffré au repos.
+- **Status**: DONE — 2026-05-10.
 
 ### Entra ID app registration (real Azure mode)
 - **Why**: required for `AZURE_MODE=real`. Mock mode does not need it.
@@ -1147,41 +1229,143 @@ links to the agent-side work that depends on it.
   - `AZURE_CLIENT_SECRET`
   - `AZURE_REDIRECT_URI` (must match the deployed origin)
   - `AZURE_TENANT_ID` (`organizations` for multi-tenant work accounts)
-- **Status**: TODO. Optional for the OSS-first launch.
+- **Status**: DONE — vérifié 2026-06-04 (Azure CLI). `AZURE_MODE=real`,
+  `AZURE_CLIENT_ID=fba047ba…`, `AZURE_TENANT_ID=organizations` et
+  `AZURE_REDIRECT_URI=https://keren.run/auth/callback` posés sur
+  `ca-keren-analytics` ; secrets `azure-client-secret` + `session-secret`
+  présents ; OAuth real mode live (keren.run sert en HTTP 200).
 
 ### Demo deploy target
 - **Why**: the Show HN / Reddit launch needs a clickable URL.
 - **When**: launch eve.
-- **How**: `render.yaml` blueprint exists. Connect the GitHub repo to
-  Render, set `SESSION_SECRET` (and Azure vars if real mode), pick a
-  region. Subdomain on a domain Lionel controls — **not** a
-  Render-generated URL (per `launch-readiness.md` A1).
-- **Status**: TODO.
+- **How**: post-ADR 0004 the demo target is **Azure Container Apps West
+  Europe** (`keren-analytics-prod`), provisioned by `infra/main.bicep`
+  via `.github/workflows/deploy-azure.yml`. The `render.yaml` blueprint
+  remains in-repo as a self-host hint but is no longer the demo target.
+  URL: `https://keren.run` (DNS step below).
+- **Status**: DONE — vérifié 2026-06-04. `https://keren.run` répond HTTP
+  200, servi par `ca-keren-analytics` (France Central) ; deploys CI verts
+  (dernier run `deploy-azure.yml` success). La démo est en mode `real`
+  (Foundry), pas mock.
+
+### Launch-week scaling policy (`minReplicas=1`, `maxReplicas=1`)
+- **Why**: sessions are in-memory (`express-session` default store). For launch
+  reliability, keep a single replica and avoid cold starts.
+- **When**: launch week (before public traffic), then reassess after launch.
+- **How**: keep `infra/main.parameters.json` at `minReplicas=1`,
+  `maxReplicas=1` for the launch deployment. After launch, if you re-enable
+  scale-out, ship a shared session store first.
+- **Status**: DONE — vérifié 2026-06-04. Le maintainer a posé
+  `minReplicas=maxReplicas=1` sur le Container App (confirmé via
+  `az containerapp show`). L'hypothèse single-replica est garantie :
+  sessions in-memory, SQLite mono-fichier et restore-on-boot sont tous
+  cohérents. Anti-drift : `infra/main.parameters.json` est déjà à `1/1`
+  **et** les défauts de `infra/main.bicep` ont été passés de `0/3` à `1/1`
+  (commit 2026-06-04), donc même un Bicep lancé sans fichier de params ne
+  régressera plus.
+
+### First Azure deploy + Key Vault secret seeding
+- **Why**: the Bicep template provisions an empty Key Vault. The Container
+  App boots with `secretRef`s pointing to `session-secret` and
+  `azure-client-secret` — those secrets must exist before the app starts
+  successfully.
+- **When**: right after the first run of `deploy-azure.yml`.
+- **How**: see `infra/README.md` § "First deploy" — generate a 32-byte
+  random `session-secret` and paste the end-user Entra app
+  `azure-client-secret` via `az keyvault secret set`. Key Vault name is
+  in the workflow / Bicep outputs. Never commit values.
+- **Status**: MOOT — vérifié 2026-06-04. Le V1 n'utilise **pas** de Key
+  Vault (secrets inline en Container App secrets — cf. « Provisionner
+  l'hébergement Azure » plus bas). Les secrets `session-secret` +
+  `azure-client-secret` sont présents sur l'app et elle boote ; rien à
+  seeder côté KV. Item conservé pour l'historique.
+
+### CNAME `keren.run` → Container App FQDN
+- **Why**: the managed certificate for the custom domain only provisions
+  once the CNAME already resolves.
+- **When**: after the first successful Azure deploy, before launch.
+- **What actually happened** (2026-05-10/11):
+  CNAME was configured at Namecheap, the managed certificate
+  `mc-cae-keren-anal-analytics-keren--4208` was created on the
+  Container Apps environment via portal/CLI, and the binding +
+  redirect URI override were applied directly on the live Container
+  App. None of this lives in [`infra/main.bicep`](../infra/main.bicep)
+  yet — see the follow-up entry below.
+- **Status**: DONE — `https://keren.run` serves the app with
+  a valid TLS cert.
+
+### Bicep ↔ prod drift on custom domain + redirect URI
+- **Why this existed**: discovered 2026-05-11 during the Track F5 what-if
+  for the Foundry env vars push. Three configurations live on the
+  production Container App that were **not represented** in
+  [`infra/main.bicep`](../infra/main.bicep):
+  1. `properties.configuration.ingress.customDomains[0]` — binding for
+     `keren.run` to managed cert
+     `mc-cae-keren-anal-analytics-keren--4208`.
+  2. The managed cert resource itself on the Container Apps environment.
+  3. `AZURE_REDIRECT_URI=https://keren.run/auth/callback` env
+     var.
+- **Risk that existed**: anyone running `./deploy/azure-deploy.sh`
+  against prod regressed OAuth + broke the custom domain. The image-only
+  CI workflow (`.github/workflows/deploy-azure.yml`) did **not**
+  redeploy Bicep so it stayed safe.
+- **Status**: DONE — 2026-05-13 — option 1 (lift into Bicep) shipped.
+  Changes:
+  - Two new params on `infra/main.bicep`: `customDomainName` (defaults
+    to `keren.run` via `infra/main.parameters.json`) and
+    `customDomainCertificateName` (defaults to
+    `mc-cae-keren-anal-analytics-keren--4208`). The cert is referenced
+    by name rather than created (cert provisioning depends on DNS
+    being live, which isn't expressible in pure IaC) — fresh
+    environments must create the cert out-of-band before running
+    Bicep, then plug the name in.
+  - `containerApp.properties.configuration.ingress.customDomains` now
+    binds the custom domain to the existing cert when both params are
+    set.
+  - New `effectiveRedirectUri` variable: explicit `azureRedirectUri`
+    override > `https://<customDomainName>/auth/callback` > empty
+    (deploy script patches with the FQDN only when neither is set).
+    Container App env var `AZURE_REDIRECT_URI` is wired to this.
+  - `deploy/azure-deploy.sh` reads the new `effectiveRedirectUri`
+    output and **no longer clobbers** AZURE_REDIRECT_URI when Bicep
+    has filled it in. New `--custom-domain` / `--custom-domain-cert`
+    flags let staging environments override the prod defaults.
+  - Two new outputs (`effectiveRedirectUri`, `customDomainConfigured`)
+    so future scripts / CI can introspect the binding without re-querying.
+- **Re-run safety**: confirmed via inspection — re-running
+  `./deploy/azure-deploy.sh` against prod with the default params will
+  preserve `AZURE_REDIRECT_URI=https://keren.run/auth/callback`
+  and the custom-domain binding. A what-if dry-run before the next deploy
+  is still good hygiene.
 
 ---
 
 ## 2. GitHub repo Settings (not file-tracked)
 
 These need a human to click through `Settings` on
-`github.com/lionelgarnier/easy-analytics-for-azure`:
+`github.com/lionelgarnier/keren-analytics`:
 
 ### About / topics / website / description
 - **Why**: HN/Reddit visitors pattern-match on these in the first 5s.
-- **How**: Settings → top of the repo page →
-  - Description: short pitch (≤ 140 chars).
-  - Website: the demo URL (set this once A1 ships).
-  - Topics: `azure`, `application-insights`, `analytics`, `kql`,
-    `dashboard`, `oss`, `nodejs`, `express`. Add `marketing-analytics`
-    if there's room.
-- **Status**: TODO. Blocked on demo URL for the website field.
+- **Status**: DONE — 2026-05-10. Description :
+  *"Plug-and-play Marketing & Technical dashboards for Azure App Insights —
+  AI-mapped schema, KQL-only, MIT."* (102 chars). Homepage :
+  `https://keren.run`. Topics (10) : `analytics`,
+  `application-insights`, `azure`, `dashboard`, `express`, `kql`,
+  `marketing-analytics`, `nodejs`, `oss`, `self-hosted`. Tout posé via
+  `gh repo edit` + `gh api` ; modifiable au besoin.
+
+- **Homepage** — corrigée 2026-06-04 par le maintainer : le champ Website
+  pointe désormais sur `https://keren.run` (vérifié `gh repo view`).
+  Auparavant sur le domaine retiré `analytics.keren.run`.
 
 ### Pin v0.1.0 release with notes
 - **Why**: the right-hand sidebar's "Releases: v0.1.0" is a strong
   signal of "this is real software, not a weekend hack".
-- **How**: `Releases` → `Draft a new release`. Tag `v0.1.0` on `main`.
-  Notes should mirror the future `CHANGELOG.md` v0.1.0 section
-  (Claude can draft the changelog body — see C4).
-- **Status**: TODO.
+- **Status**: DONE — 2026-05-10. Tag `v0.1.0` créé sur le HEAD `ed561a7`,
+  release publiée avec les notes du `[0.1.0]` de `CHANGELOG.md`, marquée
+  *Latest* (donc auto-épinglée dans le sidebar). URL :
+  https://github.com/lionelgarnier/keren-analytics/releases/tag/v0.1.0
 
 ### Issue + PR templates UI check
 - **Why**: the `.github/ISSUE_TEMPLATE/*.yml` and
@@ -1191,11 +1375,52 @@ These need a human to click through `Settings` on
 
 ### Branch protection on `main`
 - **Why**: prevents accidental force-push to the deployed branch.
-- **How**: Settings → Branches → Add rule for `main` → require PR
-  before merging, require status checks if/when CI exists (C3).
-- **Status**: TODO. Low priority pre-launch (single-maintainer repo).
+- **Débloqué (2026-06-04)**: le repo est désormais **public** (vérifié via
+  `gh repo view`), la limitation repo-privé ne s'applique plus. La
+  protection peut être activée maintenant.
+- **Où**: UI → repo **Settings → Branches** (ou **Rules → Rulesets**) →
+  *Add rule / Add branch ruleset* sur `main` ; ou le `gh api` ci-dessous.
+- **How (à exécuter le jour du launch, juste après `gh repo edit --visibility public`)** :
+  ```bash
+  cat <<'JSON' | gh api repos/lionelgarnier/keren-analytics/branches/main/protection -X PUT --input -
+  {
+    "required_status_checks": {"strict": true, "contexts": ["Tests", "Security audit"]},
+    "enforce_admins": false,
+    "required_pull_request_reviews": null,
+    "restrictions": null,
+    "allow_force_pushes": false,
+    "allow_deletions": false
+  }
+  JSON
+  ```
+- **Status**: DONE — vérifié 2026-06-04. Protection posée par le maintainer
+  via un **ruleset** GitHub (`main`, enforcement *active*, règles
+  `non_fast_forward` + `deletion`) — d'où le 404 de l'endpoint classique
+  `/branches/main/protection`, qui ne voit pas les rulesets. Force-push et
+  suppression de `main` sont bloqués. Pas de gating `required_status_checks`
+  (Tests / Security audit) dans le ruleset — optionnel, à ajouter si tu veux
+  exiger la CI verte avant merge.
 
 ---
+
+### Default `AI_PROVIDER` for the public demo
+- **Why**: `docs/architecture-ai.md` introduces a provider abstraction
+  (`none` / `ollama` / `azure-openai`). The public demo has to pick one.
+  Each option has cost / quality / privacy trade-offs that are a maintainer
+  call, not an agent call. See § 7 of `launch-strategy.md` for the budget
+  cap and the architecture doc § "Deployment patterns" for the matrix.
+- **When**: before the demo URL goes live (overlaps with the demo deploy
+  target item above).
+- **How**: pick one and set the env var on Render / the deploy target.
+  Recommended for first launch: `none` (zero infra cost, canned narration
+  on the demo, fits the budget). Switch to `ollama` post-launch if the
+  AI angle needs to feel "alive" and a small CPU instance covers it.
+  Avoid `azure-openai` on the public demo unless a Microsoft sponsorship
+  covers the bill — pay-per-visitor is incompatible with a HN spike.
+- **Status**: DONE (choix arbitré) — vérifié 2026-06-04. La démo prod tourne
+  en `AI_PROVIDER=azure-foundry` (deployment `gpt-5.4-mini`), couvert par les
+  crédits Founders Hub — pas `none`. Le garde-quota 10 €/jour (F3) + le
+  fallback déterministe restent le filet de sécurité pour un spike HN.
 
 ## 3. Third-party accounts (launch-day infrastructure)
 
@@ -1317,10 +1542,357 @@ action are yours.
 - **Status**: TODO (≤ 5 min).
 
 ### `docs/launch-strategy.md` traction-gate review
-- **Why**: Phase 3 (multi-tenant SaaS) and Phase 4 (multi-cloud) are
-  gated on signals defined there. As launch unfolds you'll want to
-  re-read this and decide if any gate criterion shifted.
-- **Status**: ongoing.
+- **Why**: Phase 3 (multi-tenant SaaS) and Phase 4 (multi-cloud) were
+  originally gated on signals defined there. **Now superseded by ADR 0001**
+  (portfolio pivot) — the SaaS gate is no longer the active decision.
+  Multi-cloud becomes a primary deliverable, not a gated bet. Document
+  kept as historical reference.
+- **Status**: superseded — see `docs/adr/0001-positioning-portfolio.md`.
+
+---
+
+## 6. Pivot vitrine + retournement Azure-first (ADRs 0001-0004) — items à arbitrer / exécuter
+
+### Renommer le projet en `keren-analytics`
+- **Why**: ADR 0001 acte le repositionnement vitrine. Le suffixe `-for-azure`
+  est redondant avec la tagline (qui reste *"plug-and-play analytics for
+  Azure App Insights"* — cf. ADR 0004) et alourdit le nom de repo. `keren-analytics`
+  signe le mainteneur via le domaine `keren.run` tout en restant neutre.
+- **When**: avant la Phase A (refacto provider + déploiement Azure), pour
+  éviter une cascade de renames.
+- **How**: rename GitHub repo (`lionelgarnier/easy-analytics-for-azure` →
+  `lionelgarnier/keren-analytics`, redirect GH auto), puis PR dédiée pour
+  mettre à jour `package.json`, `README.md`, `public/index.html`, landing,
+  toutes les références dans `docs/**/*.md`. Ne pas bundler avec un
+  changement d'archi.
+- **Status**: DONE — repo renamed + references updated in branch
+  `claude/cloud-agnostic-architecture-fVCQx` (this commit).
+
+### Microsoft for Startups Founders Hub — statut crédits Azure
+- **Why**: ADR 0004 fait d'Azure Container Apps l'hôte de la démo, et ADR
+  0005 ajoute l'inference Azure AI Foundry. Founders Hub couvre les deux,
+  sans coût out-of-pocket pendant la phase pre-launch.
+- **Status — 2026-05-11** :
+  - **1 000 € de crédits Azure approuvés** — utilisables immédiatement.
+  - **5 000 € supplémentaires en cours de validation** (montant total
+    potentiel : 5k-150k$ sur 4 ans selon le niveau Founders Hub atteint).
+  - Note importante pour les agents Claude : **ne pas redemander à chaque
+    session si Founders Hub est fait** — la candidature est déposée et en
+    cours. Le statut est mis à jour ici.
+- **Once 5k€ approved** : récupérer subscription ID + sponsor reference,
+  ajouter le badge "Microsoft for Startups" sur le README et la landing.
+- **Pitch utilisé** : *"Keren Analytics is an MIT-licensed plug-and-play
+  dashboard for Azure Application Insights with AI-powered setup wizard
+  (audit + mapping + recommendations). Aimed at Azure dev teams frustrated
+  by the portal UX. KQL-only, no raw data leaves the tenant. Hosting public
+  demo on Azure Container Apps + Azure AI Foundry."*
+
+### Provisionner Azure AI Foundry (Track F — ADR 0005)
+- **Why**: ADR 0005 acte AI-first setup wizard pre-launch. Track F nécessite
+  un endpoint Azure AI Foundry avec un model deployment pour le scan +
+  AI mapping + recommendations.
+- **When**: avant le démarrage de F3 (AI mapping service). F1 (SQLite) et F2
+  (schema scan enrichi) peuvent commencer en parallèle sans le LLM.
+- **What was actually done** (2026-05-11) :
+  - Foundry Hub + Project `keren-analytics-prod` créés via portail.
+  - Model `gpt-5.4-mini` (deployment `2026-03-17`) déployé — choix
+    upgradé depuis `gpt-4o-mini` après inspection du catalogue, cf.
+    addendum ADR 0005.
+  - Endpoint format **projet Responses API** :
+    `https://keren-analytics-prod-foundry.services.ai.azure.com/api/projects/keren-analytics-prod/openai/v1/responses`
+  - Env vars en local (`.env`) : `AZURE_FOUNDRY_ENDPOINT` +
+    `AZURE_FOUNDRY_DEPLOYMENT=gpt-5.4-mini`. Test bout-en-bout OK
+    (HTTP 200, `pong`, 18 tokens — token audience `https://ai.azure.com/`).
+- **What remains** :
+  - Propagation des env vars dans `infra/main.bicep` (l'agent F3 le fait
+    dans la PR de F3).
+  - **Assignation du rôle MI** : entrée séparée ci-dessous (blocking F3
+    en prod).
+- **Quota TPM** : à vérifier dans le portail Foundry sur le deployment
+  `gpt-5.4-mini`. Demander 100k+ TPM avant launch HN si on anticipe un
+  spike Show HN.
+- **Status**: DONE — vérifié 2026-06-04 (Azure CLI). Account+projet
+  `keren-analytics-prod-foundry` provisionnés ; deployment `gpt-5.4-mini`
+  (version `2026-03-17`) live ; env `AZURE_FOUNDRY_ENDPOINT` /
+  `AZURE_FOUNDRY_DEPLOYMENT` / `AZURE_FOUNDRY_CLIENT_ID` posées sur le
+  Container App ; rôle MI `Foundry User` assigné (cf. entrée suivante).
+  Le « What remains » ci-dessus (Bicep + rôle MI) est résolu. Reste juste
+  à vérifier le quota TPM avant un spike HN.
+
+### Assigner le rôle `Azure AI User` à la MI du Container App (Track F3)
+- **Why**: F3 appellera Foundry depuis le Container App via la Managed
+  Identity (`uami-keren-analytics`). Sans le rôle `Azure AI User` sur le
+  Project Foundry, l'inférence renverra `403 Forbidden` en prod. ADR 0005
+  addendum 2026-05-11 corrige le rôle initialement listé
+  (`Cognitive Services User` ne suffit pas pour l'endpoint projet).
+- **When**: avant le **premier deploy de F3 en prod**. Pas bloquant pour
+  le développement local (qui utilise le token `az` du mainteneur).
+- **How** (Azure Portal, le plus simple) :
+  1. Portal → AI Foundry → Project `keren-analytics-prod` → Access
+     control (IAM) → Add role assignment.
+  2. Role : **Azure AI User** (lecture + inférence). `Azure AI Developer`
+     marche aussi mais donne plus que nécessaire.
+  3. Assign to : **Managed Identity** → `id-keren-analytics` (la
+     user-assigned MI déjà créée par `infra/main.bicep`,
+     `var managedIdentityName = 'id-${namePrefix}'`).
+  4. Review + assign.
+- **How** (CLI alternative — vérifié 2026-05-11 contre la prod) :
+  ```bash
+  MI_PRINCIPAL_ID=$(az identity show -g keren-analytics-prod \
+    -n id-keren-analytics --query principalId -o tsv)
+  # Foundry est un Microsoft.CognitiveServices/accounts (kind=AIServices)
+  # avec un sub-resource projects/<projectName>. Scope au projet pour
+  # least-privilege ; scope au compte si tu veux que l'assignment couvre
+  # de futurs projets sous le même Hub.
+  PROJECT_ID=$(az resource show -g keren-analytics-prod \
+    --name keren-analytics-prod-foundry/keren-analytics-prod \
+    --resource-type Microsoft.CognitiveServices/accounts/projects \
+    --query id -o tsv)
+  az role assignment create --assignee-object-id "$MI_PRINCIPAL_ID" \
+    --assignee-principal-type ServicePrincipal \
+    --role "Azure AI User" --scope "$PROJECT_ID"
+  ```
+- **Verify**: depuis le Container App, `curl` vers le Foundry endpoint
+  doit renvoyer 200, pas 401/403. F3 expose une route healthcheck
+  `/api/ai/ping` à utiliser pour ça.
+- **Status**: DONE — 2026-05-13 — vérifié via
+  `az role assignment list --assignee <MI principalId> --all`. Rôle
+  `Azure AI User` assigné au scope
+  `…/Microsoft.CognitiveServices/accounts/keren-analytics-prod-foundry`
+  (scope compte plutôt que projet, ce qui couvre aussi les futurs
+  projets sous le même Hub — léger sur-périmètre acceptable). La MI
+  `id-keren-analytics` a également `AcrPull` sur le registry, comme
+  prévu par `infra/main.bicep`.
+
+### Wirer le backup SQLite en production (Track F1 — ADR 0005)
+- **Why**: F1 a shippé `scripts/backup-sqlite.mjs` (VACUUM INTO + rotation 24
+  snapshots vers `data/backups/`), mais rien ne le déclenche en prod. Sans
+  cron + upload off-host, un redémarrage de Container App perd `data/keren.db`
+  (tous les mappings, validations, scans).
+- **What shipped (2026-05-13)**: option 2 (snapshot off-host vers Blob) en
+  **in-process scheduler** plutôt qu'en Container Apps Job séparé. Un Job
+  séparé n'a pas accès au filesystem de l'app (besoin d'un Azure Files mount
+  partagé qui ralentit aussi les INSERT du wizard), donc le scheduler tourne
+  directement dans le process Node — un `setInterval` horaire qui exécute
+  `VACUUM INTO` vers un fichier temp puis `BlockBlobClient.uploadFile`.
+  Auth via la MI déjà utilisée par Foundry (rôle `Storage Blob Data
+  Contributor` ajouté sur le Storage Account dans Bicep).
+  Code : [`src/core/backupScheduler.js`](../src/core/backupScheduler.js),
+  câblé dans [`src/server.js`](../src/server.js) ; 7 tests dans
+  [`tests/backupScheduler.test.js`](../tests/backupScheduler.test.js).
+- **Trade-off accepté**: si l'app crash, plus de snapshot tant qu'elle n'est
+  pas redémarrée (RPO ≤ 1h pendant un outage long). Pour le launch HN,
+  acceptable : le wizard est idempotent (nouveau OAuth → re-scan gratuit),
+  donc 1h de perte = nuisance UX, pas drame.
+- **Restore-on-boot + backup SIGTERM (2026-06-04)** : le backup était
+  **write-only** — rien ne le relisait, donc chaque redéploiement du
+  Container App (filesystem éphémère) repartait d'une base vide malgré les
+  snapshots. Corrigé : `restoreLatestSnapshot()`
+  ([`backupScheduler.js`](../src/core/backupScheduler.js)) télécharge le
+  dernier snapshot Blob au démarrage **si `data/keren.db` est absent**
+  (jamais d'écrasement d'une base vivante), câblé dans
+  [`src/server.js`](../src/server.js) avant `app.listen()`. Un handler
+  `SIGTERM`/`SIGINT` prend un dernier snapshot avant l'arrêt (Container Apps
+  envoie SIGTERM avant de couper un replica), donc un redéploiement propre
+  ne perd rien (RPO ≈ 0). Aucune action maintainer supplémentaire : une fois
+  les 5 étapes ci-dessous exécutées (Storage Account provisionné + MI
+  autorisée), restore et backup utilisent la même infra Blob. En dev/local
+  sans `BACKUP_BLOB_ACCOUNT`, restore est un no-op silencieux.
+- **Bicep ressources ajoutées**: Storage Account `Standard_LRS` /
+  StorageV2 (nom auto-généré `stkbk…<uniqueSuffix>`, max 24 chars), Blob
+  container privé `sqlite-backups`, role assignment `Storage Blob Data
+  Contributor` (GUID `ba92f5b4-2d11-453d-a403-e96b0029c9fe`) sur la MI
+  `id-keren-analytics`. Env vars sur le Container App :
+  `BACKUP_BLOB_ACCOUNT`, `BACKUP_BLOB_CONTAINER=sqlite-backups`,
+  `BACKUP_INTERVAL_MS=3600000`, `BACKUP_MAX_SNAPSHOTS=24`.
+
+#### À faire côté Azure pour activer en prod
+1. **Re-déployer Bicep** une fois pour provisionner le Storage Account
+   et l'attribution de rôle :
+   ```bash
+   ./deploy/azure-deploy.sh --client-id <GUID> --client-secret <secret> --skip-build
+   ```
+   (Le `--skip-build` évite de rebuilder l'image — on veut juste l'infra
+   pour cette première passe. Bicep est idempotent : les ressources déjà
+   provisionnées ne sont pas re-créées.)
+2. **Récupérer le nom du Storage Account** depuis les outputs :
+   ```bash
+   az deployment group list -g keren-analytics-prod \
+     --query "[?contains(name, 'keren-analytics-')] | [0].properties.outputs.storageAccountName.value" \
+     -o tsv
+   ```
+3. **Vérifier que la MI peut bien écrire** (avant de pousser une image qui
+   en dépend) :
+   ```bash
+   STORAGE_ACCOUNT=<output from step 2>
+   az storage blob list --account-name "$STORAGE_ACCOUNT" \
+     --container-name sqlite-backups --auth-mode login -o table
+   ```
+   Doit retourner une liste vide (pas une erreur 403). Si 403 →
+   l'attribution de rôle n'a pas encore propagé (peut prendre 1-2 min).
+4. **Pousser une nouvelle image** via le workflow OIDC GitHub Actions
+   (`deploy-azure.yml`) ou en relançant `azure-deploy.sh` sans
+   `--skip-build`. Le scheduler démarre au boot, premier snapshot
+   ~60s après le démarrage du replica.
+5. **Vérifier qu'un snapshot apparaît** au bout de quelques minutes :
+   ```bash
+   az storage blob list --account-name "$STORAGE_ACCOUNT" \
+     --container-name sqlite-backups --auth-mode login -o table
+   ```
+   Doit montrer un blob `keren-2026-MM-DDTHH-MM-SS-mmmZ.db`. Les logs
+   du Container App montrent aussi `[backup] uploaded keren-…` :
+   ```bash
+   az containerapp logs show -n ca-keren-analytics -g keren-analytics-prod \
+     --tail 100 | grep backup
+   ```
+
+#### Restore (si jamais)
+```bash
+STORAGE_ACCOUNT=<from step 2 above>
+# Pick a snapshot
+az storage blob list --account-name "$STORAGE_ACCOUNT" \
+  --container-name sqlite-backups --auth-mode login -o table
+# Download it
+az storage blob download --account-name "$STORAGE_ACCOUNT" \
+  --container-name sqlite-backups --auth-mode login \
+  --name keren-2026-05-13T10-00-00-000Z.db --file restored.db
+# Copy into the Container App (or rebuild a revision with --bind it)
+```
+- **Status**: DONE — vérifié 2026-06-04. Les 5 étapes ci-dessus sont
+  **exécutées en prod** : Storage Account `stkbkkerenanalyticsdfrvt`
+  provisionné, MI `Storage Blob Data Contributor`, env `BACKUP_*` posées,
+  et **snapshots réels** dans le container `sqlite-backups` (dernier
+  aujourd'hui 14:06, série remontant au 13/05). Le restore-on-boot +
+  backup SIGTERM (2026-06-04) sont déployés. Plus rien de manuel — à la
+  seule condition de garder l'app en **single-replica** (cf. § scaling
+  policy plus haut, actuellement `0/3`).
+
+### Provisionner l'hébergement Azure de la démo
+- **Why**: ADR 0004 § Decision 2 — Azure Container Apps. Région retenue :
+  **France Central** (préférence souveraineté FR, latence ~5ms depuis Paris).
+- **How (effectif)**: stack provisionné via Bicep dans
+  [`infra/main.bicep`](../infra/main.bicep), orchestré par
+  [`deploy/azure-deploy.sh`](../deploy/azure-deploy.sh). Composants :
+  Log Analytics + Container Apps environment + Container App + Azure Container
+  Registry (Basic) + User-assigned Managed Identity (AcrPull). **Pas de Key
+  Vault dans le V1** : les secrets (SESSION_SECRET, AZURE_CLIENT_SECRET) sont
+  passés directement comme Container App secrets via paramètres `@secure()`
+  Bicep. Migration KV à layer en Phase B si rotation/audit deviennent un
+  besoin réel.
+- **Prereq découvert** : la subscription doit avoir le resource provider
+  Microsoft.App enregistré. Si le premier déploiement échoue avec
+  "Subscription is not registered for the Microsoft.App resource provider",
+  exécuter une fois : `az provider register -n Microsoft.App --wait`.
+- **Status**: DONE — 2026-05-10 — premier déploiement manuel réussi sur la
+  subscription `0a3afaae-8849-4b27-8e43-dad3ba80ce58` (RG
+  `keren-analytics-prod`, France Central). FQDN provisoire :
+  `ca-keren-analytics.happyrock-d99ade88.francecentral.azurecontainerapps.io`.
+  Coût observé : ~10-15 €/mois sans crédits Founders Hub (scale-to-zero
+  Container App + ACR Basic + Log Analytics).
+
+### Configurer GitHub Actions pour déployer sur Azure
+- **Why**: ADR 0004 § Decision 4 — workflow `deploy-azure.yml` via OIDC
+  federated credentials (pas de secret long-lived côté GH).
+- **How (effectif)** : workflow file
+  [`.github/workflows/deploy-azure.yml`](../.github/workflows/deploy-azure.yml)
+  + script de setup
+  [`deploy/azure-ci-setup.sh`](../deploy/azure-ci-setup.sh). Le script crée
+  une app registration `keren-analytics-ci` dédiée (séparée de l'app
+  `keren-analytics` qui sert l'OAuth utilisateur, pour éviter qu'une rotation
+  CI casse l'OAuth), une federated credential OIDC pour
+  `repo:lionelgarnier/keren-analytics:ref:refs/heads/main`, et assigne 2
+  rôles RBAC minimaux : **AcrPush** sur l'ACR, **Contributor** sur le
+  Container App (pas Contributor sur le RG entier — least privilege).
+- **Steps maintainer (~5 min)** :
+  1. `./deploy/azure-ci-setup.sh` (idempotent).
+  2. Coller les 3 valeurs imprimées comme GitHub Secrets (Settings →
+     Secrets and variables → Actions), ou utiliser les `gh secret set`
+     one-liners imprimés par le script.
+  3. Push sur `main` ou `gh workflow run deploy-azure.yml` pour déclencher.
+  4. Le workflow build l'image, push à ACR, update le Container App, et
+     attend la propagation healthy avant de finir.
+- **Status**: DONE — vérifié 2026-06-04. Les 3 secrets OIDC
+  (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`) sont
+  posés et les runs `deploy-azure.yml` passent (3 derniers verts, dont le
+  push du 04/06). Le pipeline build→push→update tourne automatiquement sur
+  push `main`.
+
+### DNS `keren.run` pointé sur Azure
+- **Why**: ADR 0002 § 7 (DNS maintenu par ADR 0004 § Decision 5) — l'URL
+  canonique `https://keren.run` reste en place, seul l'endpoint
+  cible change.
+- **When**: déblocable depuis le 2026-05-10 — l'infra Azure est en place, le
+  FQDN provisoire est `ca-keren-analytics.happyrock-d99ade88.francecentral.azurecontainerapps.io`.
+- **How**:
+  1. Récupérer le FQDN Azure Container Apps après déploiement (forme
+     `<app>.<env>.francecentral.azurecontainerapps.io`).
+  2. Chez le registrar de `keren.run`, pointer l'apex `keren.run` vers le
+     FQDN Azure (A/ALIAS ou CNAME flatten selon le registrar). Vérifier le
+     record `asuid.keren.run` requis par Azure pour l'attache du custom
+     domain.
+  3. Activer le **managed certificate** Azure Container Apps pour
+     `keren.run` (Let's Encrypt managé).
+  4. `keren.run` est désormais le domaine canonique servi directement —
+     aucune redirection apex à configurer.
+- **Status**: DONE — vérifié 2026-06-04. `keren.run` est lié au Container
+  App (custom domain SNI + managed cert sur l'environnement) et répond en
+  HTTP 200. Doublon avec « CNAME keren.run → Container App FQDN » du §1,
+  déjà marqué DONE.
+
+### Mettre à jour `CLAUDE.md` après Phase A
+- **Why**: `CLAUDE.md` mentionne encore "Phase 3/4 gated, do not start
+  speculatively" et la stratégie originale OSS-first SaaS-track. Après
+  ADRs 0001+0004, le bon récit est "Azure-first, vitrine portfolio,
+  multi-cloud V2 conditionnel".
+- **How**: remplacer la section "Status" et "Known gaps" par une référence
+  aux ADRs 0001 et 0004. Garder le reste (invariants, conventions, mock
+  parity, KQL templating, etc.) inchangé — ils tiennent toujours.
+- **Status**: DONE — 2026-05-10 — section Status réécrite (Phase A DONE,
+  ref ADRs 0001+0004), repo map ajoute `deploy/`, "metadataStore in-memory"
+  corrigé en fs-backed, SESSION_SECRET fail-loud noté, "Render auto-deploys"
+  remplacé par `deploy/azure-deploy.sh`.
+
+### Purger le Key Vault orphelin du premier déploiement raté
+- **Why**: lors du premier essai de Bicep le 2026-05-10, le Container App
+  référençait des secrets KV qui n'existaient pas encore → échec. Bicep
+  reformulé sans KV (secrets inline), mais le KV `kv-keren-analytics-dfrvt`
+  créé pendant le run raté est resté dans le RG. Coût ~0 (pas de secrets,
+  pas d'opérations) mais c'est du bruit dans le portail.
+- **How**:
+  ```bash
+  az keyvault delete --name kv-keren-analytics-dfrvt -g keren-analytics-prod
+  az keyvault purge  --name kv-keren-analytics-dfrvt --location francecentral
+  ```
+  (Le `purge` est nécessaire car KV reste 7j en soft-delete par défaut.)
+- **Status**: DONE — vérifié 2026-06-04. Plus aucun Key Vault dans le RG,
+  ni en soft-delete (`az keyvault list` + `list-deleted` → vides).
+  L'orphelin a été supprimé+purgé. Rien à faire.
+
+### Gotcha — ne pas re-run `azure-app-registration.sh` inutilement
+- **Why**: le script utilise `az ad app credential reset --append`, qui
+  **mint un nouveau client secret à chaque run**. Les anciens secrets
+  restent valides (le Container App tournant ne casse pas), mais ça pollue
+  l'app registration et complique les audits. À ne lancer que pour :
+  - Première création de l'app registration.
+  - Ajouter une nouvelle redirect URI (le script dedupe correctement, donc
+    re-run sûr quand un nouvel environnement apparaît, ex. URL Container
+    Apps après premier déploiement).
+  - Rotation explicite de secret.
+- **Status**: note opérationnelle — pas un TODO.
+
+### ~~Compte Scaleway + dossier Startup Program~~ — reporté V2
+- ~~Why / How~~: superseded par ADR 0004 — l'hôte V1 est Azure, pas Scaleway.
+  Le compte Scaleway et le dossier Startup Program redeviennent pertinents
+  uniquement si la V2 multi-cloud est déclenchée (article portage
+  Scaleway). Conservé ici pour mémoire, à réactiver le cas échéant.
+- **Status**: deferred to V2 (post-traction).
+
+### ~~Setup OpenTofu Scaleway + GH secrets Scaleway~~ — reporté V2
+- ~~Why / How~~: superseded par ADR 0004 — V1 utilise Azure (Bicep ou
+  `terraform/azure/`). Les secrets Scaleway ne sont pas créés tant que la
+  V2 multi-cloud n'est pas activée.
+- **Status**: deferred to V2 (post-traction).
+
 
 ---
 
@@ -1360,7 +1932,7 @@ action are yours.
 
 ## Track A — Public surface (the things strangers see first)
 
-### A1. Demo URL — `demo.easy-analytics.dev` or equivalent [BLOCKER, 6h]
+### A1. Demo URL — `demo.keren-analytics.dev` or equivalent [BLOCKER, 6h]
 - Stand up a public hosted instance using mock mode (no Azure auth needed).
 - Pin a deterministic mock dataset that tells a complete product story
   (visitors trending up, one anomaly, one slow endpoint, readiness score 68).
@@ -1447,7 +2019,7 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
   primary, Connect-Azure is ghost, and a third button links the repo
   with a ★ icon. Below-the-fold sections, in order: feature cards
   (lightly updated copy to mention period-over-period chips and the
-  paste-into-Cursor framing), comparison table (Easy Analytics vs
+  paste-into-Cursor framing), comparison table (Keren Analytics vs
   Azure Portal / Datadog / Power BI; 6 rows; honesty disclaimer
   underneath), security paragraph (links the seven encoded controls
   + the SECURITY.md reporting path), 3-question FAQ (data storage /
@@ -1479,7 +2051,7 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
   ```bash
   az deployment sub create -f deploy/azure-app-registration.bicep \
     -p redirectUri=...
-  docker run -p 3000:3000 -e AZURE_CLIENT_ID=... easy-analytics
+  docker run -p 3000:3000 -e AZURE_CLIENT_ID=... keren-analytics
   ```
 - Keep the long manual guide as a fallback section.
 - **Shipped:** went with a single bash script (`deploy/azure-app-registration.sh`)
@@ -1721,7 +2293,7 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
 ## Track D — Distribution prep (the launch ammunition)
 
 ### D1. Show HN post draft [BLOCKER, 3h]
-- Title format: "Show HN: Easy Analytics — 2-min Azure App Insights
+- Title format: "Show HN: Keren Analytics — 2-min Azure App Insights
   dashboards (open source, AI-mapped)".
 - Body: 4-6 paragraphs:
   1. What it is (one paragraph).
@@ -1811,6 +2383,114 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
   contacts section. The LLM kill-switch section is stubbed with a
   pointer to where it'll live when B2 ships.
 
+## Track F — AI-first setup wizard (ADR 0005, pre-launch blocker)
+
+> **Added 2026-05-11 after ADR 0005.** The "AI-mapped schema / AI explains
+> your telemetry" claims were AI-washing — no LLM was wired. This track
+> closes that gap before launch by shipping a real audit + AI mapping +
+> recommendations flow on Azure AI Foundry, persisted in SQLite. The other
+> AI surfaces (`ai-natural-language-queries.md`,
+> `ai-instrumentation-assistant.md`) stay post-launch. See
+> [`docs/adr/0005-ai-first-scope.md`](../adr/0005-ai-first-scope.md).
+
+### F1. Persistance SQLite [BLOCKER, 16-24h]
+- Install `better-sqlite3` (sync, simple) or use Node 22.5+ `node:sqlite`
+  native module. ADR 0005 § Decision 2.
+- Schema: `tenants`, `scans`, `mappings`, `signals`, `validations` — with
+  per-tenant scope and timestamps. File at `data/keren.db`.
+- Rewrite `src/core/metadataStore.js` to use the SQLite schema. Keep the
+  same exported interface (`getTenant`, `updateTenant`,
+  `logStateTransition`) so callers don't change.
+- Migration script: if `data/store.json` exists at boot, import it into
+  the SQLite schema, then rename to `store.json.legacy` (don't delete).
+- Backup policy: hourly `VACUUM INTO`-based snapshot to `data/backups/`
+  (cap 24 snapshots). Production-side: Azure Blob upload via Container
+  Apps Jobs cron (separate task, F1 ships the script).
+- Tests: existing 5 metadataStore tests must keep passing; add 3 new
+  tests for migration path + concurrent transactions.
+
+### F2. Schema scan enrichi [BLOCKER, 16-24h]
+- Extend `src/core/schemaProfile.js` → new `src/core/schemaScan.js`.
+- Capture per-tenant : event volumes by `name`, top-N `customDimensions`
+  keys with cardinality + sample values (PII-scrubbed via regex
+  `email|phone|ssn`), timestamps span, gaps detected (e.g. no
+  `userId`-like field present, no campaign tracking, no session
+  duration).
+- Persist scan output as a JSON document in `scans` table, indexed by
+  `tenantId + scannedAt`. Latest scan is the active one; history kept.
+- Cap on scan KQL: use existing `queryTimeoutMs` (12s), summary queries
+  only (no `take 10000`). Total ≤ 5-6 queries per scan.
+- Tests: schema parse roundtrip, PII scrub coverage, gap detection
+  heuristics.
+
+### F3. AI mapping + recommendations service [BLOCKER, 24-32h]
+- New `src/ai/azureFoundry.js` provider implementing the contract in
+  `docs/architecture-ai.md`. Authenticate via the existing Managed
+  Identity (no API keys). Endpoint + deployment name in env vars
+  (`AZURE_FOUNDRY_ENDPOINT`, `AZURE_FOUNDRY_DEPLOYMENT`).
+- Prompt structuré (JSON schema response) that takes a F2 scan as input
+  and returns: `mapping_proposals[]` (canonical field → tenant column,
+  with confidence + explanation), `missing_signals[]` (signal name +
+  recommended KQL to instrument), `dashboard_recommendations` (which
+  charts to show prominently given what's available).
+- **Quota guard**: in-memory daily counter; hard cap at 10 €/day worth
+  of tokens (computed from `gpt-4o-mini` pricing); when exceeded,
+  return a deterministic fallback (existing alias/regex mapping +
+  empty recommendations) plus a `degraded: true` flag the UI surfaces.
+- Cache scan→AI-output in SQLite (so a re-load doesn't re-spend
+  tokens). Invalidate on re-scan.
+- Mode `AI_PROVIDER=none` must continue to work (deterministic-only
+  output, no LLM call) — tests run in this mode.
+- Bicep update: extend `infra/main.bicep` with Azure AI Foundry Hub +
+  Project + connection + model deployment + role assignment
+  (`Cognitive Services User` to the existing MI).
+- Tests: provider contract test, JSON schema validation, fallback
+  trigger on quota exceeded, cache hit/miss.
+
+### F4. Setup wizard UI [BLOCKER, 32-40h]
+- New route `/setup` (or extend existing post-OAuth flow). Multi-step:
+  1. **Scanning** — spinner + live narration ("Reading custom dimensions…
+     Found 47 event types… Detecting user identity…").
+  2. **AI findings** — proposed mappings with confidence badges,
+     missing signals with recommended KQL (copy button), dashboard
+     recommendations.
+  3. **Validate/edit** — user can accept all, override individual
+     mappings, dismiss recommendations. Persists to `validations` table.
+  4. **Save & continue** — redirects to the dashboard with the
+     validated mapping active.
+- Re-scan button in settings ("Found new event types? Re-scan now").
+- Empty-state handling: tenant with no events yet → wizard explains
+  what to instrument and waits.
+- Tests: end-to-end supertest covering the 4-step flow + override path.
+
+### F5. Documentation + AI specs refresh [STRONG, 8-16h]
+- Update `docs/backlog/ai-setup-wizard.md` status from "post-launch
+  optional" to "pre-launch, see Track F". Add the concrete F1-F4
+  scope (replace speculative sections).
+- Update `docs/backlog/ai-environment-analysis.md` similarly — Layer 1
+  alias is done (B1), Layer 2 LLM ships as part of F3.
+- Update `docs/architecture-ai.md` status from DRAFT to ACCEPTED, with
+  the `azure-foundry` provider as the canonical implementation.
+- Remove the `Preview — real LLM coming soon` badge from `narration.js`
+  generator output when `AI_PROVIDER=azure-foundry` and the call
+  succeeds.
+
+### Track F dependencies & sequencing
+
+```
+F1 (SQLite) ─┬─→ F2 (scan) ─→ F3 (AI mapping) ─→ F4 (wizard UI)
+             │                       ↑
+             └───────────────────────┘
+                  (cache + persistence)
+
+F5 in parallel once F1-F4 are conceptually clear (~day 3 of Track F).
+```
+
+Maintainer dependency : Azure AI Foundry workspace + `gpt-4o-mini`
+deployment must exist before F3 can run end-to-end. See
+[`docs/maintainer-todo.md`](../maintainer-todo.md) § "Provisionner Azure
+AI Foundry".
+
 ## Effort summary
 
 | Track                                  | Blockers | Strong | Optional | Total |
@@ -1820,11 +2500,16 @@ The first screen of the README determines 70% of stargazers vs. bouncers.
 | C — Trust signals                      | 7h       | 3h     | 1h       | 11h   |
 | D — Distribution prep                  | 9h       | 4h     | 2h       | 15h   |
 | E — Anti-fragility                     | 3h       | 3h     | 1h       | 7h    |
-| **Total blockers (must ship)**         | **57h**  |        |          |       |
-| **Total with strong items**            |          |        |          | **96h** |
-| **Total all-in**                       |          |        |          | **104h** |
+| **F — AI-first scope (added 2026-05-11)** | **88-120h** | 8-16h | 0h | **96-136h** |
+| **Total blockers (must ship)**         | **145-177h** | | | |
+| **Total with strong items**            |          |        |          | **192-232h** |
+| **Total all-in**                       |          |        |          | **200-240h** |
 
-Realistic 2-week sprint with all blockers + most strong items: **80 hours**.
+Realistic launch timeline with all blockers + most strong items:
+~5-6 weeks at ~40h/week focused. Most of Phase A blockers already shipped
+(infra, custom domain, CI/CD, GitHub polish, release v0.1.0). Remaining
+heavy lift is Track F (AI setup wizard, ~15 jours focus) plus the
+content/asset drafts in Track D and the Hero GIF / OG image in Track A.
 
 ## Sequencing — recommended order
 
@@ -1878,7 +2563,7 @@ single most common way solo founders waste their launch window.
 
 # Changelog
 
-All notable changes to **Easy Analytics for Azure** are documented in this
+All notable changes to **Keren Analytics** are documented in this
 file. Format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/);
 this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
@@ -1889,9 +2574,43 @@ Pre-launch sprint work that has landed on `main` since v0.1.0 — see
 for the per-track status.
 
 ### Added
+- **AI-first setup wizard (Track F, ADR 0005)** at `/setup` — scans the
+  tenant's Application Insights telemetry, asks the model "what dashboards
+  can we credibly render for you", and persists a validated column
+  mapping. Backed by:
+  - **SQLite persistence (F1)** via Node 22 native `node:sqlite`
+    (`data/keren.db`, schema in `src/core/db.js`, accessed through
+    `src/core/metadataStore.js`). Legacy `data/store.json` auto-migrates
+    on first boot.
+  - **Enriched schema scan (F2)** — `src/core/schemaScan.js`: event
+    volumes, top custom-dimension keys with cardinality + PII-scrubbed
+    samples, gap detection. Persisted per `(tenant, resourceId)`.
+  - **AI mapping + recommendations (F3)** on **Azure AI Foundry**
+    (`src/ai/azureFoundry.js`, deployment `gpt-5.4-mini`, Managed-Identity
+    auth, no API keys). Provider abstraction
+    `AI_PROVIDER=none|ollama|azure-foundry`; daily EUR quota guard with a
+    deterministic fallback; scan→output cached in SQLite.
+  - **Wizard UI (F4)** with live SSE scan narration, AI findings cards
+    (✓ Ready / ! Needs instrumentation), and copy-paste `code_prompt`s
+    for missing signals (`public/setup.{html,js}`).
+- **Per-resource setup state + service hub** — `scans`/`validations` keyed
+  by `(tenant, resourceId)`; a post-login hub lists every App Insights
+  resource with a config status. Config/render split: `runSetupScan`
+  (config, once) vs `runOverviewPipeline` (render, every load — no
+  re-scan, no LLM call).
+- **Azure-first hosting (Phase A, ADR 0004)** — production on **Azure
+  Container Apps** (France Central) via Bicep (`infra/main.bicep` +
+  `deploy/azure-deploy.sh`), custom domain **https://keren.run** with
+  managed TLS, and image-only CI/CD through OIDC
+  (`.github/workflows/deploy-azure.yml`). Render blueprint kept as a
+  self-host fallback only.
+- **Durable persistence across redeploys** — hourly in-process SQLite →
+  Azure Blob backup (`src/core/backupScheduler.js`), plus **restore-on-boot**
+  and a final snapshot on `SIGTERM`, so the Container App's ephemeral
+  filesystem no longer loses wizard config on redeploy (single-replica).
 - Landing page on `/` rewritten as a launch one-pager — tagline, three
   CTAs (Try the demo / Connect your Azure / ★ Star on GitHub),
-  comparison table (Easy Analytics vs Azure Portal / Datadog / Power
+  comparison table (Keren Analytics vs Azure Portal / Datadog / Power
   BI), security trust paragraph, 3-question FAQ, and a privacy-clean
   footer (no tracking by default; explicit Plausible/Umami slot for
   the operator).
@@ -1930,7 +2649,19 @@ for the per-track status.
 - License + Node-version badges in the README next to the existing
   security-audit badge.
 
+### Changed
+- **Setup wizard streamlined to ~1 click** — after the scan the wizard
+  auto-advances to the AI findings, and "Build my dashboard" always saves
+  the proposed mapping directly. The technical mapping editor is no longer
+  a forced step: it's reachable on demand via the dashboard's "Mapping"
+  link (`/setup?mode=mapping`). Low-confidence fields are flagged inline
+  rather than forcing a detour. (See `docs/backlog/ai-setup-wizard.md`
+  § "Two-click wizard".)
+
 ### Security
+- **CSRF tokens** enforced on every mutating route (`verifyCsrf` in
+  `src/server.js`; token issued via `/auth/session`, sent as
+  `X-CSRF-Token`). Closes the previous "no CSRF" gap.
 - `SESSION_SECRET` is now required in production: `src/config.js` throws
   at boot when `NODE_ENV=production` and the value is missing or set to
   a known placeholder (`dev-secret-change-me`,
@@ -2030,11 +2761,11 @@ First public release. Everything below is what shipped on day one.
   supertest for API tests. All run in mock mode (`NODE_ENV=test`
   forces `azureMode=mock`).
 
-[Unreleased]: https://github.com/lionelgarnier/easy-analytics-for-azure/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/lionelgarnier/easy-analytics-for-azure/releases/tag/v0.1.0
+[Unreleased]: https://github.com/lionelgarnier/keren-analytics/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/lionelgarnier/keren-analytics/releases/tag/v0.1.0
 
 
 ---
 
-_Bundle generated: 2026-05-08 20:12 UTC_
+_Bundle generated: 2026-06-04 15:18 UTC_
 _Generator: scripts/build-strategy-bundle.sh_
