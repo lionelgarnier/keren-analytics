@@ -7,6 +7,7 @@ import { DatabaseSync } from "node:sqlite";
 
 import {
   createSnapshot,
+  restoreLatestSnapshot,
   runBackupOnce,
   snapshotBlobName,
   startBackupScheduler,
@@ -59,6 +60,35 @@ function makeFakeContainerClient() {
 }
 
 const silentLogger = { info() {}, warn() {}, error() {} };
+
+/**
+ * Restore-side container double. `listBlobsFlat` reports the seeded blob
+ * names; `downloadToFile` writes the recorded bytes for the requested
+ * snapshot to disk so the restore can be asserted end to end.
+ */
+function makeFakeRestoreContainer(snapshots = {}) {
+  return {
+    getBlockBlobClient(name) {
+      return {
+        async downloadToFile(dest) {
+          fs.writeFileSync(dest, snapshots[name] ?? Buffer.from(""));
+        },
+      };
+    },
+    listBlobsFlat({ prefix }) {
+      const names = Object.keys(snapshots).filter((n) => n.startsWith(prefix));
+      return {
+        async *[Symbol.asyncIterator]() {
+          for (const name of names) yield { name };
+        },
+      };
+    },
+  };
+}
+
+function restoreBlobService(container) {
+  return { getContainerClient: () => container };
+}
 
 test("createSnapshot produces a readable copy of the source DB", () => {
   const { dir, dbPath } = makeFixtureDb();
@@ -147,6 +177,79 @@ test("runBackupOnce returns skipped=true when the DB file is missing", async () 
   });
   assert.equal(result.skipped, true);
   assert.equal(container.blobs.size, 0);
+});
+
+test("restoreLatestSnapshot is a no-op when no blob account is configured", async () => {
+  const result = await restoreLatestSnapshot({
+    dbPath: "/nonexistent/keren.db",
+    blobAccount: "",
+    blobServiceClient: null,
+    logger: silentLogger,
+  });
+  assert.equal(result.skipped, true);
+  assert.equal(result.reason, "disabled");
+});
+
+test("restoreLatestSnapshot skips when a non-empty DB already exists", async () => {
+  const { dir, dbPath } = makeFixtureDb();
+  const container = makeFakeRestoreContainer({
+    "keren-2026-05-13T10-00-00-000Z.db": Buffer.from("newer"),
+  });
+  try {
+    const result = await restoreLatestSnapshot({
+      dbPath,
+      blobAccount: "ignored",
+      blobServiceClient: restoreBlobService(container),
+      logger: silentLogger,
+    });
+    assert.equal(result.skipped, true);
+    assert.equal(result.reason, "db-present");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("restoreLatestSnapshot reports no-snapshots when the container is empty", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "keren-restore-test-"));
+  const dbPath = path.join(dir, "keren.db");
+  const container = makeFakeRestoreContainer({});
+  try {
+    const result = await restoreLatestSnapshot({
+      dbPath,
+      blobAccount: "ignored",
+      blobServiceClient: restoreBlobService(container),
+      logger: silentLogger,
+    });
+    assert.equal(result.skipped, true);
+    assert.equal(result.reason, "no-snapshots");
+    assert.equal(fs.existsSync(dbPath), false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("restoreLatestSnapshot downloads the newest snapshot when the DB is absent", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "keren-restore-test-"));
+  const dbPath = path.join(dir, "nested", "keren.db");
+  const container = makeFakeRestoreContainer({
+    "keren-2026-05-11T00-00-00-000Z.db": Buffer.from("oldest"),
+    "keren-2026-05-13T10-00-00-000Z.db": Buffer.from("newest"),
+    "keren-2026-05-12T00-00-00-000Z.db": Buffer.from("middle"),
+  });
+  try {
+    const result = await restoreLatestSnapshot({
+      dbPath,
+      blobAccount: "ignored",
+      blobServiceClient: restoreBlobService(container),
+      logger: silentLogger,
+    });
+    assert.equal(result.skipped, false);
+    assert.equal(result.restored, "keren-2026-05-13T10-00-00-000Z.db");
+    // Parent dirs are created and the newest snapshot's bytes land on disk.
+    assert.equal(fs.readFileSync(dbPath, "utf8"), "newest");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("startBackupScheduler is a no-op when no blob account is configured", async () => {

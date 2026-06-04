@@ -111,6 +111,26 @@ untouched, and the 4-step state machine is intact — the validate step is now
 **conditionally** visited rather than removed. Progress label "Validate" →
 "Confirm" to reflect its new role.
 
+### Two-click wizard: auto-advance + validate always optional (2026-06-04)
+
+Follow-up to the 2026-05-31 pass. Two residual clicks remained in the happy
+path: a manual **"Continue → findings"** after the scan finished, and — on
+any low-confidence field — a forced detour through the validate step. Both
+are now gone, taking the happy path to a **single click** ("Build my
+dashboard →").
+
+| Area | Change | Code |
+|------|--------|------|
+| Scan → findings | `finishScan()` now auto-advances to the findings step ~1s after the scan completes (skipped in `?mode=mapping`). The header / command-bar "Continue" buttons stay wired as a fallback. | `runScan` in [`setup.js`](../../public/setup.js) |
+| Findings CTA | `proceedFromFindings()` **always** `submitValidation("accept_all")` — even when a field is low-confidence. The validate step is no longer auto-visited at all; it's reachable only via the on-demand "Edit mapping" header action and the dashboard's Mapping link. | `proceedFromFindings` / `renderChrome` in [`setup.js`](../../public/setup.js) |
+| Low-confidence | No longer a routing trigger. The findings sub-copy flags any uncertain field inline ("We weren't fully sure about *user identity* — refine it anytime from the dashboard") so nothing is hidden while keeping the one-click flow. | `humanizeField` + findings chrome in [`setup.js`](../../public/setup.js) |
+
+Still no server-side change: `/api/setup/*` contracts and the `accept_all`
+snapshot are untouched; the validate panel is now reached purely on demand.
+Verified end-to-end in mock mode: land on `/setup` → scan auto-advances to
+findings (0 clicks) → "Build my dashboard →" → `/service/<name>` (1 click);
+`/setup?mode=mapping` still opens the validate editor directly.
+
 ### Design intent vs. what shipped
 
 The original narrative below describes the **end-state** experience —

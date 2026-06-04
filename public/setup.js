@@ -170,12 +170,14 @@
 
     if (step === "findings") {
       const c = computeFindingCounts();
-      // When the AI is confident on every canonical field, the mapping step
-      // adds no value — the CTA saves the proposed mapping and goes straight
-      // to the dashboard. A low-confidence field is the one case where the
-      // user's input matters, so we route to the focused confirm screen.
-      const needsConfirm = lowConfidenceFields().length > 0;
-      const proceedLabel = needsConfirm ? "Review fields →" : "Build my dashboard →";
+      const proceedLabel = "Build my dashboard →";
+      // Low-confidence fields no longer force a confirm step. We surface
+      // them inline so nothing is hidden, and point at the always-available
+      // "Edit mapping" action (and the dashboard's Mapping link) for refining.
+      const lowConf = lowConfidenceFields();
+      const lowConfNote = lowConf.length > 0
+        ? ` We weren't fully sure about ${lowConf.map(humanizeField).join(", ")} — refine ${lowConf.length === 1 ? "it" : "them"} anytime from the dashboard.`
+        : "";
       header.classList.remove("hidden");
       header.innerHTML = `
         <div class="d2-pageheader-l">
@@ -186,13 +188,15 @@
             <span class="d2-breadcrumb-tag d2-breadcrumb-tag--ai">AI · ${escapeHtml(c.modelTag)}</span>
           </div>
           <h1 class="d2-h1">What we can render</h1>
-          <p class="d2-sub">${c.ready} of ${c.total} dashboards can render now.${c.needs > 0 ? ` ${c.needs} need extra instrumentation to be useful — we've drafted the prompts so you can ship them in minutes.` : ""}</p>
+          <p class="d2-sub">${c.ready} of ${c.total} dashboards can render now.${c.needs > 0 ? ` ${c.needs} need extra instrumentation to be useful — we've drafted the prompts so you can ship them in minutes.` : ""}${lowConfNote}</p>
         </div>
         <div class="d2-pageheader-r">
           ${headerAction("findingsBack", "← Re-scan", false)}
+          ${headerAction("findingsAdvanced", "Edit mapping", false)}
           ${headerAction("findingsContinue", proceedLabel, true)}
         </div>`;
       $("findingsBack").addEventListener("click", () => startStep1());
+      $("findingsAdvanced").addEventListener("click", () => gotoValidate());
       $("findingsContinue").addEventListener("click", () => proceedFromFindings());
       bar.innerHTML = cmdbar("setup · findings · 02 / 04",
         { id: "cmdReview", label: proceedLabel, accent: true });
@@ -234,14 +238,25 @@
       .map((r) => r.canonical);
   }
 
-  // Findings CTA: skip the mapping step entirely when the AI is confident,
-  // otherwise drop into the focused confirm screen.
+  // Human-readable label per canonical field, for the low-confidence note.
+  const FIELD_LABELS = {
+    canonicalUserId: "user identity",
+    canonicalSessionId: "sessions",
+    canonicalPagePath: "page paths",
+    canonicalReferrer: "referrers",
+  };
+  function humanizeField(field) {
+    return FIELD_LABELS[field] || field;
+  }
+
+  // Findings CTA always builds the dashboard — even when a field is
+  // low-confidence. The validation/edit screen is no longer a forced step:
+  // it's reachable on demand via the "Edit mapping" action here and the
+  // dashboard's "Mapping" link (/setup?mode=mapping). This keeps the happy
+  // path at a single click; nothing the AI guessed is hidden, since the
+  // findings copy flags any uncertain field inline.
   function proceedFromFindings() {
-    if (lowConfidenceFields().length > 0) {
-      gotoValidate();
-    } else {
-      submitValidation("accept_all");
-    }
+    submitValidation("accept_all");
   }
 
   function gotoValidate() {
@@ -559,11 +574,20 @@
     // "Continue" (header or command bar) to advance.
     const finishScan = () => {
       headingEl.textContent = "Scan complete";
-      narrationEl.textContent = "Review the schema tree, then continue to the AI findings.";
+      narrationEl.textContent = "Schema mapped — opening the AI findings…";
       $("scanNowTag").textContent = "DONE · 05 OF 05";
       if ($("scanTreeStream")) $("scanTreeStream").style.display = "none";
       state.scanComplete = true;
       if (state.step === "scanning") renderChrome("scanning");
+      // Auto-advance to findings: once the scan is done the manual
+      // "Continue" click added nothing. A short beat lets the completed
+      // tree register, then we move on. The header / command-bar Continue
+      // buttons stay wired as a fallback if the timer is pre-empted.
+      if (!state.advancedMapping) {
+        setTimeout(() => {
+          if (state.step === "scanning" && state.scanComplete) show("findings");
+        }, 1000);
+      }
     };
 
     let settled = false;

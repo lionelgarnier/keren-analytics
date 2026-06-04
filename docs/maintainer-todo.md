@@ -453,6 +453,20 @@ action are yours.
   pas redémarrée (RPO ≤ 1h pendant un outage long). Pour le launch HN,
   acceptable : le wizard est idempotent (nouveau OAuth → re-scan gratuit),
   donc 1h de perte = nuisance UX, pas drame.
+- **Restore-on-boot + backup SIGTERM (2026-06-04)** : le backup était
+  **write-only** — rien ne le relisait, donc chaque redéploiement du
+  Container App (filesystem éphémère) repartait d'une base vide malgré les
+  snapshots. Corrigé : `restoreLatestSnapshot()`
+  ([`backupScheduler.js`](../src/core/backupScheduler.js)) télécharge le
+  dernier snapshot Blob au démarrage **si `data/keren.db` est absent**
+  (jamais d'écrasement d'une base vivante), câblé dans
+  [`src/server.js`](../src/server.js) avant `app.listen()`. Un handler
+  `SIGTERM`/`SIGINT` prend un dernier snapshot avant l'arrêt (Container Apps
+  envoie SIGTERM avant de couper un replica), donc un redéploiement propre
+  ne perd rien (RPO ≈ 0). Aucune action maintainer supplémentaire : une fois
+  les 5 étapes ci-dessous exécutées (Storage Account provisionné + MI
+  autorisée), restore et backup utilisent la même infra Blob. En dev/local
+  sans `BACKUP_BLOB_ACCOUNT`, restore est un no-op silencieux.
 - **Bicep ressources ajoutées**: Storage Account `Standard_LRS` /
   StorageV2 (nom auto-généré `stkbk…<uniqueSuffix>`, max 24 chars), Blob
   container privé `sqlite-backups`, role assignment `Storage Blob Data

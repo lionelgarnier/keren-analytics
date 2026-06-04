@@ -22,7 +22,7 @@ import {
 } from "./core/validationStore.js";
 import { runWithToken } from "./providers/azure/tokenStore.js";
 import { createRateLimiter } from "./core/rateLimit.js";
-import { startBackupScheduler } from "./core/backupScheduler.js";
+import { startBackupScheduler, restoreLatestSnapshot } from "./core/backupScheduler.js";
 import { createAzureFoundryProvider } from "./ai/azureFoundry.js";
 
 const app = express();
@@ -1164,24 +1164,58 @@ app.get("/{*splat}", (req, res, next) => {
 let server;
 let backupScheduler;
 if (process.env.NODE_ENV !== "test") {
-  server = app.listen(config.port, () => {
-    console.log(`Server running on http://localhost:${config.port} (mode: ${config.azureMode})`);
-    if (config.azureMode === "real") {
-      if (oauthConfigured) {
-        const secretStatus = config.azureClientSecret ? "secret: yes" : "secret: MISSING";
-        console.log(`OAuth configured (client: ${config.azureClientId.substring(0, 8)}..., ${secretStatus})`);
-      } else {
-        console.log("OAuth not configured — set AZURE_CLIENT_ID and AZURE_CLIENT_SECRET in .env for browser sign-in");
-      }
+  // Restore the latest Blob snapshot before opening the DB. The Container
+  // Apps filesystem is ephemeral, so without this every redeploy starts
+  // from an empty DB even though hourly backups exist. Awaited before
+  // listen() so it completes ahead of the first request (and thus the
+  // first lazy getDb()); a failure degrades to the previous behaviour
+  // (empty local DB) rather than blocking boot.
+  (async () => {
+    try {
+      await restoreLatestSnapshot({ logger: console });
+    } catch (err) {
+      console.error("[restore] failed — continuing with local DB:", err?.message || err);
     }
-  });
-  const keepAlive = setInterval(() => {}, 2_147_483_647);
-  server.on("close", () => clearInterval(keepAlive));
 
-  // In-process SQLite → Azure Blob backup. No-op when BACKUP_BLOB_ACCOUNT
-  // is unset (dev, first deploy before infra is wired).
-  backupScheduler = startBackupScheduler();
-  server.on("close", () => backupScheduler?.stop?.());
+    server = app.listen(config.port, () => {
+      console.log(`Server running on http://localhost:${config.port} (mode: ${config.azureMode})`);
+      if (config.azureMode === "real") {
+        if (oauthConfigured) {
+          const secretStatus = config.azureClientSecret ? "secret: yes" : "secret: MISSING";
+          console.log(`OAuth configured (client: ${config.azureClientId.substring(0, 8)}..., ${secretStatus})`);
+        } else {
+          console.log("OAuth not configured — set AZURE_CLIENT_ID and AZURE_CLIENT_SECRET in .env for browser sign-in");
+        }
+      }
+    });
+    const keepAlive = setInterval(() => {}, 2_147_483_647);
+    server.on("close", () => clearInterval(keepAlive));
+
+    // In-process SQLite → Azure Blob backup. No-op when BACKUP_BLOB_ACCOUNT
+    // is unset (dev, first deploy before infra is wired).
+    backupScheduler = startBackupScheduler();
+    server.on("close", () => backupScheduler?.stop?.());
+
+    // Container Apps sends SIGTERM before stopping a replica; take a final
+    // snapshot so a graceful redeploy loses nothing (RPO ≈ 0). A 5s guard
+    // forces exit if the snapshot or close hangs past the grace window.
+    let shuttingDown = false;
+    const gracefulShutdown = async (signal) => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      console.log(`[backup] ${signal} received — final snapshot before exit`);
+      const forced = setTimeout(() => process.exit(0), 5000);
+      forced.unref();
+      try {
+        await backupScheduler?.runOnce?.();
+      } catch (err) {
+        console.error("[backup] final snapshot failed:", err?.message || err);
+      }
+      server.close(() => process.exit(0));
+    };
+    process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+    process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+  })();
 }
 
 export { app, server };

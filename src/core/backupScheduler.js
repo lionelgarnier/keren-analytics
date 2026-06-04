@@ -129,6 +129,54 @@ export async function runBackupOnce({
 }
 
 /**
+ * Restore the most recent Blob snapshot into `dbPath` when the local DB
+ * is absent. The Container Apps filesystem is ephemeral, so every
+ * redeploy/restart wipes `data/keren.db`; the hourly backups are
+ * otherwise write-only, which means the wizard config (mappings,
+ * validations, scans) was silently lost on each deploy. This closes that
+ * loop and must run before the first `getDb()` opens the database.
+ *
+ * Never clobbers an existing non-empty DB — a present file means this
+ * replica already holds live state. No-op when backups are disabled
+ * (`BACKUP_BLOB_ACCOUNT` unset) or when no snapshot exists yet.
+ */
+export async function restoreLatestSnapshot({
+  dbPath = process.env.KEREN_DB_PATH || path.resolve("data", "keren.db"),
+  blobAccount = process.env.BACKUP_BLOB_ACCOUNT,
+  blobContainer = process.env.BACKUP_BLOB_CONTAINER || "sqlite-backups",
+  miClientId = process.env.AZURE_FOUNDRY_CLIENT_ID,
+  blobServiceClient,
+  logger = console,
+} = {}) {
+  if (!blobAccount && !blobServiceClient) {
+    logger.info("[restore] BACKUP_BLOB_ACCOUNT not set — restore skipped");
+    return { skipped: true, reason: "disabled" };
+  }
+  if (fs.existsSync(dbPath) && fs.statSync(dbPath).size > 0) {
+    logger.info(`[restore] ${dbPath} already present — restore skipped`);
+    return { skipped: true, reason: "db-present" };
+  }
+
+  const client =
+    blobServiceClient || (await buildDefaultBlobServiceClient(blobAccount, miClientId));
+  const containerClient = client.getContainerClient(blobContainer);
+
+  const blobs = await listSnapshotBlobs(containerClient);
+  if (blobs.length === 0) {
+    logger.info("[restore] no snapshots found — starting with an empty DB");
+    return { skipped: true, reason: "no-snapshots" };
+  }
+  // Same descending sort as the prune step: the newest snapshot is first.
+  blobs.sort((a, b) => (a.name < b.name ? 1 : -1));
+  const latest = blobs[0].name;
+
+  fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+  await containerClient.getBlockBlobClient(latest).downloadToFile(dbPath);
+  logger.info(`[restore] restored ${latest} → ${dbPath}`);
+  return { skipped: false, restored: latest };
+}
+
+/**
  * Start the recurring scheduler. Returns `{ stop, runOnce }`; callers
  * keep the handle to unwire it (tests, graceful shutdown).
  *
