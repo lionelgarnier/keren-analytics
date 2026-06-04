@@ -128,64 +128,52 @@
             </div>
           </div>
 
-          <!-- Hero chart card -->
-          <div class="lv2-hero-card">
-            <div class="lv2-hero-card-head">
-              <div>
-                <span class="lv2-tag">Unique visitors · last 30 days</span>
-                <div class="lv2-bignum">
-                  <span class="lv2-bignum-value">12,847</span>
-                  <span class="lv2-delta-ok">↑ 13.6%</span>
-                  <span class="lv2-delta-muted">vs prev period</span>
-                </div>
-              </div>
-              <div class="lv2-pills">
-                <span class="lv2-pill">TODAY</span>
-                <span class="lv2-pill">7D</span>
-                <span class="lv2-pill is-active">30D</span>
-                <span class="lv2-pill">90D</span>
-              </div>
+          <!-- Hero product walkthrough (auto carousel) -->
+          <div class="lv2-hero-carousel" id="lv2HeroCarousel"
+               aria-roledescription="carousel" aria-label="How Keren works, in four steps">
+            <div class="lv2-carousel-viewport">
+              <figure class="lv2-carousel-slide is-active" data-index="0">
+                <img src="/demo-1-scan.webp" width="1280" height="533"
+                     loading="eager" decoding="async"
+                     alt="Keren scanning Application Insights telemetry — schema fields mapped live" />
+                <figcaption class="lv2-carousel-cap">
+                  <span class="lv2-carousel-step">01 · Scan</span>
+                  Keren reads your telemetry schema
+                </figcaption>
+              </figure>
+              <figure class="lv2-carousel-slide" data-index="1">
+                <img src="/demo-2-render.webp" width="1280" height="533"
+                     loading="lazy" decoding="async"
+                     alt="Readiness score 85 out of 100 and the dashboards Keren can render" />
+                <figcaption class="lv2-carousel-cap">
+                  <span class="lv2-carousel-step">02 · AI mapping</span>
+                  What we can render, scored 0–100
+                </figcaption>
+              </figure>
+              <figure class="lv2-carousel-slide" data-index="2">
+                <img src="/demo-3-trend.webp" width="1280" height="533"
+                     loading="lazy" decoding="async"
+                     alt="Marketing dashboard — traffic trend of visitors and page views over time" />
+                <figcaption class="lv2-carousel-cap">
+                  <span class="lv2-carousel-step">03 · Dashboard</span>
+                  Traffic, trends and period-over-period deltas
+                </figcaption>
+              </figure>
+              <figure class="lv2-carousel-slide" data-index="3">
+                <img src="/demo-4-geo.webp" width="1280" height="533"
+                     loading="lazy" decoding="async"
+                     alt="Geo distribution world map of where visitors come from" />
+                <figcaption class="lv2-carousel-cap">
+                  <span class="lv2-carousel-step">04 · Insights</span>
+                  Geo, performance and readiness in one place
+                </figcaption>
+              </figure>
             </div>
-
-            <div class="lv2-chart">
-              <svg viewBox="0 0 720 260" preserveAspectRatio="none" aria-hidden="true">
-                <defs>
-                  <linearGradient id="lv2HeroGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stop-color="currentColor" stop-opacity="0.35"/>
-                    <stop offset="100%" stop-color="currentColor" stop-opacity="0"/>
-                  </linearGradient>
-                </defs>
-                <line x1="0" y1="65"  x2="720" y2="65"  stroke="currentColor" stroke-opacity="0.06" stroke-dasharray="2 4"/>
-                <line x1="0" y1="130" x2="720" y2="130" stroke="currentColor" stroke-opacity="0.06" stroke-dasharray="2 4"/>
-                <line x1="0" y1="195" x2="720" y2="195" stroke="currentColor" stroke-opacity="0.06" stroke-dasharray="2 4"/>
-                <path d="M0,238 L25,231 L50,234 L75,224 L100,210 L125,217 L150,201 L175,182 L200,189 L225,168 L250,172 L275,154 L300,140 L325,147 L350,124 L375,108 L400,117 L425,98 L450,79 L475,90 L500,71 L525,55 L550,63 L575,42 L600,28 L625,35 L650,11 L675,3 L700,10 L720,3 L720,256 L0,256 Z" fill="url(#lv2HeroGrad)"/>
-                <path d="M0,238 L25,231 L50,234 L75,224 L100,210 L125,217 L150,201 L175,182 L200,189 L225,168 L250,172 L275,154 L300,140 L325,147 L350,124 L375,108 L400,117 L425,98 L450,79 L475,90 L500,71 L525,55 L550,63 L575,42 L600,28 L625,35 L650,11 L675,3 L700,10 L720,3" fill="none" stroke="currentColor" stroke-width="1.8"/>
-                <circle cx="720" cy="3" r="8" fill="currentColor" fill-opacity="0.2"/>
-                <circle cx="720" cy="3" r="4" fill="currentColor"/>
-              </svg>
-            </div>
-
-            <div class="lv2-kpi-strip">
-              <div class="lv2-kpi">
-                <span class="lv2-tag">Sessions</span>
-                <div class="lv2-kpi-value">18,302</div>
-                <div class="lv2-kpi-meta"><span class="lv2-kpi-delta">+9.2%</span></div>
-              </div>
-              <div class="lv2-kpi">
-                <span class="lv2-tag">Page views</span>
-                <div class="lv2-kpi-value">64,118</div>
-                <div class="lv2-kpi-meta"><span class="lv2-kpi-delta">+11.0%</span></div>
-              </div>
-              <div class="lv2-kpi">
-                <span class="lv2-tag">Avg pages / session</span>
-                <div class="lv2-kpi-value">3.5</div>
-                <div class="lv2-kpi-meta"><span class="lv2-kpi-delta">+0.3</span></div>
-              </div>
-              <div class="lv2-kpi">
-                <span class="lv2-tag">P95 response</span>
-                <div class="lv2-kpi-value">312ms</div>
-                <div class="lv2-kpi-meta"><span class="lv2-kpi-delta lv2-kpi-delta-muted">stable</span></div>
-              </div>
+            <div class="lv2-carousel-dots" role="tablist" aria-label="Choose a step">
+              <button type="button" class="lv2-carousel-dot is-active" data-goto="0" role="tab" aria-selected="true" aria-label="Step 1: scan"></button>
+              <button type="button" class="lv2-carousel-dot" data-goto="1" role="tab" aria-selected="false" aria-label="Step 2: AI mapping"></button>
+              <button type="button" class="lv2-carousel-dot" data-goto="2" role="tab" aria-selected="false" aria-label="Step 3: dashboard"></button>
+              <button type="button" class="lv2-carousel-dot" data-goto="3" role="tab" aria-selected="false" aria-label="Step 4: insights"></button>
             </div>
           </div>
 
@@ -562,7 +550,7 @@
             <span class="d2-mark">Keren<span class="d2-mark-dot">.</span></span>
             <div class="d2-tabs">
               <a class="d2-tab is-active" href="/services">Services</a>
-              <a class="d2-tab" href="/setup">Setup</a>
+              <a class="d2-tab" href="/setup" data-action="confirm-setup">Setup</a>
               <a class="d2-tab" href="/docs">Docs</a>
               <a class="d2-tab" href="/auth/logout" data-action="logout">Logout</a>
             </div>
@@ -602,7 +590,14 @@
                 <span class="d2-breadcrumb-here" id="dashBreadcrumbName">service</span>
                 <span class="d2-breadcrumb-tag">live</span>
               </div>
-              <h1 class="d2-h1 d2-h1--xl" id="dashServiceName">Service</h1>
+              <div class="svc-switch">
+                <button type="button" class="svc-switch-trigger" id="svcSwitchBtn"
+                        aria-haspopup="listbox" aria-expanded="false" aria-label="Switch service">
+                  <span class="d2-h1 d2-h1--xl" id="dashServiceName">Service</span>
+                  <svg class="svc-switch-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                </button>
+                <div class="svc-switch-menu hidden" id="svcSwitchMenu" role="listbox" aria-label="Switch service"></div>
+              </div>
               <p class="d2-sub" id="dashSub">Application Insights dashboard — visitors, performance, and readiness for the selected range.</p>
             </div>
             <div class="d2-pageheader-r">
@@ -1146,6 +1141,7 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="/promptActionButton.js"></script>
+    <script src="/landingCarousel.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>
