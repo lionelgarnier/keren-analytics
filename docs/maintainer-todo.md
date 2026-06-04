@@ -9,6 +9,17 @@ items off.
 Format: each item has **what**, **why**, **when needed**, **how**, and
 links to the agent-side work that depends on it.
 
+> **Audit live 2026-06-04** (Azure CLI + `gh`, sub
+> `0a3afaae-8849-4b27-8e43-dad3ba80ce58`). Plusieurs items marqués TODO
+> étaient en fait faits — statuts recoupés contre la prod et corrigés.
+> **Reste réellement ouvert et actionnable** : (1) ⚠️ scaling
+> `0/3` → passer en `1/1` (sessions + SQLite + restore supposent
+> single-replica) ; (2) branch protection sur `main` (repo déjà public,
+> non protégé) ; (3) homepage GitHub périmée (`analytics.keren.run` mort
+> → `keren.run`) ; (4) contenus voix-auteur (Hero GIF, OG image, Show HN,
+> Reddit, outreach, Plausible). Le reste de l'infra Azure/CI/Foundry/backup
+> est en place et vérifié.
+
 ---
 
 ## 1. Production environment & secrets
@@ -36,7 +47,11 @@ links to the agent-side work that depends on it.
   - `AZURE_CLIENT_SECRET`
   - `AZURE_REDIRECT_URI` (must match the deployed origin)
   - `AZURE_TENANT_ID` (`organizations` for multi-tenant work accounts)
-- **Status**: TODO. Optional for the OSS-first launch.
+- **Status**: DONE — vérifié 2026-06-04 (Azure CLI). `AZURE_MODE=real`,
+  `AZURE_CLIENT_ID=fba047ba…`, `AZURE_TENANT_ID=organizations` et
+  `AZURE_REDIRECT_URI=https://keren.run/auth/callback` posés sur
+  `ca-keren-analytics` ; secrets `azure-client-secret` + `session-secret`
+  présents ; OAuth real mode live (keren.run sert en HTTP 200).
 
 ### Demo deploy target
 - **Why**: the Show HN / Reddit launch needs a clickable URL.
@@ -46,7 +61,10 @@ links to the agent-side work that depends on it.
   via `.github/workflows/deploy-azure.yml`. The `render.yaml` blueprint
   remains in-repo as a self-host hint but is no longer the demo target.
   URL: `https://keren.run` (DNS step below).
-- **Status**: TODO.
+- **Status**: DONE — vérifié 2026-06-04. `https://keren.run` répond HTTP
+  200, servi par `ca-keren-analytics` (France Central) ; deploys CI verts
+  (dernier run `deploy-azure.yml` success). La démo est en mode `real`
+  (Foundry), pas mock.
 
 ### Launch-week scaling policy (`minReplicas=1`, `maxReplicas=1`)
 - **Why**: sessions are in-memory (`express-session` default store). For launch
@@ -55,7 +73,16 @@ links to the agent-side work that depends on it.
 - **How**: keep `infra/main.parameters.json` at `minReplicas=1`,
   `maxReplicas=1` for the launch deployment. After launch, if you re-enable
   scale-out, ship a shared session store first.
-- **Status**: TODO.
+- **Status**: TODO — ⚠️ **NON appliqué**. Vérifié 2026-06-04 : l'app tourne
+  en `minReplicas=0, maxReplicas=3`, pas `1/1`. Sous scale-out (spike Show
+  HN), les sessions in-memory + le SQLite mono-fichier + le restore-on-boot
+  (2026-06-04) divergeraient entre replicas. À corriger avant launch :
+  ```bash
+  az containerapp update -n ca-keren-analytics -g keren-analytics-prod \
+    --min-replicas 1 --max-replicas 1
+  ```
+  + aligner `infra/main.parameters.json` pour que le prochain deploy Bicep
+  ne ré-écrase pas.
 
 ### First Azure deploy + Key Vault secret seeding
 - **Why**: the Bicep template provisions an empty Key Vault. The Container
@@ -67,7 +94,11 @@ links to the agent-side work that depends on it.
   random `session-secret` and paste the end-user Entra app
   `azure-client-secret` via `az keyvault secret set`. Key Vault name is
   in the workflow / Bicep outputs. Never commit values.
-- **Status**: TODO.
+- **Status**: MOOT — vérifié 2026-06-04. Le V1 n'utilise **pas** de Key
+  Vault (secrets inline en Container App secrets — cf. « Provisionner
+  l'hébergement Azure » plus bas). Les secrets `session-secret` +
+  `azure-client-secret` sont présents sur l'app et elle boote ; rien à
+  seeder côté KV. Item conservé pour l'historique.
 
 ### CNAME `keren.run` → Container App FQDN
 - **Why**: the managed certificate for the custom domain only provisions
@@ -144,6 +175,11 @@ These need a human to click through `Settings` on
   `marketing-analytics`, `nodejs`, `oss`, `self-hosted`. Tout posé via
   `gh repo edit` + `gh api` ; modifiable au besoin.
 
+- ⚠️ **Homepage périmée — vérifié 2026-06-04** : le champ Website live
+  pointe sur `https://analytics.keren.run`, domaine **retiré** (HTTP 000,
+  cf. commit SEO/domain-cleanup du 01/06). À recorriger en `keren.run` :
+  `gh repo edit lionelgarnier/keren-analytics --homepage https://keren.run`.
+
 ### Pin v0.1.0 release with notes
 - **Why**: the right-hand sidebar's "Releases: v0.1.0" is a strong
   signal of "this is real software, not a weekend hack".
@@ -160,10 +196,11 @@ These need a human to click through `Settings` on
 
 ### Branch protection on `main`
 - **Why**: prevents accidental force-push to the deployed branch.
-- **Blocker**: GitHub limite la branch protection avancée aux repos publics
-  (gratuit) ou GitHub Pro privés ($4/mo). Le repo est privé pour l'instant
-  → activation différée jusqu'au passage en public (cf. launch-strategy
-  § 10 *"Do not pre-announce"*, qui plaide pour rendre public le jour J).
+- **Débloqué (2026-06-04)**: le repo est désormais **public** (vérifié via
+  `gh repo view`), la limitation repo-privé ne s'applique plus. La
+  protection peut être activée maintenant.
+- **Où**: UI → repo **Settings → Branches** (ou **Rules → Rulesets**) →
+  *Add rule / Add branch ruleset* sur `main` ; ou le `gh api` ci-dessous.
 - **How (à exécuter le jour du launch, juste après `gh repo edit --visibility public`)** :
   ```bash
   cat <<'JSON' | gh api repos/lionelgarnier/keren-analytics/branches/main/protection -X PUT --input -
@@ -177,7 +214,8 @@ These need a human to click through `Settings` on
   }
   JSON
   ```
-- **Status**: TODO — déblocable au passage public.
+- **Status**: TODO — repo déjà public, à activer. Vérifié 2026-06-04 :
+  `main` n'est **pas** protégée (`gh api …/branches/main/protection` → 404).
 
 ---
 
@@ -195,7 +233,10 @@ These need a human to click through `Settings` on
   AI angle needs to feel "alive" and a small CPU instance covers it.
   Avoid `azure-openai` on the public demo unless a Microsoft sponsorship
   covers the bill — pay-per-visitor is incompatible with a HN spike.
-- **Status**: TODO. Blocks demo deploy.
+- **Status**: DONE (choix arbitré) — vérifié 2026-06-04. La démo prod tourne
+  en `AI_PROVIDER=azure-foundry` (deployment `gpt-5.4-mini`), couvert par les
+  crédits Founders Hub — pas `none`. Le garde-quota 10 €/jour (F3) + le
+  fallback déterministe restent le filet de sécurité pour un spike HN.
 
 ## 3. Third-party accounts (launch-day infrastructure)
 
@@ -386,7 +427,13 @@ action are yours.
 - **Quota TPM** : à vérifier dans le portail Foundry sur le deployment
   `gpt-5.4-mini`. Demander 100k+ TPM avant launch HN si on anticipe un
   spike Show HN.
-- **Status**: PARTIAL — provisioning + dev local OK ; reste rôle MI + Bicep.
+- **Status**: DONE — vérifié 2026-06-04 (Azure CLI). Account+projet
+  `keren-analytics-prod-foundry` provisionnés ; deployment `gpt-5.4-mini`
+  (version `2026-03-17`) live ; env `AZURE_FOUNDRY_ENDPOINT` /
+  `AZURE_FOUNDRY_DEPLOYMENT` / `AZURE_FOUNDRY_CLIENT_ID` posées sur le
+  Container App ; rôle MI `Foundry User` assigné (cf. entrée suivante).
+  Le « What remains » ci-dessus (Bicep + rôle MI) est résolu. Reste juste
+  à vérifier le quota TPM avant un spike HN.
 
 ### Assigner le rôle `Azure AI User` à la MI du Container App (Track F3)
 - **Why**: F3 appellera Foundry depuis le Container App via la Managed
@@ -527,8 +574,14 @@ az storage blob download --account-name "$STORAGE_ACCOUNT" \
   --name keren-2026-05-13T10-00-00-000Z.db --file restored.db
 # Copy into the Container App (or rebuild a revision with --bind it)
 ```
-- **Status**: DONE — 2026-05-13 — code + Bicep shipped. Maintainer
-  doit exécuter les 5 étapes ci-dessus pour activer en prod.
+- **Status**: DONE — vérifié 2026-06-04. Les 5 étapes ci-dessus sont
+  **exécutées en prod** : Storage Account `stkbkkerenanalyticsdfrvt`
+  provisionné, MI `Storage Blob Data Contributor`, env `BACKUP_*` posées,
+  et **snapshots réels** dans le container `sqlite-backups` (dernier
+  aujourd'hui 14:06, série remontant au 13/05). Le restore-on-boot +
+  backup SIGTERM (2026-06-04) sont déployés. Plus rien de manuel — à la
+  seule condition de garder l'app en **single-replica** (cf. § scaling
+  policy plus haut, actuellement `0/3`).
 
 ### Provisionner l'hébergement Azure de la démo
 - **Why**: ADR 0004 § Decision 2 — Azure Container Apps. Région retenue :
@@ -574,8 +627,11 @@ az storage blob download --account-name "$STORAGE_ACCOUNT" \
   3. Push sur `main` ou `gh workflow run deploy-azure.yml` pour déclencher.
   4. Le workflow build l'image, push à ACR, update le Container App, et
      attend la propagation healthy avant de finir.
-- **Status**: workflow file en place 2026-05-10 ; reste les 2 actions
-  maintainer (script CI + secrets) avant le premier run automatique.
+- **Status**: DONE — vérifié 2026-06-04. Les 3 secrets OIDC
+  (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`) sont
+  posés et les runs `deploy-azure.yml` passent (3 derniers verts, dont le
+  push du 04/06). Le pipeline build→push→update tourne automatiquement sur
+  push `main`.
 
 ### DNS `keren.run` pointé sur Azure
 - **Why**: ADR 0002 § 7 (DNS maintenu par ADR 0004 § Decision 5) — l'URL
@@ -594,7 +650,10 @@ az storage blob download --account-name "$STORAGE_ACCOUNT" \
      `keren.run` (Let's Encrypt managé).
   4. `keren.run` est désormais le domaine canonique servi directement —
      aucune redirection apex à configurer.
-- **Status**: TODO.
+- **Status**: DONE — vérifié 2026-06-04. `keren.run` est lié au Container
+  App (custom domain SNI + managed cert sur l'environnement) et répond en
+  HTTP 200. Doublon avec « CNAME keren.run → Container App FQDN » du §1,
+  déjà marqué DONE.
 
 ### Mettre à jour `CLAUDE.md` après Phase A
 - **Why**: `CLAUDE.md` mentionne encore "Phase 3/4 gated, do not start
@@ -621,7 +680,9 @@ az storage blob download --account-name "$STORAGE_ACCOUNT" \
   az keyvault purge  --name kv-keren-analytics-dfrvt --location francecentral
   ```
   (Le `purge` est nécessaire car KV reste 7j en soft-delete par défaut.)
-- **Status**: TODO — 30 secondes, pas urgent.
+- **Status**: DONE — vérifié 2026-06-04. Plus aucun Key Vault dans le RG,
+  ni en soft-delete (`az keyvault list` + `list-deleted` → vides).
+  L'orphelin a été supprimé+purgé. Rien à faire.
 
 ### Gotcha — ne pas re-run `azure-app-registration.sh` inutilement
 - **Why**: le script utilise `az ad app credential reset --append`, qui
