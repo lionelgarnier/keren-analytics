@@ -12,6 +12,17 @@ the matching GitHub issue to claim it so two people don't pick up the same one.
 Every task is verified the same way: **`npm test` and `npm run audit:security`
 stay green**, plus the per-task acceptance criteria below.
 
+| # | Task | Level | Est. | Issue |
+|---|------|-------|------|-------|
+| 1 | `/healthz` endpoint test | beginner | 30 min | [#27](https://github.com/lionelgarnier/keren-analytics/issues/27) |
+| 2 | `/recommendations` both-branch tests | beginner | 1 h | [#28](https://github.com/lionelgarnier/keren-analytics/issues/28) |
+| 3 | One-line header per KQL template | beginner | 1 h | [#29](https://github.com/lionelgarnier/keren-analytics/issues/29) |
+| 4 | More stack detection in prompt generator | beginner–int. | 1–1.5 h | [#30](https://github.com/lionelgarnier/keren-analytics/issues/30) |
+| 5 | Low-signal mock scenario | intermediate | 1.5 h | [#31](https://github.com/lionelgarnier/keren-analytics/issues/31) |
+| 6 | ARIA tab pattern + keyboard nav | intermediate | 2 h | [#32](https://github.com/lionelgarnier/keren-analytics/issues/32) |
+| 7 | Cohort/retention KQL template | intermediate | 1.5 h | [#33](https://github.com/lionelgarnier/keren-analytics/issues/33) |
+| 8 | `exceptions` readiness signal | intermediate | 2–3 h | [#34](https://github.com/lionelgarnier/keren-analytics/issues/34) |
+
 ---
 
 ## 1. Add a test for the `/healthz` endpoint
