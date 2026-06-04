@@ -8,6 +8,11 @@ Application Insights and Log Analytics, it provides a GA-like experience with ze
 agent deployment, zero raw data storage, and intelligent recommendations to
 continuously improve telemetry coverage.
 
+An **AI setup wizard** sits at the front door: it scans the tenant's telemetry,
+maps the schema to a canonical model, and shows — up front — which dashboards it
+can credibly render for you, before you commit. The happy path is a single click
+("Build my dashboard"); the mapping stays editable on demand.
+
 The product targets two audiences through a single entry point:
 - **Marketing / Product teams** : instant behavioral analytics without SDK work
 - **Technical teams** : simplified real-time monitoring without KQL expertise
@@ -17,7 +22,10 @@ See `docs/vision.md` for the full product vision and strategy.
 ## Goals
 - Connect via SSO (Entra ID) and show a dashboard within 60 to 120 seconds.
 - Use existing telemetry only. No agent deployment required.
-- Provide deterministic mapping and fallbacks when signals are missing.
+- Run an AI-assisted setup that scans telemetry, proposes a schema mapping
+  with confidence, and shows what each dashboard can render — in one click.
+- Provide deterministic mapping and fallbacks when signals are missing (and
+  when the AI provider is `none` or over its quota).
 - Store only metadata and aggregated results (no raw logs).
 - Provide clear readiness feedback, improvement steps, and LLM-ready prompts.
 - Design architecture for multi-cloud expansion (AWS, GCP) from day one.
@@ -65,11 +73,21 @@ See `docs/vision.md` for the full product vision and strategy.
 ## Dashboard (Overview)
 
 ### Marketing View
+Top-of-tab:
+- **Environment analysis** panel — an AI-style narration of what the
+  telemetry looks like (visitors, sessions, top campaign source, peak hour,
+  error band, identity mapping). Real LLM in `azure-foundry` mode;
+  deterministic generator otherwise.
+- **First-run banner** — readiness score + top quick wins as clickable chips
+  that jump to the matching Readiness signal (dismissable, persisted).
+
 KPIs:
 - Unique visitors (user or session based)
 - Sessions
 - Page views
 - Avg pages per session
+- **Period-over-period delta chips** on the top 3 KPIs (green/red/neutral
+  vs. the previous period, e.g. "vs last week")
 - KPI sparklines with anomaly detection (derived from daily trends)
 
 Charts and tables:
@@ -110,11 +128,40 @@ Session analysis:
 ## User Journey
 1. Connect Azure tenant (OAuth SSO via Entra ID).
 2. Discover App Insights resources and linked workspaces.
-3. Auto-select if only one candidate exists.
-4. Run readiness probes and schema profiling.
-5. Build on-the-fly mappings and run dashboard queries.
-6. Show overview dashboard and readiness panel.
-7. Display recommendations with actionable prompts.
+3. **Service hub** — land on a per-resource hub that tags each App Insights
+   as Ready / Incomplete / Unconfigured. Single-resource tenants skip the
+   hub and go straight to setup.
+4. **AI setup wizard** (per resource, see below) — scan → AI findings →
+   one-click build.
+5. Show the overview dashboard (Marketing / Technical / Readiness) reusing
+   the validated config snapshot — no re-scan or LLM call per load.
+6. Display recommendations with actionable, copy-paste prompts.
+
+## AI Setup Wizard
+
+The wizard is the configuration step; the dashboard is pure rendering
+afterwards. Setup state is **per resource** (`tenant + resourceId`), so a
+tenant with several App Insights resources configures each independently.
+
+1. **Scan** — reads custom dimensions, counts event types, detects identity /
+   session / page-path fields, and runs readiness probes. Streams live
+   narration (SSE). Auto-advances when done — no manual "Continue".
+2. **AI findings** — "what we can render for you" as graph-level cards
+   (✓ Ready / ! Needs instrumentation), a readiness gauge, and a copy-paste
+   `code_prompt` for each missing signal (paste into Copilot / Cursor /
+   Claude Code). Powered by Azure AI Foundry; falls back to a deterministic
+   alias/regex mapping when the AI provider is `none`, degraded, or over its
+   daily quota.
+3. **Build** — "Build my dashboard" saves the proposed mapping and lands on
+   the dashboard. The technical field-mapping editor is **optional**:
+   reachable any time from the dashboard's "Mapping" link
+   (`/setup?mode=mapping`); a low-confidence field is flagged inline rather
+   than forcing a detour. A "Re-scan" action re-runs step 1 when new event
+   types appear.
+
+The validated mapping persists in SQLite (`data/keren.db`), is backed up
+hourly to Azure Blob, and is restored on boot — so configuring once survives
+service redeploys.
 
 ## Readiness Score
 

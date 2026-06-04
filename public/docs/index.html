@@ -49,6 +49,7 @@
           <div class="doc-sidebar-title">Getting Started</div>
           <a href="#getting-started" class="doc-sidebar-link active">Welcome</a>
           <a href="#connect" class="doc-sidebar-link">Connect Your App</a>
+          <a href="#setup-wizard" class="doc-sidebar-link">AI Setup Wizard</a>
           <a href="#first-dashboard" class="doc-sidebar-link">Your First Dashboard</a>
         </div>
         <div class="doc-sidebar-section">
@@ -135,14 +136,56 @@
             <div class="doc-step">
               <span class="doc-step-num">3</span>
               <div>
-                <strong>See your dashboard</strong>
-                <p>That's it. Your Marketing and Technical dashboards are generated from your existing telemetry in under 2 minutes.</p>
+                <strong>Let the AI map your data, then build</strong>
+                <p>Keren scans your telemetry and shows what each dashboard can render — the <a href="#setup-wizard">AI setup wizard</a>. One click on <em>Build my dashboard</em> and your Marketing and Technical views are live, usually under 2 minutes total.</p>
               </div>
             </div>
           </div>
 
           <div class="doc-callout doc-callout-info">
             <strong>No access yet?</strong> Ask your Azure admin to grant you <em>Reader</em> on the subscription and <em>Log Analytics Reader</em> on the workspace. These are read-only roles — Keren Analytics never writes to your Azure tenant.
+          </div>
+        </section>
+
+        <!-- ==================== AI SETUP WIZARD ==================== -->
+        <section id="setup-wizard">
+          <h2>AI Setup Wizard</h2>
+          <p>The first time you open a resource, Keren Analytics runs a short setup that figures out how your telemetry maps to dashboards — so you never start from a blank screen or hand-edit query fields.</p>
+
+          <div class="doc-steps">
+            <div class="doc-step">
+              <span class="doc-step-num">1</span>
+              <div>
+                <strong>Scan</strong>
+                <p>Keren reads your custom dimensions, counts event types, and detects which fields carry user identity, sessions, and page paths. You watch it happen live, then it moves on automatically — no button to press.</p>
+              </div>
+            </div>
+            <div class="doc-step">
+              <span class="doc-step-num">2</span>
+              <div>
+                <strong>See what we can render</strong>
+                <p>The AI shows graph-level cards — <strong>✓ Ready</strong> for dashboards it can build now, <strong>! Needs instrumentation</strong> for the ones missing a signal — plus a readiness score. For each gap, you get a copy-paste prompt to drop into Copilot, Cursor, or Claude Code.</p>
+              </div>
+            </div>
+            <div class="doc-step">
+              <span class="doc-step-num">3</span>
+              <div>
+                <strong>Build your dashboard</strong>
+                <p>One click on <em>Build my dashboard</em> and you're in. That's it — no field mapping required.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="doc-callout doc-callout-info">
+            <strong>Want to fine-tune the mapping?</strong> It's optional. Open the <em>Mapping</em> link on the dashboard any time to override how a field maps to your telemetry. If the AI wasn't fully sure about a field, it's flagged so you know where to look. Use <em>Re-scan</em> when you add new event types.
+          </div>
+
+          <div class="doc-callout doc-callout-info">
+            <strong>Multiple resources?</strong> Each App Insights resource is configured independently. After signing in you land on a service hub that shows each resource as <em>Ready</em>, <em>Incomplete</em>, or <em>Unconfigured</em>. Your setup is saved and survives redeploys, so you only do this once per resource.
+          </div>
+
+          <div class="doc-callout doc-callout-info">
+            <strong>Is the AI required?</strong> No. With the AI provider off, the wizard falls back to a deterministic alias/regex mapping — you still get a working dashboard, just without the narrated findings.
           </div>
         </section>
 
@@ -154,6 +197,12 @@
             <div class="doc-feature"><strong>Technical</strong><span>Response times, error rates, slow endpoints, frontend performance, session timelines</span></div>
             <div class="doc-feature"><strong>Readiness</strong><span>Telemetry coverage score (0-100), what's missing, how to fix it with AI-ready prompts</span></div>
           </div>
+          <p>A few things you'll notice on the Marketing tab:</p>
+          <ul>
+            <li><strong>Environment analysis</strong> — a plain-language read of what your telemetry looks like (busiest hour, top campaign, error level), written by the AI.</li>
+            <li><strong>Quick-wins banner</strong> — your readiness score with the top one or two improvements as buttons that jump straight to the fix.</li>
+            <li><strong>Trend chips</strong> — the headline KPIs show a green/red change versus the previous period (e.g. "vs last week").</li>
+          </ul>
           <p>The dashboard auto-refreshes when you change the time range (Today, 7 days, 30 days). All data comes directly from your Azure Log Analytics workspace — nothing is stored on our side.</p>
         </section>
 
