@@ -155,6 +155,22 @@ links to the agent-side work that depends on it.
 
 ---
 
+### `AZURE_FOUNDRY_REGION` (setup AI disclosure)
+- **What**: the human-readable region shown to users in the setup
+  "Configure with AI" menu + data popover ("where your sanitized metadata
+  is processed"). Added 2026-06-05 with the per-resource AI opt-out work.
+- **Why manual**: the Foundry **project** endpoint hostname
+  (`<project>.services.ai.azure.com`) does **not** encode the region, so it
+  can't be derived in code. The disclosure would otherwise show a default.
+- **When**: only if the Foundry deployment is **not** France Central. The
+  code default is `France Central (UE)` (matches ADR 0004), so prod is
+  already correct and **no action is needed unless you move regions**.
+- **How**: set the `AZURE_FOUNDRY_REGION` env var on the Container App (or in
+  Key Vault wiring) to the actual region label, e.g. `West Europe (UE)`.
+  Not in Bicep yet — set it alongside the other `AZURE_FOUNDRY_*` vars.
+
+---
+
 ## 2. GitHub repo Settings (not file-tracked)
 
 These need a human to click through `Settings` on

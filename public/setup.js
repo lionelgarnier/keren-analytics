@@ -340,7 +340,7 @@
     if (key === "customDimensions") return `✓ ${p.keyCount || 0} fields`;
     if (key === "eventVolumes") return `✓ ${p.totalEvents || 0} events`;
     if (key === "identity") return `✓ ${p.resolved || 0}/${p.total || 4}`;
-    if (key === "ai") return p.degraded ? "✓ heuristic" : `✓ ${p.ready || 0} ready`;
+    if (key === "ai") return p.disabled ? "✓ AI off" : (p.degraded ? "✓ heuristic" : `✓ ${p.ready || 0} ready`);
     return "✓";
   }
 

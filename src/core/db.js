@@ -42,6 +42,7 @@ const SCHEMA_STATEMENTS = [
     readiness_report   TEXT,
     dashboard_config   TEXT,
     discovery_cache    TEXT,
+    ai_preferences     TEXT,
     last_accessed_at   TEXT NOT NULL
   )`,
   `CREATE TABLE IF NOT EXISTS state_transitions (
@@ -133,6 +134,19 @@ function migrateResourceIdColumns(db) {
   }
 }
 
+/**
+ * Track-F-era DBs created `tenants` without `ai_preferences` (the
+ * per-resource "configure with / without AI" choice — see the AI setup
+ * disclosure work). Add it in place; the column check makes re-runs a
+ * no-op. New rows default to NULL = no opt-out (AI on per config).
+ */
+function migrateTenantColumns(db) {
+  const columns = db.prepare("PRAGMA table_info(tenants)").all();
+  if (!columns.some((c) => c.name === "ai_preferences")) {
+    db.exec("ALTER TABLE tenants ADD COLUMN ai_preferences TEXT");
+  }
+}
+
 function backfillResourceId(db, table) {
   const tenants = db
     .prepare("SELECT id, selected_resource FROM tenants WHERE selected_resource IS NOT NULL")
@@ -164,6 +178,7 @@ function applySchema(db) {
   // Must run after the CREATE TABLE pass (so the tables exist) and
   // before the resource-scoped indexes (which reference the column).
   migrateResourceIdColumns(db);
+  migrateTenantColumns(db);
   for (const stmt of RESOURCE_SCOPED_INDEXES) {
     db.exec(stmt);
   }

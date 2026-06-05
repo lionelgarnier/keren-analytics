@@ -70,14 +70,29 @@ function noteDegraded(scanId, reason, err) {
  * @param {object} [opts]
  * @param {object} [opts.readinessReport] - readiness payload to attach to the prompt
  * @param {AbortSignal} [opts.abortSignal]
+ * @param {boolean} [opts.optOut] - user disabled AI for this resource: skip the
+ *   LLM entirely and persist the deterministic fallback (no outbound call).
  * @returns {Promise<null | { id, scanId, source, proposals, degraded, createdAt, reason? }>}
  */
-export async function getOrComputeMapping(tenantId, resourceId, { readinessReport, abortSignal, provider } = {}) {
+export async function getOrComputeMapping(tenantId, resourceId, { readinessReport, abortSignal, provider, optOut } = {}) {
   const scan = getLatestScan(tenantId, resourceId);
   if (!scan) return null;
 
   const cached = getMappingForScan(tenantId, scan.id);
   if (cached) return cached;
+
+  // User chose "Configure without AI" for this resource — no prompt is ever
+  // built, so nothing leaves the box. Persist the deterministic fallback so
+  // the dashboard pipeline has a mapping row to reuse, same as any degrade.
+  if (optOut) {
+    const fb = fallback("ai_disabled_by_user");
+    const persisted = persistMapping(tenantId, scan.id, {
+      source: fb.source,
+      proposals: fb.proposals,
+      degraded: true,
+    });
+    return { ...persisted, scanId: scan.id, ...fb, disabled: true };
+  }
 
   const aiProvider = provider || getAiProvider();
   const supportsMapping = aiProvider.capabilities().mappingAnalysis;

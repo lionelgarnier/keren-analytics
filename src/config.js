@@ -61,6 +61,15 @@ export const config = {
   azureFoundryEndpoint: process.env.AZURE_FOUNDRY_ENDPOINT || "",
   /** Foundry model deployment name (e.g. "gpt-5.4-mini"). */
   azureFoundryDeployment: process.env.AZURE_FOUNDRY_DEPLOYMENT || "",
+  /**
+   * Human-readable region the Foundry deployment lives in, surfaced in the
+   * setup AI disclosure so the user sees where their (sanitized) metadata
+   * goes. The Foundry *project* endpoint hostname doesn't encode the region,
+   * so it can't be derived — set AZURE_FOUNDRY_REGION explicitly. Defaults
+   * to the canonical hosted deployment (ADR 0004); override when deploying
+   * elsewhere.
+   */
+  azureFoundryRegion: process.env.AZURE_FOUNDRY_REGION || "France Central (UE)",
   /** Per-call request timeout (ms). */
   aiRequestTimeoutMs: Number(process.env.AI_REQUEST_TIMEOUT_MS || 20000),
   /** Hard daily spend cap in EUR. Beyond this, providers degrade to deterministic fallback. */
