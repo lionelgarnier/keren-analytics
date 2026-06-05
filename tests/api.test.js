@@ -43,6 +43,23 @@ test("landing page (A5): tagline, comparison table, FAQ, footer present", async 
   assert.match(body, /garniel6@gmail\.com/);
 });
 
+test("static assets carry type-appropriate Cache-Control (HN-spike hardening)", async () => {
+  const request = supertest(app);
+
+  // Stable media: cached hard so a traffic spike serves them from the
+  // browser cache instead of re-hitting the single replica.
+  const img = await request.get("/og-image.png").expect(200);
+  assert.equal(img.headers["cache-control"], "public, max-age=604800");
+
+  // JS/CSS: short cache + revalidate (filenames aren't content-hashed).
+  const css = await request.get("/styles.css").expect(200);
+  assert.equal(css.headers["cache-control"], "public, max-age=300, must-revalidate");
+
+  // HTML shell: must revalidate so a deploy lands immediately.
+  const html = await request.get("/").expect(200);
+  assert.equal(html.headers["cache-control"], "no-cache");
+});
+
 test("mock auth and dashboard overview flow", async () => {
   const request = supertest.agent(app);
   await request.get("/auth/login").redirects(2).expect(200);

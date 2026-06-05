@@ -76,7 +76,36 @@ app.use(
     },
   })
 );
-app.use(express.static(path.resolve(__dirname, "..", "public")));
+/*
+ * Static asset caching. No bundler → filenames aren't content-hashed, so
+ * we can't blanket-cache everything as immutable: a deploy must be able to
+ * push fresh JS/CSS/HTML. We split by type:
+ *   - HTML (SPA shell + marketing pages): no-cache so a deploy lands at
+ *     once; the ETag still yields cheap 304s.
+ *   - Stable media/fonts: cache hard (7d). These are the bulk of an
+ *     anonymous landing-page hit (demo.gif, og-image, demo-*.webp), so a
+ *     traffic spike — e.g. an HN front-page post — serves them from the
+ *     browser cache and never touches the single replica a second time.
+ *   - JS/CSS: short max-age + revalidate so a deploy isn't masked by a
+ *     stale bundle while still saving most re-fetches.
+ */
+const MEDIA_EXTENSIONS = new Set([
+  ".webp", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".woff", ".woff2",
+]);
+app.use(
+  express.static(path.resolve(__dirname, "..", "public"), {
+    setHeaders: (res, filePath) => {
+      const ext = path.extname(filePath).toLowerCase();
+      if (ext === ".html") {
+        res.setHeader("Cache-Control", "no-cache");
+      } else if (MEDIA_EXTENSIONS.has(ext)) {
+        res.setHeader("Cache-Control", "public, max-age=604800");
+      } else if (ext === ".js" || ext === ".css") {
+        res.setHeader("Cache-Control", "public, max-age=300, must-revalidate");
+      }
+    },
+  })
+);
 
 /* ========== Rate limiting ==========
  *
