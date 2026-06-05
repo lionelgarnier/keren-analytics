@@ -1,3 +1,4 @@
+// Browser timing averages and p95 total duration for the Technical performance view
 let start={{timeStart}};
 let end={{timeEnd}};
 browserTimings

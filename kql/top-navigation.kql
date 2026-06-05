@@ -1,3 +1,4 @@
+// Most common page-to-page transitions for the Marketing navigation view
 let start={{timeStart}};
 let end={{timeEnd}};
 let ordered = {{tableName}}

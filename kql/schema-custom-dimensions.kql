@@ -1,3 +1,4 @@
+// Most common custom-dimension keys by table for setup schema analysis
 let start={{timeStart}};
 let end={{timeEnd}};
 union isfuzzy=true withsource=tableName pageViews, requests, customEvents

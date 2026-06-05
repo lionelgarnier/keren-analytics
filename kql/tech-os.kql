@@ -1,3 +1,4 @@
+// Top operating systems by event count for the Technical breakdown
 let start={{timeStart}};
 let end={{timeEnd}};
 let total = toscalar(

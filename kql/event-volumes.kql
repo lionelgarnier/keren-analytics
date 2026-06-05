@@ -1,3 +1,4 @@
+// Top custom event names by count for the Technical events view
 let start={{timeStart}};
 let end={{timeEnd}};
 customEvents

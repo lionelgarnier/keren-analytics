@@ -1,3 +1,4 @@
+// Recent session page-path timelines with device and country context for Marketing
 let start={{timeStart}};
 let end={{timeEnd}};
 let recentSessions = {{tableName}}

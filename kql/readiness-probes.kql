@@ -1,3 +1,4 @@
+// Readiness signal counts and latest telemetry timestamp for the Readiness view
 let start={{timeStart}};
 let end={{timeEnd}};
 let events = union isfuzzy=true withsource=tableName pageViews, requests

@@ -1,3 +1,4 @@
+// Latency, volume, and error-rate trend for a single endpoint in the Technical view
 requests
 | where timestamp >= {{timeStart}} and timestamp < {{timeEnd}}
 | where url has "{{endpointPath}}" or name has "{{endpointPath}}"

@@ -1,3 +1,4 @@
+// Sample custom-dimension values and cardinality by table for setup mapping review
 let start={{timeStart}};
 let end={{timeEnd}};
 union isfuzzy=true withsource=tableName pageViews, requests, customEvents

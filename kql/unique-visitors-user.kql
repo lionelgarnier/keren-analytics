@@ -1,3 +1,4 @@
+// Distinct visitors using authenticated user IDs with session fallback
 let start={{timeStart}};
 let end={{timeEnd}};
 {{tableName}}
