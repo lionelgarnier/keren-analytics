@@ -65,6 +65,18 @@ together replace the original SaaS-track gate logic.
   deployment). Provider abstraction (`AI_PROVIDER=none|ollama|azure-foundry`)
   per `docs/architecture-ai.md`. Auth via Managed Identity (no API keys in
   env vars). Quota guard: 10 €/day cap with deterministic fallback.
+- Self-telemetry (dogfooding) : the app emits its **own** telemetry to a
+  provisioned App Insights so a Keren dashboard can be pointed at Keren
+  itself. Two stages — server (`applicationinsights` Node SDK,
+  [`src/telemetry.js`](src/telemetry.js) → Technical view: requests/deps/
+  exceptions + funnel `customEvents`) and browser (page-served
+  `/telemetry.js` loads the App Insights JS SDK → Marketing + Readiness
+  views: pageViews/sessions/geo/browserTimings — 85/100 readiness points
+  come from the browser). Gated by `TELEMETRY_ENABLED`; **off in
+  `NODE_ENV=test`** (no dep load, no network). Tenant ids in events are
+  SHA-256 hashed (no PII). Infra: `appi-…` in `infra/main.bicep`, local-auth
+  ingestion key required for the browser SDK (write-only by design — see
+  `docs/maintainer-todo.md`).
 - Tests: Node native test runner (`node --test`) + supertest for API tests.
   AI provider is mocked in `NODE_ENV=test` (deterministic, no LLM calls).
 - Deploy: Docker (Node 22 Alpine, non-root user `app`, pre-creates `/app/data`).
@@ -200,7 +212,9 @@ These are **intentionally** deferred and tracked in `docs/backlog/phase-3.md`:
   store ships (cf. `docs/maintainer-todo.md` § scaling). Multi-tenant
   Postgres is the Phase 3 target.
 - Frontend `public/app.js` shipped raw (~92 KB), no bundling/minification.
-- CSP allows `cdn.jsdelivr.net` and `unpkg.com` (supply-chain risk).
+- CSP allows `cdn.jsdelivr.net`, `unpkg.com` and `js.monitor.azure.com`
+  (the last for the App Insights browser SDK, self-telemetry stage B) —
+  supply-chain risk. Self-host under `public/vendor/` to close it.
 
 Note: rate limiting (`src/core/rateLimit.js`) shipped with the launch-readiness
 E1 track. `SESSION_SECRET` now fails loud in production (see `src/config.js`).

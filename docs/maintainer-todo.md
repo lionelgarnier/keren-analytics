@@ -50,6 +50,38 @@ links to the agent-side work that depends on it.
   `ca-keren-analytics` ; secrets `azure-client-secret` + `session-secret`
   présents ; OAuth real mode live (keren.run sert en HTTP 200).
 
+### Self-telemetry — Application Insights (dogfooding)
+- **Why**: Keren now emits its own telemetry so a Keren dashboard can be
+  pointed at Keren itself to watch the launch (Marketing map + funnel,
+  Technical health). Server SDK (`applicationinsights`, stage A) +
+  browser SDK (page-served `/telemetry.js`, stage B). Provisioned by
+  `infra/main.bicep` (`appi-keren-analytics`, workspace-based on the
+  existing Log Analytics).
+- **Important — local auth stays enabled**: `DisableLocalAuth: false` on
+  the App Insights component is **deliberate**. The browser SDK
+  authenticates with the connection string's ingestion key, which is
+  **write-only by design** (it can post telemetry, never read it). Do not
+  flip this to Entra-only or stage B (pageViews/sessions/geo — i.e. the
+  whole Marketing + Readiness surface, 85/100 readiness points) goes dark.
+- **CSP**: the browser SDK is loaded from the `js.monitor.azure.com` CDN
+  (per the maintainer's choice). This adds a CDN origin to `scriptSrc` /
+  `connectSrc` — same supply-chain class as the existing jsdelivr/unpkg
+  origins (tracked under CLAUDE.md known gaps). Self-host under
+  `public/vendor/` if/when the supply-chain gap is closed.
+- **Kill-switch**: set Bicep param `telemetryEnabled=false` (or env
+  `TELEMETRY_ENABLED` ≠ `true`) to disable both stages — `/telemetry.js`
+  then serves a no-op stub and the server SDK never loads.
+- **To use it**: in the Keren UI, connect to the subscription holding
+  `appi-keren-analytics` and select it as the App Insights resource — you
+  get Keren's own Marketing/Technical/Readiness views. Funnel events land
+  in `customEvents`: `tenant_connected`, `setup_scan_completed`,
+  `validation_accepted`, `dashboard_rendered` (tenant ids are SHA-256
+  hashed — no PII).
+- **Status**: code + infra shipped on branch
+  `claude/app-insights-telemetry-check`. **Maintainer action**: redeploy
+  `infra/main.bicep` so `appi-keren-analytics` is provisioned and the
+  connection string is wired into the Container App.
+
 ### Demo deploy target
 - **Why**: the Show HN / Reddit launch needs a clickable URL.
 - **When**: launch eve.

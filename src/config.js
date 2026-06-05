@@ -78,4 +78,25 @@ export const config = {
   aiPricePerMillionInputEur: Number(process.env.AI_PRICE_PER_M_IN_EUR || 0.25),
   /** EUR per million output tokens. */
   aiPricePerMillionOutputEur: Number(process.env.AI_PRICE_PER_M_OUT_EUR || 1.0),
+
+  // --- Self-telemetry (Keren observing itself in App Insights) ---
+  // Two-stage: the Node SDK (server) feeds the Technical view (requests,
+  // dependencies, exceptions); the browser JS SDK feeds the Marketing +
+  // Readiness views (pageViews, sessions, geo, browserTimings). Disabled
+  // in test so the suite never opens a network connection or loads the
+  // applicationinsights dep.
+  telemetry: {
+    enabled: nodeEnv === "test" ? false : process.env.TELEMETRY_ENABLED === "true",
+    /** Server-side ingestion (Node SDK). */
+    connectionString: process.env.APPLICATIONINSIGHTS_CONNECTION_STRING || "",
+    /** Browser ingestion. Defaults to the same resource; the connection
+     *  string carries a write-only ingestion key — safe to expose to the
+     *  page (it can post telemetry, never read it). */
+    browserConnectionString:
+      process.env.APPLICATIONINSIGHTS_BROWSER_CONNECTION_STRING ||
+      process.env.APPLICATIONINSIGHTS_CONNECTION_STRING ||
+      "",
+    /** Cloud role name shown in App Insights. */
+    serviceName: process.env.TELEMETRY_SERVICE_NAME || "keren-analytics",
+  },
 };
