@@ -53,6 +53,10 @@ test("migration adds resource_id and backfills from the tenant's selected resour
     const valCols = db.prepare("PRAGMA table_info(validations)").all().map((c) => c.name);
     assert.ok(valCols.includes("resource_id"), "validations.resource_id added");
 
+    // Same upgrade adds the per-resource AI opt-out column to tenants.
+    const tenantCols = db.prepare("PRAGMA table_info(tenants)").all().map((c) => c.name);
+    assert.ok(tenantCols.includes("ai_preferences"), "tenants.ai_preferences added");
+
     // 3. Existing rows backfilled from tenants.selected_resource.
     const scan = db.prepare("SELECT resource_id FROM scans WHERE tenant_id = ?").get("t1");
     assert.equal(scan.resource_id, RES);

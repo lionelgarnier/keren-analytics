@@ -20,6 +20,10 @@ const TENANT_JSON_COLUMNS = [
   ["readinessReport", "readiness_report"],
   ["dashboardConfig", "dashboard_config"],
   ["discoveryCache", "discovery_cache"],
+  // Per-resource "configure with / without AI" choice. Map keyed by
+  // resourceId → { optOut: boolean }. Scoped per resource so a tenant can
+  // disable AI on one App Insights while keeping it on for another.
+  ["aiPreferences", "ai_preferences"],
 ];
 
 function toJSON(value) {
@@ -44,6 +48,7 @@ function defaultTenantRow(now) {
     readiness_report: null,
     dashboard_config: null,
     discovery_cache: null,
+    ai_preferences: null,
     last_accessed_at: now,
   };
 }
@@ -56,6 +61,7 @@ function rowToTenant(row, transitions) {
     readinessReport: fromJSON(row.readiness_report),
     dashboardConfig: fromJSON(row.dashboard_config),
     discoveryCache: fromJSON(row.discovery_cache),
+    aiPreferences: fromJSON(row.ai_preferences),
     stateTransitions: transitions,
     lastAccessedAt: row.last_accessed_at,
   };
@@ -231,6 +237,26 @@ export function updateTenant(tenantId, patch) {
   const row = db.prepare("SELECT * FROM tenants WHERE id = ?").get(tenantId);
   const transitions = loadTransitions(db, tenantId);
   return rowToTenant(row, transitions);
+}
+
+/**
+ * Per-resource AI opt-out. `true` means "configure this resource without
+ * the LLM — deterministic mapping only". Defaults to `false` (AI on, per
+ * `config.aiProvider`). Scoped by resourceId so disabling AI on one App
+ * Insights doesn't touch another (mirrors the scans/validations invariant).
+ */
+export function getResourceAiOptOut(tenantId, resourceId) {
+  if (!resourceId) return false;
+  const tenant = getTenant(tenantId);
+  return Boolean(tenant.aiPreferences?.[resourceId]?.optOut);
+}
+
+export function setResourceAiOptOut(tenantId, resourceId, optOut) {
+  if (!resourceId) return;
+  const tenant = getTenant(tenantId);
+  const prefs = { ...(tenant.aiPreferences || {}) };
+  prefs[resourceId] = { ...(prefs[resourceId] || {}), optOut: Boolean(optOut) };
+  updateTenant(tenantId, { aiPreferences: prefs });
 }
 
 export function logStateTransition(tenantId, transition) {

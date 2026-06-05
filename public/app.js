@@ -923,6 +923,176 @@ function escapeHtmlApp(value) {
     .replace(/'/g, "&#39;");
 }
 
+/* ===== Configure split-button: AI mode choice + data disclosure ===== */
+
+// Deployment-global AI disclosure (provider, region, what's sent / never
+// sent). Fetched once and cached — only the per-resource opt-out varies, and
+// that's set explicitly when the user chooses, so we don't need it here.
+let aiDisclosureCache = null;
+async function getAiDisclosure() {
+  if (aiDisclosureCache) return aiDisclosureCache;
+  aiDisclosureCache = await apiFetch("/api/ai/disclosure");
+  return aiDisclosureCache;
+}
+
+// Record the AI choice for this resource, select it, then route to setup.
+// optOut=false → the scan calls the configured provider; true → deterministic
+// only, no outbound call. The choice is persisted so the scan stream (a
+// separate request after navigation) honours it.
+async function chooseConfigure(resource, optOut) {
+  setStatus(`Connecting to ${resource.appInsightsName}…`);
+  try {
+    await apiFetch("/api/setup/ai-preference", {
+      method: "POST",
+      body: JSON.stringify({ resourceId: resource.resourceId, optOut }),
+    });
+    await selectResourceApi(resource);
+    window.location.href = "/setup";
+  } catch (err) {
+    setStatus(err.message || "Could not save your choice.", "error");
+  }
+}
+
+// Configure with the default mode (the first available option — AI when a
+// provider is wired, else deterministic). Same outcome as a plain card click,
+// but explicit so the persisted preference matches the advertised label.
+async function chooseDefaultConfigure(resource) {
+  let optOut = false;
+  try {
+    const d = await getAiDisclosure();
+    optOut = Boolean(d.available?.[0]?.optOut);
+  } catch { /* fall back to AI-on default */ }
+  chooseConfigure(resource, optOut);
+}
+
+// Fill in each configure split-button's primary label with the default choice
+// ("Configurer avec l'IA — Azure OpenAI" / "Configurer sans IA"). Async so the
+// grid renders immediately; on failure the neutral placeholder stays.
+async function applyConfigureLabels(root) {
+  let disclosure;
+  try { disclosure = await getAiDisclosure(); } catch { return; }
+  const def = disclosure.available?.[0];
+  if (!def) return;
+  const suffix = def.optOut ? "sans IA" : `avec l'IA — ${def.provider}`;
+  root.querySelectorAll("[data-ai-primary]").forEach((btn) => {
+    const verb = btn.dataset.verb || "Configurer";
+    const labelEl = btn.querySelector(".d2-cfg-primary-label");
+    if (labelEl) labelEl.textContent = `${verb} ${suffix}`;
+  });
+}
+
+// Modal listing exactly what leaves the box and what never does, plus where
+// the AI runs. Built on demand, CSP-safe (no inline JS), dismiss on
+// Esc/outside-click — mirrors krConfirm.
+function openAiDataPopover(disclosure) {
+  const aiOption = (disclosure.available || []).find((o) => !o.optOut);
+  const dest = aiOption
+    ? `${escapeHtmlApp(aiOption.provider)}${aiOption.location ? ` · ${escapeHtmlApp(aiOption.location)}` : ""}`
+    : "aucune IA configurée";
+  const list = (items) =>
+    items.map((i) => `<li>${escapeHtmlApp(i)}</li>`).join("");
+  const overlay = document.createElement("div");
+  overlay.className = "kr-confirm-scrim";
+  overlay.innerHTML = `
+    <div class="ai-data-pop" role="dialog" aria-modal="true" aria-labelledby="aiDataPopTitle">
+      <h3 id="aiDataPopTitle" class="ai-data-pop-title">Quelles données sont envoyées ?</h3>
+      <p class="ai-data-pop-dest">Analyse IA : <strong>${dest}</strong>${aiOption && aiOption.outbound === false ? " (local, rien ne sort)" : ""}</p>
+      <div class="ai-data-pop-cols">
+        <div class="ai-data-pop-col ai-data-pop-col--sent">
+          <h4>Envoyé (sanitizé)</h4>
+          <ul>${list(disclosure.dataContract?.sent || [])}</ul>
+        </div>
+        <div class="ai-data-pop-col ai-data-pop-col--never">
+          <h4>Jamais envoyé</h4>
+          <ul>${list(disclosure.dataContract?.never || [])}</ul>
+        </div>
+      </div>
+      <p class="ai-data-pop-foot">Choisir « sans IA » désactive tout appel sortant pour cette ressource.</p>
+      <div class="ai-data-pop-actions">
+        <button type="button" class="kr-confirm-ok ai-data-pop-close">Compris</button>
+      </div>
+    </div>`;
+  function close() {
+    document.removeEventListener("keydown", onKey);
+    overlay.remove();
+  }
+  function onKey(e) { if (e.key === "Escape") close(); }
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector(".ai-data-pop-close").addEventListener("click", close);
+  document.addEventListener("keydown", onKey);
+  document.body.appendChild(overlay);
+  overlay.querySelector(".ai-data-pop-close").focus();
+}
+
+// Floating menu anchored to a card's caret: the configured AI provider(s)
+// then "sans IA", then the data popover. Fixed-positioned off the button rect
+// so it never clips inside the grid's overflow.
+let openConfigMenuEl = null;
+function closeConfigMenu() {
+  if (openConfigMenuEl) {
+    openConfigMenuEl.remove();
+    openConfigMenuEl = null;
+    document.removeEventListener("click", closeConfigMenu, { capture: true });
+    document.removeEventListener("keydown", onConfigMenuKey);
+  }
+}
+function onConfigMenuKey(e) { if (e.key === "Escape") closeConfigMenu(); }
+
+async function openConfigureMenu(anchorBtn, resource) {
+  if (openConfigMenuEl) { closeConfigMenu(); return; }
+  let disclosure;
+  try {
+    disclosure = await getAiDisclosure();
+  } catch (err) {
+    setStatus(err.message || "Could not load AI options.", "error");
+    return;
+  }
+  const menu = document.createElement("div");
+  menu.className = "d2-cfg-menu";
+  menu.setAttribute("role", "menu");
+
+  for (const opt of disclosure.available || []) {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "d2-cfg-item";
+    item.setAttribute("role", "menuitem");
+    const icon = opt.optOut ? "🔒" : (opt.outbound ? "⚡" : "🖥");
+    const where = opt.location ? `<span class="d2-cfg-where">${escapeHtmlApp(opt.location)}</span>` : "";
+    item.innerHTML = `
+      <span class="d2-cfg-icon" aria-hidden="true">${icon}</span>
+      <span class="d2-cfg-text">
+        <span class="d2-cfg-label">${escapeHtmlApp(opt.label)}${opt.provider ? ` — ${escapeHtmlApp(opt.provider)}` : ""} ${where}</span>
+        <span class="d2-cfg-detail">${escapeHtmlApp(opt.detail)}</span>
+      </span>`;
+    item.addEventListener("click", () => { closeConfigMenu(); chooseConfigure(resource, opt.optOut); });
+    menu.appendChild(item);
+  }
+
+  const info = document.createElement("button");
+  info.type = "button";
+  info.className = "d2-cfg-item d2-cfg-info";
+  info.setAttribute("role", "menuitem");
+  info.innerHTML = `<span class="d2-cfg-icon" aria-hidden="true">ⓘ</span><span class="d2-cfg-text"><span class="d2-cfg-label">Quelles données sont envoyées ?</span></span>`;
+  info.addEventListener("click", () => { closeConfigMenu(); openAiDataPopover(disclosure); });
+  menu.appendChild(info);
+
+  document.body.appendChild(menu);
+  const r = anchorBtn.getBoundingClientRect();
+  // Prefer dropping below-right of the caret; flip up if it would overflow.
+  menu.style.left = `${Math.min(r.left, window.innerWidth - menu.offsetWidth - 12)}px`;
+  const below = r.bottom + 6;
+  menu.style.top = below + menu.offsetHeight > window.innerHeight
+    ? `${Math.max(12, r.top - menu.offsetHeight - 6)}px`
+    : `${below}px`;
+
+  openConfigMenuEl = menu;
+  anchorBtn.setAttribute("aria-expanded", "true");
+  setTimeout(() => {
+    document.addEventListener("click", closeConfigMenu, { capture: true });
+    document.addEventListener("keydown", onConfigMenuKey);
+  }, 0);
+}
+
 function renderResources(resources) {
   lastDiscoveredResources = resources;
   statusPanel.textContent = "";
@@ -1032,9 +1202,25 @@ function renderResources(resources) {
     const bars = barHeights(D2_SPARK_KIND[status])
       .map((h) => `<span class="d2-spark-bar" style="height:${h}%"></span>`).join("");
     const sparkValClass = status === "unconfigured" ? "d2-spark-val d2-spark-val-mute" : "d2-spark-val";
-    const ctaFooter = status === "ready"
-      ? `<button type="button" class="d2-cta-secondary" data-reconfigure>Reconfigurer</button>`
-      : (status === "unconfigured" ? `<span class="d2-cta-kbd">↵</span>` : "");
+    // Configure CTA is a split-button: the primary states the default choice
+    // (e.g. "Configurer avec l'IA — Azure OpenAI", filled in by
+    // applyConfigureLabels once the disclosure loads), the attached caret opens
+    // the with/without-AI menu + data popover. On a ready card the open action
+    // stays the card body; reconfigure is the (ghost) split.
+    const aiCaret = `<button type="button" class="d2-cfg-caret" data-ai-menu aria-haspopup="menu" aria-expanded="false" aria-label="Choisir le mode IA">▾</button>`;
+    const cta = status === "ready"
+      ? `<span class="d2-cta-link${D2_CTA_CLASS[status]}">${escapeHtmlApp(statusMeta.action)} →</span>
+         <div class="d2-cfg-split d2-cfg-split--ghost">
+           <button type="button" class="d2-cfg-primary" data-reconfigure><span class="d2-cfg-primary-label">Reconfigurer</span></button>
+           ${aiCaret}
+         </div>`
+      : `<div class="d2-cfg-split">
+           <button type="button" class="d2-cfg-primary" data-ai-primary data-verb="Configurer">
+             <span class="d2-cfg-primary-label">Configurer…</span>
+             <span class="d2-cfg-primary-kbd" aria-hidden="true">↵</span>
+           </button>
+           ${aiCaret}
+         </div>`;
 
     card.innerHTML = `
       <div class="d2-rescard-head">
@@ -1053,9 +1239,8 @@ function renderResources(resources) {
         <div class="d2-tree-line"><span class="d2-tree-glyph">├</span><span class="d2-tree-key">rg</span><span class="d2-tree-val" title="${escapeHtmlApp(resource.resourceGroup || "")}">${escapeHtmlApp(resource.resourceGroup || "—")}</span></div>
         <div class="d2-tree-line"><span class="d2-tree-glyph">└</span><span class="d2-tree-key">ws</span><span class="d2-tree-val" title="${escapeHtmlApp(resource.workspaceId || "")}">${escapeHtmlApp(wsName)}</span></div>
       </div>
-      <div class="d2-cardcta">
-        <span class="d2-cta-link${D2_CTA_CLASS[status]}">${escapeHtmlApp(statusMeta.action)} →</span>
-        ${ctaFooter}
+      <div class="d2-cardcta${status === "ready" ? "" : " d2-cardcta--split"}">
+        ${cta}
       </div>
     `;
 
@@ -1066,9 +1251,30 @@ function renderResources(resources) {
         gotoService(resource, card, "setup");
       });
     }
+    // Primary on a non-ready card configures with the default mode (the same
+    // mode its label advertises). Clicking the card body does the same.
+    const primaryBtn = card.querySelector("[data-ai-primary]");
+    if (primaryBtn) {
+      primaryBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        chooseDefaultConfigure(resource);
+      });
+    }
+    const aiMenuBtn = card.querySelector("[data-ai-menu]");
+    if (aiMenuBtn) {
+      aiMenuBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openConfigureMenu(aiMenuBtn, resource);
+      });
+    }
     card.addEventListener("click", () => gotoService(resource, card, destination));
     grid.appendChild(card);
   });
+
+  // Label the configure split-buttons with the default choice once the
+  // (deployment-global) disclosure resolves — keeps render synchronous and
+  // works for every renderResources call site.
+  applyConfigureLabels(resourcePanel);
 
   // Filter state: active env chip + free-text search, combined.
   let activeEnv = "all";

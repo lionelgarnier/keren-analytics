@@ -12,7 +12,8 @@ import { runOverviewPipeline, runSetupScan } from "./core/orchestrator.js";
 import { buildRecommendations } from "./core/recommendations.js";
 import { computeReadinessScore } from "./core/readinessScore.js";
 import { generatePrompts } from "./core/promptGenerator.js";
-import { getTenant, updateTenant } from "./core/metadataStore.js";
+import { getTenant, updateTenant, setResourceAiOptOut, getResourceAiOptOut } from "./core/metadataStore.js";
+import { buildAiDisclosure } from "./ai/disclosure.js";
 import { getLatestScan, getScannedResourceIds } from "./core/scanStore.js";
 import { getLatestMapping } from "./core/mappingStore.js";
 import {
@@ -76,7 +77,36 @@ app.use(
     },
   })
 );
-app.use(express.static(path.resolve(__dirname, "..", "public")));
+/*
+ * Static asset caching. No bundler → filenames aren't content-hashed, so
+ * we can't blanket-cache everything as immutable: a deploy must be able to
+ * push fresh JS/CSS/HTML. We split by type:
+ *   - HTML (SPA shell + marketing pages): no-cache so a deploy lands at
+ *     once; the ETag still yields cheap 304s.
+ *   - Stable media/fonts: cache hard (7d). These are the bulk of an
+ *     anonymous landing-page hit (demo.gif, og-image, demo-*.webp), so a
+ *     traffic spike — e.g. an HN front-page post — serves them from the
+ *     browser cache and never touches the single replica a second time.
+ *   - JS/CSS: short max-age + revalidate so a deploy isn't masked by a
+ *     stale bundle while still saving most re-fetches.
+ */
+const MEDIA_EXTENSIONS = new Set([
+  ".webp", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".woff", ".woff2",
+]);
+app.use(
+  express.static(path.resolve(__dirname, "..", "public"), {
+    setHeaders: (res, filePath) => {
+      const ext = path.extname(filePath).toLowerCase();
+      if (ext === ".html") {
+        res.setHeader("Cache-Control", "no-cache");
+      } else if (MEDIA_EXTENSIONS.has(ext)) {
+        res.setHeader("Cache-Control", "public, max-age=604800");
+      } else if (ext === ".js" || ext === ".css") {
+        res.setHeader("Cache-Control", "public, max-age=300, must-revalidate");
+      }
+    },
+  })
+);
 
 /* ========== Rate limiting ==========
  *
@@ -759,6 +789,25 @@ app.get("/api/setup/state", ensureAuth, (req, res) => {
   });
 });
 
+// Per-resource "configure with / without AI" choice, set from the Services
+// hub split-button before the scan runs. `optOut: true` means the next scan
+// for this resource skips the LLM entirely (deterministic mapping only, zero
+// outbound). Scoped by resourceId — never tenant-global (see CLAUDE.md
+// invariant: setup state is per-resource).
+app.post("/api/setup/ai-preference", ensureAuth, verifyCsrf, (req, res) => {
+  const tenantId = req.session.tenantId;
+  const { resourceId, optOut } = req.body || {};
+  if (typeof resourceId !== "string" || !resourceId) {
+    return res.status(400).json({ error: "MISSING_RESOURCE_ID", message: "resourceId is required" });
+  }
+  if (typeof optOut !== "boolean") {
+    return res.status(400).json({ error: "INVALID_OPT_OUT", message: "optOut must be a boolean" });
+  }
+  setResourceAiOptOut(tenantId, resourceId, optOut);
+  res.set("Cache-Control", "no-store");
+  res.json({ ok: true, resourceId, optOut });
+});
+
 // Trigger the CONFIG phase: a fresh scan + AI analysis for the selected
 // resource. This is the only entry point that re-runs the scan/LLM —
 // dashboard loads reuse its snapshot and never re-config.
@@ -1091,6 +1140,22 @@ app.get("/preview/dashboard", async (req, res) => {
 
 app.get("/healthz", (_req, res) => {
   res.json({ ok: true, mode: config.azureMode, aiProvider: config.aiProvider });
+});
+
+// What the AI does with telemetry, derived from config — drives the Services
+// hub "Configure" menu (which providers are offered) and its inline data
+// popover (what's sent / never sent, and where). Per-resource opt-out state
+// is attached when ?resourceId= is supplied so the hub can reflect a prior
+// choice. No secrets in the payload — it's a config read.
+app.get("/api/ai/disclosure", ensureAuth, (req, res) => {
+  const tenantId = req.session.tenantId;
+  const disclosure = buildAiDisclosure(config);
+  const resourceId = typeof req.query.resourceId === "string" ? req.query.resourceId : null;
+  res.set("Cache-Control", "no-store");
+  res.json({
+    ...disclosure,
+    optOut: resourceId ? getResourceAiOptOut(tenantId, resourceId) : false,
+  });
 });
 
 app.get("/api/ai/ping", async (_req, res) => {

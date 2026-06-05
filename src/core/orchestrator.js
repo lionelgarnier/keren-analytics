@@ -9,7 +9,7 @@ import { getActiveValidation } from "./validationStore.js";
 import { buildOverviewDashboard } from "./dashboard.js";
 import { resolveTimeRange, toKqlDatetime } from "./timeRange.js";
 import { loadKqlTemplate, renderTemplate } from "./kql.js";
-import { logStateTransition, getTenant, updateTenant } from "./metadataStore.js";
+import { logStateTransition, getTenant, updateTenant, getResourceAiOptOut } from "./metadataStore.js";
 import { PipelineStates } from "./stateMachine.js";
 
 /*
@@ -186,16 +186,23 @@ export async function runSetupScan({ tenantId, azureClient, onProgress, onStep }
   if (scan) emitScanSteps(emitStep, scan, deterministicMapping);
 
   // ── AI mapping — cached per scan_id, so this is the only place the LLM
-  //    is ever called. A dashboard render reuses this row, never re-calls. ──
+  //    is ever called. A dashboard render reuses this row, never re-calls.
+  //    When the user opted this resource out of AI, no prompt is built and
+  //    nothing leaves the box — getOrComputeMapping persists the
+  //    deterministic fallback instead. ──
   logStateTransition(tenantId, { state: PipelineStates.AI_ANALYSIS });
-  progress("AI mapping analysis", 0.55);
+  const aiOptOut = getResourceAiOptOut(tenantId, selectedResource.resourceId);
+  progress(aiOptOut ? "Building deterministic mapping" : "AI mapping analysis", 0.55);
   let aiMapping = null;
   try {
-    aiMapping = await getOrComputeMapping(tenantId, selectedResource.resourceId, { readinessReport });
+    aiMapping = await getOrComputeMapping(tenantId, selectedResource.resourceId, {
+      readinessReport,
+      optOut: aiOptOut,
+    });
     if (aiMapping?.degraded) {
       logStateTransition(tenantId, {
         state: PipelineStates.AI_ANALYSIS,
-        detail: `degraded: ${aiMapping.reason || "unknown"}`,
+        detail: aiOptOut ? "ai-disabled-by-user" : `degraded: ${aiMapping.reason || "unknown"}`,
       });
     }
   } catch (error) {
@@ -208,6 +215,9 @@ export async function runSetupScan({ tenantId, azureClient, onProgress, onStep }
   const aiRecs = aiMapping?.proposals?.dashboard_recommendations || {};
   emitStep("ai", {
     degraded: !aiMapping || !!aiMapping.degraded,
+    // Distinguishes a deliberate opt-out ("AI off") from an unexpected
+    // degrade (quota/error) so the wizard can label the scan row honestly.
+    disabled: aiOptOut,
     summary: aiMapping?.proposals?.summary || null,
     ready: (aiRecs.feature || []).length,
     needsInstrumentation: (aiRecs.hide || []).length,
