@@ -15,6 +15,8 @@ const SIGNAL_WEIGHTS = {
   userAgent:       { points: 10, label: "Device & Browser",  category: "recommended", description: "Client environment details" },
   geo:             { points: 10, label: "Geo Location",      category: "optional",    description: "Geographic enrichment" },
   browserTimings:  { points: 15, label: "Frontend Perf",     category: "optional",    description: "Browser timing metrics" },
+  dependencies:    { points: 10, label: "Dependencies",      category: "recommended", description: "Outbound call telemetry (SQL, HTTP, queues)" },
+  exceptions:      { points: 10, label: "Exceptions",        category: "recommended", description: "Server-side exception capture" },
 };
 
 /**

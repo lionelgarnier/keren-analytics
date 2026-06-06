@@ -3343,6 +3343,80 @@ function renderBrowserTimingsCard(d) {
     d.browserTimings ? fmtMs(d.browserTimings.avgTotal) : "-";
 }
 
+/* ----- Backend / APM cards ----- */
+
+function renderBackendKpis(d) {
+  const av = d.availability || {};
+  const noDeps = av.hasDependencies === false;
+  const noEx = av.hasExceptions === false;
+
+  if (noDeps) {
+    document.getElementById("kpiDepCalls").textContent = "—";
+    document.getElementById("kpiDepFail").textContent = "—";
+    document.getElementById("kpiDepP95").textContent = "—";
+    showKpiHint("kpiDepCallsHint", "dependencies");
+  } else {
+    document.getElementById("kpiDepCalls").textContent = fmt(d.dependencyCalls);
+    document.getElementById("kpiDepFail").textContent = fmtPct(d.dependencyFailureRate);
+    document.getElementById("kpiDepP95").textContent = fmtMs(d.dependencyP95Ms);
+    hideKpiHint("kpiDepCallsHint");
+  }
+  const targetsEl = document.getElementById("kpiDepTargets");
+  if (targetsEl) targetsEl.textContent = !noDeps && d.distinctTargets ? `${d.distinctTargets} targets` : "";
+
+  const failCard = document.getElementById("kpiDepFailCard");
+  if (failCard) {
+    if (!noDeps && d.dependencyFailureRate > 0.05) failCard.style.borderLeft = "3px solid var(--danger)";
+    else if (!noDeps && d.dependencyFailureRate > 0.02) failCard.style.borderLeft = "3px solid var(--warning)";
+    else failCard.style.borderLeft = "3px solid var(--success)";
+  }
+
+  if (noEx) {
+    document.getElementById("kpiExceptions").textContent = "—";
+    showKpiHint("kpiExceptionsHint", "exceptions");
+  } else {
+    document.getElementById("kpiExceptions").textContent = fmt(d.exceptionCount);
+    hideKpiHint("kpiExceptionsHint");
+  }
+  const typesEl = document.getElementById("kpiExceptionTypes");
+  if (typesEl) typesEl.textContent = !noEx && d.distinctExceptionTypes ? `${d.distinctExceptionTypes} types` : "";
+}
+
+function renderDependenciesCard(d) {
+  renderTableRows("slowDepsBody", "slowDepsEmpty", "slowDepsCount", d.slowDependencies, (tr, row) => {
+    tr.appendChild(td(row.target));
+    tr.appendChild(td(row.type));
+    tr.appendChild(td(fmtMs(row.p50), "num"));
+    tr.appendChild(td(fmtMs(row.p95), "num"));
+    tr.appendChild(td(fmt(row.count), "num"));
+    tr.appendChild(td(fmtPct(row.failureRate), "num"));
+  });
+  renderDoughnut("dependencyTypesChart", "dependencyTypesEmpty", "dependencyTypes", d.dependencyTypes, "type", "count");
+}
+
+function renderExceptionsCard(d) {
+  renderTableRows("exceptionsBody", "exceptionsEmpty", "exceptionsCount", d.topExceptions, (tr, row) => {
+    tr.appendChild(td(row.type));
+    tr.appendChild(td(fmt(row.count), "num"));
+    tr.appendChild(td(fmt(row.affectedOperations), "num"));
+    tr.appendChild(td(fmt(row.affectedUsers), "num"));
+  });
+}
+
+function renderServiceHealthCard(d) {
+  renderTableRows("serviceHealthBody", "serviceHealthEmpty", "serviceHealthCount", d.serviceHealth, (tr, row) => {
+    tr.appendChild(td(row.role));
+    tr.appendChild(td(fmt(row.count), "num"));
+    tr.appendChild(td(fmtMs(row.avgDuration), "num"));
+    tr.appendChild(td(fmtMs(row.p95), "num"));
+    tr.appendChild(td(fmtPct(row.errorRate), "num"));
+  });
+}
+
+function renderStatusCodesCard(d) {
+  renderDoughnut("statusCodesChart", "statusCodesEmpty", "statusCodes", d.statusCodes, "class", "count");
+}
+
 // card name -> renderer. Each renderer takes the card's streamed payload.
 const CARD_RENDERERS = {
   marketingKpis: renderMarketingKpis,
@@ -3362,6 +3436,11 @@ const CARD_RENDERERS = {
   sessionReplays: (d) => renderSessionReplays(d.sessionReplays),
   contentScoring: (d) => renderContentScoring(d.topNavigationPaths, d.topPages),
   funnel: (d) => renderFunnel(d.topNavigationPaths, d.topPages),
+  backendKpis: renderBackendKpis,
+  dependencies: renderDependenciesCard,
+  exceptions: renderExceptionsCard,
+  serviceHealth: renderServiceHealthCard,
+  statusCodes: renderStatusCodesCard,
 };
 
 // Rebuild a card's streamed-payload shape from a full dashboard object —
@@ -3404,6 +3483,26 @@ function cardDataFromDashboard(name, dash) {
     case "contentScoring":
     case "funnel":
       return { topNavigationPaths: c.topNavigationPaths, topPages: c.topPages };
+    case "backendKpis": {
+      const b = dash.backend || {};
+      return {
+        dependencyCalls: b.dependencyCalls,
+        dependencyFailureRate: b.dependencyFailureRate,
+        dependencyP95Ms: b.dependencyP95Ms,
+        distinctTargets: b.distinctTargets,
+        exceptionCount: b.exceptionCount,
+        distinctExceptionTypes: b.distinctExceptionTypes,
+        availability: {
+          hasDependencies: dash.availability?.hasDependencies,
+          hasExceptions: dash.availability?.hasExceptions,
+        },
+      };
+    }
+    case "dependencies":
+      return { slowDependencies: t.slowDependencies, dependencyTypes: c.dependencyTypes };
+    case "exceptions": return { topExceptions: t.topExceptions };
+    case "serviceHealth": return { serviceHealth: t.serviceHealth };
+    case "statusCodes": return { statusCodes: c.statusCodes };
     default: return {};
   }
 }
@@ -3614,6 +3713,9 @@ async function init() {
   initSortableTable("slowEndpointsTable");
   initSortableTable("topNavTable");
   initSortableTable("campaignTable");
+  initSortableTable("slowDepsTable");
+  initSortableTable("exceptionsTable");
+  initSortableTable("serviceHealthTable");
 
   // Check for OAuth redirect errors
   if (checkAuthError()) {

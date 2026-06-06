@@ -326,6 +326,11 @@ export async function buildOverviewDashboard({
   const hasRequests = schemaProfile?.tables?.requests || readinessReport?.availableSignals?.requests;
   const hasGeo = readinessReport?.availableSignals?.geo;
   const hasBrowserTimings = readinessReport?.availableSignals?.browserTimings || schemaProfile?.tables?.browserTimings;
+  // Backend / APM signals (Track: backend telemetry expansion). Gate the
+  // dependency + exception cards on the readiness probe, falling back to the
+  // schema-profile table presence so a freshly-scanned resource still renders.
+  const hasDependencies = Boolean(readinessReport?.availableSignals?.dependencies || schemaProfile?.tables?.dependencies);
+  const hasExceptions = Boolean(readinessReport?.availableSignals?.exceptions || schemaProfile?.tables?.exceptions);
   // Per-signal availability — whether the identity/page-view columns are
   // actually populated (readiness probes them with isnotempty guards). The
   // dashboard uses these to gate KPIs that would otherwise render a
@@ -647,6 +652,90 @@ export async function buildOverviewDashboard({
           timeRangeKey: prevRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
         }),
     },
+    {
+      name: "dependencyOverview",
+      label: "Summarizing dependencies",
+      enabled: hasDependencies,
+      run: () =>
+        runQuery({
+          tenantId, resourceId, workspaceId,
+          queryName: "dependencyOverview",
+          templateName: "dependency-overview",
+          params: { ...timeParams },
+          allowedValues: {},
+          timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
+        }),
+    },
+    {
+      name: "slowDependencies",
+      label: "Finding slow dependencies",
+      enabled: hasDependencies,
+      run: () =>
+        runQuery({
+          tenantId, resourceId, workspaceId,
+          queryName: "slowDependencies",
+          templateName: "slow-dependencies",
+          params: { ...timeParams },
+          allowedValues: {},
+          timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
+        }),
+    },
+    {
+      name: "dependencyTypes",
+      label: "Classifying dependencies",
+      enabled: hasDependencies,
+      run: () =>
+        runQuery({
+          tenantId, resourceId, workspaceId,
+          queryName: "dependencyTypes",
+          templateName: "dependency-types",
+          params: { ...timeParams },
+          allowedValues: {},
+          timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
+        }),
+    },
+    {
+      name: "topExceptions",
+      label: "Collecting exceptions",
+      enabled: hasExceptions,
+      run: () =>
+        runQuery({
+          tenantId, resourceId, workspaceId,
+          queryName: "topExceptions",
+          templateName: "top-exceptions",
+          params: { ...timeParams },
+          allowedValues: {},
+          timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
+        }),
+    },
+    {
+      name: "serviceHealth",
+      label: "Checking service health",
+      enabled: Boolean(hasRequests),
+      run: () =>
+        runQuery({
+          tenantId, resourceId, workspaceId,
+          queryName: "serviceHealth",
+          templateName: "service-health",
+          params: { ...timeParams },
+          allowedValues: {},
+          timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
+        }),
+    },
+    {
+      name: "statusCodes",
+      label: "Bucketing status codes",
+      enabled: Boolean(hasRequests),
+      run: () =>
+        runQuery({
+          tenantId, resourceId, workspaceId,
+          queryName: "statusCodes",
+          templateName: "status-codes",
+          params: { ...timeParams },
+          allowedValues: {},
+          timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
+        }),
+    },
   ];
 
   // --- Fire every query through the bounded pool --------------------------
@@ -713,8 +802,18 @@ export async function buildOverviewDashboard({
     campaignBreakdown: [],
     referrerSources: [],
     browserTimings: null,
+    dependencyTypes: [],
+    statusCodes: [],
   };
-  const tables = { slowEndpoints: [] };
+  const tables = { slowEndpoints: [], slowDependencies: [], topExceptions: [], serviceHealth: [] };
+  const backend = {
+    dependencyCalls: 0,
+    dependencyFailureRate: 0,
+    dependencyP95Ms: 0,
+    distinctTargets: 0,
+    exceptionCount: 0,
+    distinctExceptionTypes: 0,
+  };
 
   /** Emit a card: the data payload, or an error stub if any dep failed. */
   function publish(name, deps, data) {
@@ -932,6 +1031,104 @@ export async function buildOverviewDashboard({
     publish("sessionReplays", ["sessionTimelines"], { sessionReplays: charts.sessionReplays });
   }
 
+  // --- Backend / APM assemblers -------------------------------------------
+
+  async function assembleBackendKpis() {
+    const deps = ["dependencyOverview", "topExceptions"];
+    const [doR, teR] = await Promise.all(deps.map(q));
+    const ov = toRows(doR)[0] || {};
+    const exRows = toRows(teR);
+    backend.dependencyCalls = Number(ov.totalCalls) || 0;
+    backend.dependencyFailureRate = Number(ov.failureRate) || 0;
+    backend.dependencyP95Ms = Number(ov.p95Duration) || 0;
+    backend.distinctTargets = Number(ov.distinctTargets) || 0;
+    backend.exceptionCount = exRows.reduce((sum, row) => sum + (Number(row.count) || 0), 0);
+    backend.distinctExceptionTypes = new Set(exRows.map((row) => row.type)).size;
+    // No hard deps: this KPI row should render even if one of dependency /
+    // exception telemetry is absent — the availability flags tell the
+    // frontend which tiles to gate behind a "not tracked" hint.
+    publish("backendKpis", [], {
+      dependencyCalls: backend.dependencyCalls,
+      dependencyFailureRate: backend.dependencyFailureRate,
+      dependencyP95Ms: backend.dependencyP95Ms,
+      distinctTargets: backend.distinctTargets,
+      exceptionCount: backend.exceptionCount,
+      distinctExceptionTypes: backend.distinctExceptionTypes,
+      availability: { hasDependencies, hasExceptions },
+    });
+  }
+
+  async function assembleDependencies() {
+    const deps = ["slowDependencies", "dependencyTypes"];
+    const [sdR, dtR] = await Promise.all(deps.map(q));
+    tables.slowDependencies = toRows(sdR).map((row) => ({
+      target: row.target,
+      type: row.type,
+      p50: Number(row.p50) || 0,
+      p95: Number(row.p95) || 0,
+      p99: Number(row.p99) || 0,
+      avgDuration: Number(row.avgDuration) || 0,
+      count: Number(row.count) || 0,
+      failureRate: Number(row.failureRate) || 0,
+    }));
+    const typeRows = toRows(dtR);
+    const totalTypes = typeRows.reduce((sum, row) => sum + (Number(row.count) || 0), 0);
+    charts.dependencyTypes = typeRows.map((row) => ({
+      type: row.type,
+      count: Number(row.count) || 0,
+      failureRate: Number(row.failureRate) || 0,
+      share: safeDivide(Number(row.count) || 0, totalTypes),
+    }));
+    publish("dependencies", deps, {
+      slowDependencies: tables.slowDependencies,
+      dependencyTypes: charts.dependencyTypes,
+      availability: { hasDependencies },
+    });
+  }
+
+  async function assembleExceptions() {
+    tables.topExceptions = toRows(await q("topExceptions")).map((row) => ({
+      type: row.type,
+      problemId: row.problemId,
+      count: Number(row.count) || 0,
+      affectedOperations: Number(row.affectedOperations) || 0,
+      affectedUsers: Number(row.affectedUsers) || 0,
+      lastSeen: row.lastSeen || null,
+    }));
+    publish("exceptions", ["topExceptions"], {
+      topExceptions: tables.topExceptions,
+      availability: { hasExceptions },
+    });
+  }
+
+  async function assembleServiceHealth() {
+    tables.serviceHealth = toRows(await q("serviceHealth")).map((row) => ({
+      role: row.role,
+      count: Number(row.count) || 0,
+      avgDuration: Number(row.avgDuration) || 0,
+      p95: Number(row.p95) || 0,
+      errorRate: Number(row.errorRate) || 0,
+    }));
+    publish("serviceHealth", ["serviceHealth"], {
+      serviceHealth: tables.serviceHealth,
+      multiService: Boolean(readinessReport?.availableSignals?.multiService),
+    });
+  }
+
+  async function assembleStatusCodes() {
+    const rows = toRows(await q("statusCodes"));
+    const total = rows.reduce((sum, row) => sum + (Number(row.count) || 0), 0);
+    const order = { "2xx": 0, "3xx": 1, "4xx": 2, "5xx": 3, other: 4 };
+    charts.statusCodes = rows
+      .map((row) => ({
+        class: row.codeClass,
+        count: Number(row.count) || 0,
+        share: safeDivide(Number(row.count) || 0, total),
+      }))
+      .sort((a, b) => (order[a.class] ?? 9) - (order[b.class] ?? 9));
+    publish("statusCodes", ["statusCodes"], { statusCodes: charts.statusCodes });
+  }
+
   // Content scoring + funnel are derived entirely on the client from the
   // navigation + top-pages data. They produce no slice of `result`; they
   // just need both arrays once both queries land.
@@ -963,6 +1160,11 @@ export async function buildOverviewDashboard({
     runAssembler(["browserTimings"], assembleBrowserTimings),
     runAssembler(["sessionReplays"], assembleSessionReplays),
     runAssembler(["contentScoring", "funnel"], assembleNavDerived),
+    runAssembler(["backendKpis"], assembleBackendKpis),
+    runAssembler(["dependencies"], assembleDependencies),
+    runAssembler(["exceptions"], assembleExceptions),
+    runAssembler(["serviceHealth"], assembleServiceHealth),
+    runAssembler(["statusCodes"], assembleStatusCodes),
   ]);
 
   // --- Compose the full dashboard object ----------------------------------
@@ -993,15 +1195,30 @@ export async function buildOverviewDashboard({
       campaignBreakdown: charts.campaignBreakdown,
       referrerSources: charts.referrerSources,
       browserTimings: charts.browserTimings,
+      dependencyTypes: charts.dependencyTypes,
+      statusCodes: charts.statusCodes,
     },
     tables: {
       slowEndpoints: tables.slowEndpoints,
+      slowDependencies: tables.slowDependencies,
+      topExceptions: tables.topExceptions,
+      serviceHealth: tables.serviceHealth,
+    },
+    backend: {
+      dependencyCalls: backend.dependencyCalls,
+      dependencyFailureRate: backend.dependencyFailureRate,
+      dependencyP95Ms: backend.dependencyP95Ms,
+      distinctTargets: backend.distinctTargets,
+      exceptionCount: backend.exceptionCount,
+      distinctExceptionTypes: backend.distinctExceptionTypes,
     },
     availability: {
       hasPageTable: Boolean(hasPageTable),
       hasRequests: Boolean(hasRequests),
       hasGeo: Boolean(hasGeo),
       hasBrowserTimings: Boolean(hasBrowserTimings),
+      hasDependencies,
+      hasExceptions,
       hasUserId,
       hasSessionId,
       hasPageViews,

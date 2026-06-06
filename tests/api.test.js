@@ -89,6 +89,15 @@ test("mock auth and dashboard overview flow", async () => {
   assert.ok(Number.isFinite(kpis.errorRate), "kpis.errorRate is numeric");
   assert.ok(Number.isFinite(kpis.clientErrorRate), "kpis.clientErrorRate is numeric");
 
+  // Backend / APM expansion — mock telemetry carries dependencies + exceptions.
+  const backend = dashboard.body.dashboard.backend;
+  assert.ok(backend, "dashboard payload should include a backend block");
+  assert.ok(backend.dependencyCalls > 0, "backend dependency calls populated");
+  assert.ok(dashboard.body.dashboard.tables.slowDependencies.length > 0, "slowDependencies populated");
+  assert.ok(dashboard.body.dashboard.tables.topExceptions.length > 0, "topExceptions populated");
+  assert.equal(dashboard.body.dashboard.availability.hasDependencies, true);
+  assert.equal(dashboard.body.dashboard.availability.hasExceptions, true);
+
   // Period-over-period comparison (B4) — 7d range has prev7d as predecessor.
   const cmp = dashboard.body.dashboard.kpis.comparison;
   assert.ok(cmp, "dashboard.kpis.comparison should be present for 7d range");
@@ -123,7 +132,10 @@ test("dashboard overview stream emits per-card messages then one done", async ()
 
   // Every card name resolves; mock mode never fails a query.
   const cardNames = new Set(cards.map((c) => c.name));
-  for (const expected of ["marketingKpis", "technicalKpis", "dailyTrend", "topPages", "geo"]) {
+  for (const expected of [
+    "marketingKpis", "technicalKpis", "dailyTrend", "topPages", "geo",
+    "backendKpis", "dependencies", "exceptions", "serviceHealth", "statusCodes",
+  ]) {
     assert.ok(cardNames.has(expected), `expected a '${expected}' card`);
   }
   assert.ok(!cards.some((c) => c.data && c.data.error), "no card should carry an error in mock mode");

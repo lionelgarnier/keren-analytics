@@ -145,7 +145,7 @@ src/
     dashboard.js         # builds dashboard payload from KQL results
     timeRange.js
     audit.js
-kql/                     # 26 versioned .kql templates (Azure-specific; relocation
+kql/                     # 32 versioned .kql templates (Azure-specific; relocation
                          # to queries/azure/ deferred to V2 with second adapter)
 public/                  # static SPA (index.html, app.js, styles.css)
                          # + setup.html / setup.js (F4 wizard, /setup route)

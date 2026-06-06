@@ -19,13 +19,15 @@ describe("computeReadinessScore", () => {
         userAgent: true,
         geo: true,
         browserTimings: true,
+        dependencies: true,
+        exceptions: true,
       },
     };
     const result = computeReadinessScore(report);
-    assert.equal(result.score, 100);
+    assert.equal(result.score, result.maxScore);
     assert.equal(result.percentage, 100);
     assert.equal(result.grade, "A");
-    assert.equal(result.breakdown.length, 7);
+    assert.equal(result.breakdown.length, 9);
     assert.ok(result.breakdown.every((b) => b.available));
   });
 
@@ -43,11 +45,12 @@ describe("computeReadinessScore", () => {
     };
     const result = computeReadinessScore(report);
     assert.equal(result.score, 50); // 20 + 15 + 15
-    assert.equal(result.grade, "D"); // 50% falls in 35-55 range
+    assert.equal(result.grade, "D"); // 50/120 = 42% falls in 35-55 range
     const available = result.breakdown.filter((b) => b.available);
     const missing = result.breakdown.filter((b) => !b.available);
     assert.equal(available.length, 3);
-    assert.equal(missing.length, 4);
+    // userId, userAgent, geo, browserTimings, dependencies, exceptions
+    assert.equal(missing.length, 6);
   });
 
   it("sorts breakdown with available first", () => {
@@ -99,6 +102,7 @@ describe("computeReadinessScore", () => {
       availableSignals: {
         pageViews: true, requests: true, sessionId: true, userId: true,
         userAgent: true, geo: true, browserTimings: true,
+        dependencies: true, exceptions: true,
       },
     };
     const result = computeReadinessScore(report);

@@ -1,0 +1,11 @@
+// Aggregate outbound dependency volume, failures and latency for the Backend KPI cards
+let start={{timeStart}};
+let end={{timeEnd}};
+dependencies
+| where timestamp between (start..end)
+| summarize totalCalls = count(),
+          failedCalls = countif(success == false),
+          avgDuration = avg(duration),
+          p95Duration = percentile(duration, 95),
+          distinctTargets = dcount(target)
+| extend failureRate = iif(totalCalls == 0, 0.0, todouble(failedCalls) / todouble(totalCalls))

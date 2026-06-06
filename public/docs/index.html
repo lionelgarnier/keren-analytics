@@ -56,6 +56,7 @@
           <div class="doc-sidebar-title">Reading Your Data</div>
           <a href="#marketing-metrics" class="doc-sidebar-link">Marketing Metrics</a>
           <a href="#technical-metrics" class="doc-sidebar-link">Technical Metrics</a>
+          <a href="#backend-metrics" class="doc-sidebar-link">Backend Metrics</a>
           <a href="#readiness-score" class="doc-sidebar-link">Readiness Score</a>
         </div>
         <div class="doc-sidebar-section">
@@ -191,11 +192,12 @@
 
         <section id="first-dashboard">
           <h2>Your First Dashboard</h2>
-          <p>Once connected, your dashboard has three tabs:</p>
+          <p>Once connected, your dashboard has four tabs:</p>
           <div class="doc-feature-grid">
             <div class="doc-feature"><strong>Marketing</strong><span>Visitors, sessions, top pages, geo distribution, traffic sources, campaigns, user flow, conversion funnel, peak hours</span></div>
             <div class="doc-feature"><strong>Technical</strong><span>Response times, error rates, slow endpoints, frontend performance, session timelines</span></div>
-            <div class="doc-feature"><strong>Readiness</strong><span>Telemetry coverage score (0-100), what's missing, how to fix it with AI-ready prompts</span></div>
+            <div class="doc-feature"><strong>Backend</strong><span>Dependency latency &amp; failures, top exceptions, per-service health, response status-code mix</span></div>
+            <div class="doc-feature"><strong>Readiness</strong><span>Telemetry coverage score (0-120), what's missing, how to fix it with AI-ready prompts</span></div>
           </div>
           <p>A few things you'll notice on the Marketing tab:</p>
           <ul>
@@ -265,9 +267,45 @@
           <p>Each timeline shows: pages visited with time on page, clicks, conversions, errors, and exit points. Useful for debugging user-reported issues or understanding conversion paths.</p>
         </section>
 
+        <section id="backend-metrics">
+          <h2>Backend Metrics</h2>
+          <p>The Backend tab goes beyond request latency to give you an APM-style view of your server: what it calls, what's failing, and which service is responsible — all from telemetry you already have, no extra agents.</p>
+
+          <h3>KPIs</h3>
+          <div class="doc-table-wrapper">
+            <table class="doc-table">
+              <thead><tr><th>Metric</th><th>What it measures</th><th>Source</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Dependency Calls</strong></td><td>Outbound calls (DB, HTTP, queue, cache) and distinct targets</td><td><code>dependencies</code> table</td></tr>
+                <tr><td><strong>Dependency Fail Rate</strong></td><td>% of outbound calls that failed</td><td><code>dependencies.success</code></td></tr>
+                <tr><td><strong>Dependency P95</strong></td><td>95th percentile dependency latency</td><td><code>dependencies.duration</code></td></tr>
+                <tr><td><strong>Exceptions</strong></td><td>Server exception count and distinct types</td><td><code>exceptions</code> table</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Visualizations &amp; tables</h3>
+          <div class="doc-table-wrapper">
+            <table class="doc-table">
+              <thead><tr><th>Panel</th><th>What it shows</th><th>How to use it</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Slow Dependencies</strong></td><td>Outbound calls ranked by p95 latency, with type and failure rate</td><td>Find the database query or third-party API dragging your app down</td></tr>
+                <tr><td><strong>Dependency Types</strong></td><td>Call mix by type (SQL / HTTP / Redis / blob / queue)</td><td>Understand where your backend spends its outbound time</td></tr>
+                <tr><td><strong>Top Exceptions</strong></td><td>Server errors by type and problem location, with affected operations and users</td><td>Triage the most impactful errors first</td></tr>
+                <tr><td><strong>Service Health</strong></td><td>Per-service (cloud role) request volume, latency and 5xx rate</td><td>Pinpoint which microservice is hot or failing</td></tr>
+                <tr><td><strong>Status Codes</strong></td><td>2xx / 3xx / 4xx / 5xx response distribution</td><td>See the balance of success vs client vs server errors at a glance</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="doc-callout doc-callout-info">
+            <strong>Your error details stay private.</strong> The exceptions panel only ever shows the exception <em>type</em> and its problem location plus aggregate counts — raw error messages and stack traces are never sent off your workspace, because they routinely contain user data.
+          </div>
+        </section>
+
         <section id="readiness-score">
           <h2>Readiness Score</h2>
-          <p>Your Readiness Score (0-100) measures how complete your telemetry coverage is. A higher score means more insights available in your dashboards.</p>
+          <p>Your Readiness Score (0-120) measures how complete your telemetry coverage is. A higher score means more insights available in your dashboards.</p>
 
           <div class="doc-table-wrapper">
             <table class="doc-table">
@@ -280,6 +318,8 @@
                 <tr><td>Device &amp; Browser</td><td>10</td><td><span class="doc-badge doc-badge-yellow">recommended</span></td><td>Browser, OS, device breakdown charts</td></tr>
                 <tr><td>Geo Location</td><td>10</td><td><span class="doc-badge doc-badge-gray">optional</span></td><td>World map, country distribution</td></tr>
                 <tr><td>Frontend Perf</td><td>15</td><td><span class="doc-badge doc-badge-gray">optional</span></td><td>Browser timing breakdown, page load analysis</td></tr>
+                <tr><td>Dependencies</td><td>10</td><td><span class="doc-badge doc-badge-yellow">recommended</span></td><td>Dependency latency, failures and type mix (Backend tab)</td></tr>
+                <tr><td>Exceptions</td><td>10</td><td><span class="doc-badge doc-badge-yellow">recommended</span></td><td>Top server exceptions and affected operations (Backend tab)</td></tr>
               </tbody>
             </table>
           </div>

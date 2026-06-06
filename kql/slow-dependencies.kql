@@ -1,0 +1,19 @@
+// Slowest outbound dependencies (DB, HTTP, queue, cache) with latency percentiles
+// and failure rates, grouped by target + type, for the Backend view
+let start={{timeStart}};
+let end={{timeEnd}};
+dependencies
+| where timestamp between (start..end)
+| extend depTarget = iif(isempty(target), "(unknown)", target)
+| extend depType = iif(isempty(type), "Other", type)
+| summarize
+    p50 = percentile(duration, 50),
+    p95 = percentile(duration, 95),
+    p99 = percentile(duration, 99),
+    avgDuration = avg(duration),
+    count = count(),
+    failures = countif(success == false)
+  by depTarget, depType
+| extend failureRate = iif(count == 0, 0.0, todouble(failures) / todouble(count))
+| project target = depTarget, type = depType, p50, p95, p99, avgDuration, count, failureRate
+| top 10 by p95 desc
