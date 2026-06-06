@@ -265,6 +265,36 @@ function setDashRange(range) {
   rangeSelect.dispatchEvent(new Event("change"));
 }
 
+/* ----- Export (⌘E / Export button) ----- */
+// Serializes the aggregates currently on screen (no raw rows leave the server;
+// lastDashboardData is the already-aggregated payload) to a JSON download.
+function exportDashboard() {
+  if (!lastDashboardData) {
+    setStatus("Nothing to export yet — load a dashboard first.", "error");
+    return;
+  }
+  const service = router.current.service || selectedResourceName?.textContent?.trim() || "service";
+  const range = RANGE_LABEL[rangeSelect.value] || rangeSelect.value;
+  const stamp = new Date().toISOString().slice(0, 10);
+  const slug = service.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "service";
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    service,
+    range,
+    data: lastDashboardData,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `keren-${slug}-${range}-${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  setStatus("Dashboard exported.", "success");
+}
+
 /* ----- ⌘K command palette ----- */
 const CMDK_COMMANDS = [
   { label: "Go to Marketing", hint: "tab", run: () => activateTab("marketing") },
@@ -334,6 +364,7 @@ function runCmdk(idx) {
 }
 
 document.getElementById("dashCmdkBtn")?.addEventListener("click", openCmdk);
+document.getElementById("dashExportBtn")?.addEventListener("click", exportDashboard);
 cmdkEls().input?.addEventListener("input", (e) => { cmdkActiveIdx = 0; renderCmdkList(e.target.value); });
 cmdkEls().input?.addEventListener("keydown", (e) => {
   if (e.key === "ArrowDown") { e.preventDefault(); cmdkActiveIdx = Math.min(cmdkActiveIdx + 1, cmdkMatches.length - 1); updateCmdkActive(); }
@@ -396,12 +427,25 @@ function inEditableTarget(e) {
 
 document.addEventListener("keydown", (e) => {
   const dashOpen = !dashboardPanel.classList.contains("hidden");
-  // ⌘K / Ctrl+K toggles the palette from anywhere on the dashboard.
+  const hubOpen = !resourcePanel.classList.contains("hidden");
+  // ⌘K / Ctrl+K: toggles the palette on the dashboard, focuses the search on
+  // the services hub.
   if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
+    if (dashOpen) {
+      e.preventDefault();
+      const open = !document.getElementById("dashCmdk")?.classList.contains("hidden");
+      open ? closeCmdk() : openCmdk();
+    } else if (hubOpen) {
+      const search = resourcePanel.querySelector("#resourceSearchInput");
+      if (search) { e.preventDefault(); search.focus(); search.select(); }
+    }
+    return;
+  }
+  // ⌘E / Ctrl+E exports the current dashboard aggregates.
+  if ((e.metaKey || e.ctrlKey) && (e.key === "e" || e.key === "E")) {
     if (!dashOpen) return;
     e.preventDefault();
-    const open = !document.getElementById("dashCmdk")?.classList.contains("hidden");
-    open ? closeCmdk() : openCmdk();
+    exportDashboard();
     return;
   }
   if (e.key === "Escape") {
@@ -413,6 +457,15 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "r" || e.key === "R") {
     e.preventDefault();
     refreshDashboard();
+  } else if (e.key === "1") {
+    e.preventDefault();
+    setDashRange("today");
+  } else if (e.key === "7") {
+    e.preventDefault();
+    setDashRange("7d");
+  } else if (e.key === "3") {
+    e.preventDefault();
+    setDashRange("30d");
   }
 });
 
@@ -1291,6 +1344,10 @@ function renderResources(resources) {
     if (emptySearch) emptySearch.classList.toggle("hidden", visible > 0);
   };
   searchInput.addEventListener("input", applyFilter);
+  resourcePanel.querySelector("#d2FilterBtn")?.addEventListener("click", () => {
+    searchInput.focus();
+    searchInput.select();
+  });
   resourcePanel.querySelectorAll(".d2-chip").forEach((c) => {
     c.addEventListener("click", () => {
       activeEnv = c.dataset.env;
