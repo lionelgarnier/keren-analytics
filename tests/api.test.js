@@ -281,3 +281,13 @@ test("dashboard: an assembler transform exception is isolated to its card", asyn
   assert.equal(cards.topPages?.error, undefined, "unrelated cards are unaffected");
   assert.equal(cards.geo?.error, undefined, "unrelated cards are unaffected");
 });
+
+test("self-telemetry: /telemetry.js serves a disabled stub in test mode", async () => {
+  const request = supertest(app);
+  const res = await request.get("/telemetry.js").expect(200);
+  // NODE_ENV=test => telemetry disabled => the browser bootstrap is a no-op
+  // stub, never the App Insights loader (no CDN script, no connection string).
+  assert.match(res.headers["content-type"], /javascript/);
+  assert.match(res.text, /disabled/);
+  assert.doesNotMatch(res.text, /js\.monitor\.azure\.com/);
+});

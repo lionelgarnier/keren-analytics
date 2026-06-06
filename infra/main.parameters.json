@@ -16,6 +16,7 @@
     },
     "backupEnabled": { "value": true },
     "backupIntervalHours": { "value": 1 },
-    "backupMaxSnapshots": { "value": 24 }
+    "backupMaxSnapshots": { "value": 24 },
+    "telemetryEnabled": { "value": true }
   }
 }

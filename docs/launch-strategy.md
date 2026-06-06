@@ -250,6 +250,23 @@ Three layers, in priority order:
 We instrument these from day one — see launch-readiness for the specific
 analytics setup.
 
+**Dogfooding — Keren watches its own launch.** The app now emits its own
+telemetry to a dedicated App Insights (`appi-keren-analytics`), so point a
+Keren dashboard at Keren itself and the launch shows up in its own views:
+
+- **Marketing view** — `pageViews`/`sessions`/`geo` from the browser SDK:
+  the demo-visitor count, the world map of where traffic comes from, top
+  pages, referrers (HN vs Reddit vs direct) — i.e. the *Acquisition* layer
+  above, live.
+- **Technical view** — server `requests`/`dependencies`/`exceptions`:
+  health and latency under launch-day load.
+- **Funnel** — `customEvents` (`tenant_connected` → `setup_scan_completed`
+  → `validation_accepted` → `dashboard_rendered`) give the *Engagement*
+  layer: how many visitors actually connect a tenant and reach a dashboard.
+  Tenant ids are hashed — no PII.
+
+Toggle with `TELEMETRY_ENABLED`; see `docs/maintainer-todo.md` § Self-telemetry.
+
 ## 9. Risks and mitigations
 
 | Risk                                          | Likelihood | Mitigation |

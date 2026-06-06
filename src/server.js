@@ -1,4 +1,7 @@
 import "dotenv/config";
+// Imported before Express so the App Insights Node SDK can patch the http
+// stack before any server module loads. See src/telemetry.js.
+import { trackEvent, flushTelemetry } from "./telemetry.js";
 import crypto from "node:crypto";
 import express from "express";
 import helmet from "helmet";
@@ -53,10 +56,21 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "https://cdn.jsdelivr.net", "https://unpkg.com"],
+        // js.monitor.azure.com: App Insights browser SDK (self-telemetry,
+        // stage B). The /telemetry.js bootstrap injects this CDN script.
+        scriptSrc: ["'self'", "https://cdn.jsdelivr.net", "https://unpkg.com", "https://js.monitor.azure.com"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com"],
         imgSrc: ["'self'", "data:", "https://*.tile.openstreetmap.org"],
-        connectSrc: ["'self'", "https://cdn.jsdelivr.net", "https://unpkg.com"],
+        // *.in.applicationinsights / *.livediagnostics: App Insights ingestion
+        // + Live Metrics endpoints the browser SDK posts telemetry to.
+        connectSrc: [
+          "'self'",
+          "https://cdn.jsdelivr.net",
+          "https://unpkg.com",
+          "https://js.monitor.azure.com",
+          "https://*.in.applicationinsights.azure.com",
+          "https://*.livediagnostics.monitor.azure.com",
+        ],
       },
     },
   })
@@ -143,6 +157,12 @@ app.use(apiLimiter);
 
 function isValidTenantId(tenantId) {
   return typeof tenantId === "string" && /^[a-zA-Z0-9_-]{1,128}$/.test(tenantId);
+}
+
+// Stable, non-reversible id for telemetry. We want to count distinct tenants
+// in the funnel without ever sending a raw tenant GUID or PII to App Insights.
+function hashForTelemetry(value) {
+  return crypto.createHash("sha256").update(String(value)).digest("hex").slice(0, 16);
 }
 
 function decodeJwtPayload(token) {
@@ -425,6 +445,7 @@ app.get("/auth/callback", async (req, res) => {
     req.session.userUpn = payload?.upn || payload?.preferred_username || null;
     ensureCsrfToken(req);
 
+    trackEvent("tenant_connected", { tenant: hashForTelemetry(req.session.tenantId) });
     res.redirect("/");
   } catch (err) {
     console.error("Token exchange error:", err.message);
@@ -624,6 +645,7 @@ app.get("/dashboard/overview", ensureAuth, async (req, res) => {
         send({ type: "error", ...result });
       } else {
         const readinessScore = computeReadinessScore(result.readinessReport);
+        trackEvent("dashboard_rendered", { tenant: hashForTelemetry(tenantId), range: rangeKey, score: readinessScore?.score, streamed: true });
         send({ type: "done", dashboard: result.dashboard, readiness: result.readinessReport, readinessScore, schemaProfile: result.schemaProfile, mapping: result.mapping, recommendations: buildRecommendations(result.readinessReport) });
       }
     } catch (error) {
@@ -651,6 +673,7 @@ app.get("/dashboard/overview", ensureAuth, async (req, res) => {
       return res.status(errorStatusCode(result)).json(result);
     }
     const readinessScore = computeReadinessScore(result.readinessReport);
+    trackEvent("dashboard_rendered", { tenant: hashForTelemetry(tenantId), range: rangeKey, score: readinessScore?.score });
     res.json({
       dashboard: result.dashboard,
       readiness: result.readinessReport,
@@ -822,6 +845,10 @@ app.post("/api/setup/scan", ensureAuth, verifyCsrf, async (req, res) => {
       return res.status(403).json({ error: "NO_ACCESS", message: result.message });
     }
     res.set("Cache-Control", "no-store");
+    trackEvent("setup_scan_completed", {
+      tenant: hashForTelemetry(tenantId),
+      overallStatus: result.readinessReport?.overallStatus,
+    });
     res.json({
       ok: true,
       scanId: result.scanId || null,
@@ -883,6 +910,11 @@ app.get("/api/setup/scan/stream", ensureAuth, async (req, res) => {
     } else if (result.error === "NO_ACCESS") {
       send("fail", { error: "NO_ACCESS", message: result.message });
     } else {
+      trackEvent("setup_scan_completed", {
+        tenant: hashForTelemetry(tenantId),
+        overallStatus: result.readinessReport?.overallStatus,
+        streamed: true,
+      });
       send("done", {
         ok: true,
         scanId: result.scanId || null,
@@ -1050,6 +1082,7 @@ app.post("/api/setup/validate", ensureAuth, verifyCsrf, (req, res) => {
     decision,
     overrides: cleanedOverrides,
   });
+  trackEvent("validation_accepted", { tenant: hashForTelemetry(tenantId), decision });
   res.json({ ok: true, validation: persisted });
 });
 
@@ -1218,6 +1251,51 @@ app.get("/privacy", (_req, res) => {
   res.sendFile(path.resolve(__dirname, "..", "public", "privacy.html"));
 });
 
+/* ========== Self-telemetry: browser bootstrap (stage B) ========== */
+// Served as JS from 'self' (CSP-friendly, no inline script) and rendered
+// per-request so the connection string is injected server-side and the
+// authenticated-user id is a *hashed* tenant id — never the raw tenant GUID
+// or any PII (privacy invariant). The browser SDK feeds pageViews/sessions/
+// geo/browserTimings, which power the Marketing + Readiness views when a
+// Keren dashboard is pointed at Keren's own App Insights resource.
+app.get("/telemetry.js", (req, res) => {
+  res.set("Content-Type", "application/javascript; charset=utf-8");
+  res.set("Cache-Control", "no-store");
+  if (!config.telemetry.enabled || !config.telemetry.browserConnectionString) {
+    return res.send("/* keren self-telemetry disabled */\n");
+  }
+  const cs = JSON.stringify(config.telemetry.browserConnectionString);
+  const tenantId = req.session?.tenantId;
+  const authUser = tenantId ? JSON.stringify(hashForTelemetry(tenantId)) : "null";
+  res.send(
+    `(function () {
+  var cs = ${cs};
+  var authUser = ${authUser};
+  var s = document.createElement("script");
+  s.src = "https://js.monitor.azure.com/scripts/b/ai.3.gbl.min.js";
+  s.crossOrigin = "anonymous";
+  s.onload = function () {
+    try {
+      var ai = new Microsoft.ApplicationInsights.ApplicationInsights({
+        config: {
+          connectionString: cs,
+          enableAutoRouteTracking: true,
+          autoTrackPageVisitTime: true,
+          disableFetchTracking: false
+        }
+      });
+      ai.loadAppInsights();
+      if (authUser) { ai.setAuthenticatedUserContext(authUser); }
+      ai.trackPageView();
+      window.appInsights = ai;
+    } catch (e) { /* telemetry is best-effort */ }
+  };
+  document.head.appendChild(s);
+})();
+`
+  );
+});
+
 /* ========== SPA catch-all (History API routing) ========== */
 const API_ROUTE = /^\/(auth|azure|dashboard|readiness|recommendations|prompts|docs|api|setup)(\/|$)/;
 app.get("/{*splat}", (req, res, next) => {
@@ -1276,6 +1354,7 @@ if (process.env.NODE_ENV !== "test") {
       } catch (err) {
         console.error("[backup] final snapshot failed:", err?.message || err);
       }
+      await flushTelemetry();
       server.close(() => process.exit(0));
     };
     process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
