@@ -1,0 +1,18 @@
+// Per-service (cloud_RoleName) request health for the Backend view — surfaces
+// which microservice / role is hot or failing. Server (5xx) errors only, to
+// stay consistent with the Technical performance card.
+let start={{timeStart}};
+let end={{timeEnd}};
+requests
+| where timestamp between (start..end)
+| extend role = iif(isempty(cloud_RoleName), "(default)", cloud_RoleName)
+| extend statusCode = toint(resultCode)
+| summarize
+    count = count(),
+    avgDuration = avg(duration),
+    p95 = percentile(duration, 95),
+    serverErrors = countif(success == false and (isnull(statusCode) or statusCode >= 500))
+  by role
+| extend errorRate = iif(count == 0, 0.0, todouble(serverErrors) / todouble(count))
+| project role, count, avgDuration, p95, errorRate
+| top 12 by count desc

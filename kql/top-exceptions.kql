@@ -1,0 +1,19 @@
+// Top server-side exceptions for the Backend reliability view.
+//
+// PII boundary: only the exception *type*, the App Insights *problemId*
+// (type + failing method, never user data) and aggregate counts leave the
+// server. Raw exception messages / stack traces are deliberately NOT
+// projected — they routinely carry user input, emails, tokens.
+let start={{timeStart}};
+let end={{timeEnd}};
+exceptions
+| where timestamp between (start..end)
+| extend exType = iif(isempty(type), "Unknown", type)
+| extend exProblem = iif(isempty(problemId), exType, problemId)
+| summarize count = count(),
+          affectedOperations = dcount(operation_Name),
+          affectedUsers = dcount(user_Id),
+          lastSeen = max(timestamp)
+  by exType, exProblem
+| project type = exType, problemId = exProblem, count, affectedOperations, affectedUsers, lastSeen
+| top 15 by count desc

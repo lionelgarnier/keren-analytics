@@ -624,6 +624,7 @@
           <div class="dash-subtabs" role="tablist">
             <button class="dash-subtab is-active" data-tab="marketing" role="tab" aria-selected="true">Marketing</button>
             <button class="dash-subtab" data-tab="technical" role="tab" aria-selected="false">Technical</button>
+            <button class="dash-subtab" data-tab="backend" role="tab" aria-selected="false">Backend</button>
             <button class="dash-subtab" data-tab="readiness" role="tab" aria-selected="false">
               Readiness
               <span id="scoreMiniBadge" class="dash-subtab-num hidden"></span>
@@ -1012,6 +1013,137 @@
             <div id="sessionReplays" class="session-replays"></div>
             <div id="sessionReplaysEmpty" class="dash-panel-empty hidden">
               <p>No session data available.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==================== BACKEND TAB ==================== -->
+        <div id="tab-backend" class="tab-content">
+
+          <!-- Backend KPIs: dependencies + exceptions -->
+          <div class="dash-kpis dash-kpis--desktop" data-card="backendKpis">
+            <div class="dash-kpi-a">
+              <span class="dash-kpi-a-label">Dependency Calls</span>
+              <div class="dash-kpi-a-row">
+                <span id="kpiDepCalls" class="dash-kpi-a-value">-</span>
+              </div>
+              <button id="kpiDepCallsHint" type="button" class="kpi-hint hidden"></button>
+            </div>
+            <div class="dash-kpi-a" id="kpiDepFailCard">
+              <span class="dash-kpi-a-label">Dependency Fail Rate</span>
+              <div class="dash-kpi-a-row">
+                <span id="kpiDepFail" class="dash-kpi-a-value">-</span>
+              </div>
+              <span id="kpiDepTargets" class="dash-kpi-a-compare"></span>
+            </div>
+            <div class="dash-kpi-a">
+              <span class="dash-kpi-a-label">Dependency P95</span>
+              <div class="dash-kpi-a-row">
+                <span id="kpiDepP95" class="dash-kpi-a-value">-</span>
+                <span class="dash-kpi-a-unit">ms</span>
+              </div>
+            </div>
+            <div class="dash-kpi-a" id="kpiExceptionsCard">
+              <span class="dash-kpi-a-label">Exceptions</span>
+              <div class="dash-kpi-a-row">
+                <span id="kpiExceptions" class="dash-kpi-a-value">-</span>
+              </div>
+              <span id="kpiExceptionTypes" class="dash-kpi-a-compare"></span>
+              <button id="kpiExceptionsHint" type="button" class="kpi-hint hidden"></button>
+            </div>
+          </div>
+
+          <!-- Slow dependencies + dependency type mix -->
+          <div class="dash-grid-2 dash-grid-2--desktop" data-card="dependencies">
+            <div class="dash-panel">
+              <div class="dash-panel-head">
+                <h3 class="dash-panel-title">Slow Dependencies</h3>
+                <span id="slowDepsCount" class="badge-count"></span>
+              </div>
+              <p class="text-muted" style="margin-top:0">Outbound calls (DB, HTTP, queues, cache) ranked by p95 latency.</p>
+              <table class="data-table dash-table sortable" id="slowDepsTable">
+                <thead>
+                  <tr>
+                    <th data-sort="string">Target</th>
+                    <th data-sort="string">Type</th>
+                    <th data-sort="number">P50</th>
+                    <th data-sort="number">P95</th>
+                    <th data-sort="number">Calls</th>
+                    <th data-sort="number">Fail%</th>
+                  </tr>
+                </thead>
+                <tbody id="slowDepsBody"></tbody>
+              </table>
+              <div id="slowDepsEmpty" class="dash-panel-empty hidden">
+                <p>No dependency data. Enable App Insights dependency tracking.</p>
+              </div>
+            </div>
+            <div class="dash-panel">
+              <div class="dash-panel-head"><h3 class="dash-panel-title">Dependency Types</h3></div>
+              <div class="chart-container chart-medium">
+                <canvas id="dependencyTypesChart"></canvas>
+              </div>
+              <div id="dependencyTypesEmpty" class="dash-panel-empty hidden">
+                <p>No dependency telemetry.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Top exceptions + status code mix -->
+          <div class="dash-grid-2 dash-grid-2--desktop">
+            <div class="dash-panel" data-card="exceptions">
+              <div class="dash-panel-head">
+                <h3 class="dash-panel-title">Top Exceptions</h3>
+                <span id="exceptionsCount" class="badge-count"></span>
+              </div>
+              <p class="text-muted" style="margin-top:0">Server-side errors by type. Messages and stack traces stay on your side — only types and counts are shown.</p>
+              <table class="data-table dash-table sortable" id="exceptionsTable">
+                <thead>
+                  <tr>
+                    <th data-sort="string">Type</th>
+                    <th data-sort="number">Count</th>
+                    <th data-sort="number">Ops</th>
+                    <th data-sort="number">Users</th>
+                  </tr>
+                </thead>
+                <tbody id="exceptionsBody"></tbody>
+              </table>
+              <div id="exceptionsEmpty" class="dash-panel-empty hidden">
+                <p>No exception data. Wire trackException() or auto-collection.</p>
+              </div>
+            </div>
+            <div class="dash-panel" data-card="statusCodes">
+              <div class="dash-panel-head"><h3 class="dash-panel-title">Response Status Codes</h3></div>
+              <div class="chart-container chart-medium">
+                <canvas id="statusCodesChart"></canvas>
+              </div>
+              <div id="statusCodesEmpty" class="dash-panel-empty hidden">
+                <p>No request data.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Per-service health -->
+          <div class="dash-panel" data-card="serviceHealth">
+            <div class="dash-panel-head">
+              <h3 class="dash-panel-title">Service Health</h3>
+              <span id="serviceHealthCount" class="badge-count"></span>
+            </div>
+            <p class="text-muted" style="margin-top:0">Request volume, latency and error rate per service (cloud_RoleName).</p>
+            <table class="data-table dash-table sortable" id="serviceHealthTable">
+              <thead>
+                <tr>
+                  <th data-sort="string">Service</th>
+                  <th data-sort="number">Requests</th>
+                  <th data-sort="number">Avg</th>
+                  <th data-sort="number">P95</th>
+                  <th data-sort="number">Err%</th>
+                </tr>
+              </thead>
+              <tbody id="serviceHealthBody"></tbody>
+            </table>
+            <div id="serviceHealthEmpty" class="dash-panel-empty hidden">
+              <p>No request data. Enable backend request tracking.</p>
             </div>
           </div>
         </div>
