@@ -116,6 +116,12 @@
     const ctaHtml = cta
       ? `<button type="button" class="d2-cmdbar-action${cta.accent ? " d2-cmdbar-action--accent" : ""}" id="${cta.id}"${cta.disabled ? " disabled" : ""}>${cta.label}</button>`
       : "";
+    // The wizard is linear — there's no list to navigate or filter — so the
+    // only real shortcut is ↵ to advance. Only advertise it when the step has
+    // an enabled CTA (handled live by the keydown listener in init()).
+    const hint = cta && !cta.disabled
+      ? `<span class="d2-cmdbar-cell"><span class="d2-cmdbar-kbd">↵</span>continue</span>`
+      : "";
     return `
       <div class="d2-cmdbar-l">
         <span class="d2-cmdbar-status"><span class="d2-cmdbar-status-dot"></span>synced · ${new Date().toLocaleTimeString([], { hour12: false })}</span>
@@ -123,9 +129,7 @@
         <span id="setupCmdScope">${scope}</span>
       </div>
       <div class="d2-cmdbar-r">
-        <span class="d2-cmdbar-cell"><span class="d2-cmdbar-kbd">↑</span><span class="d2-cmdbar-kbd">↓</span>navigate</span>
-        <span class="d2-cmdbar-cell"><span class="d2-cmdbar-kbd">↵</span>open</span>
-        <span class="d2-cmdbar-cell"><span class="d2-cmdbar-kbd">⌘K</span>filter</span>
+        ${hint}
         ${ctaHtml}
       </div>`;
   }
@@ -977,6 +981,21 @@
     });
     $("validateAcceptAll").addEventListener("click", () => submitValidation("accept_all"));
     $("validateSaveOverrides").addEventListener("click", () => submitValidation("override"));
+
+    // ↵ advances the wizard by clicking the active step's command-bar CTA
+    // (Continue / Build my dashboard / Save mapping). Disabled CTAs (the scan
+    // still running) are skipped. Ignored while the user is typing or focused
+    // on another control, so it never steals Enter from the mapping inputs or
+    // the "Use prompt" buttons.
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target;
+      const tag = t && t.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" ||
+          tag === "BUTTON" || tag === "A" || (t && t.isContentEditable)) return;
+      const cta = document.querySelector("#setupCmdbar .d2-cmdbar-action:not([disabled])");
+      if (cta) { e.preventDefault(); cta.click(); }
+    });
 
     const themeBtn = $("themeToggle");
     if (themeBtn) {
