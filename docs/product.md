@@ -125,6 +125,26 @@ Tables:
 Session analysis:
 - Session timelines (reconstructed user journeys from page view events)
 
+### Backend View
+Server-side / APM telemetry beyond request latency, mined from the
+`dependencies`, `exceptions` and `cloud_RoleName` signals.
+
+KPIs:
+- Dependency calls and distinct targets
+- Dependency failure rate
+- Dependency P95 latency
+- Exception count (and distinct exception types)
+
+Charts:
+- Dependency type mix (SQL/HTTP/Redis/blob/queue doughnut)
+- Response status-code distribution (2xx/3xx/4xx/5xx)
+
+Tables:
+- Slow dependencies (target + type, p50/p95, calls, failure rate)
+- Top exceptions (type, count, affected operations and users — **no raw
+  messages or stack traces**, only types and aggregate counts)
+- Service health (per `cloud_RoleName`: requests, avg/p95 latency, 5xx rate)
+
 ## User Journey
 1. Connect Azure tenant (OAuth SSO via Entra ID).
 2. Discover App Insights resources and linked workspaces.
@@ -133,8 +153,8 @@ Session analysis:
    hub and go straight to setup.
 4. **AI setup wizard** (per resource, see below) — scan → AI findings →
    one-click build.
-5. Show the overview dashboard (Marketing / Technical / Readiness) reusing
-   the validated config snapshot — no re-scan or LLM call per load.
+5. Show the overview dashboard (Marketing / Technical / Backend / Readiness)
+   reusing the validated config snapshot — no re-scan or LLM call per load.
 6. Display recommendations with actionable, copy-paste prompts.
 
 ## AI Setup Wizard
@@ -165,17 +185,19 @@ service redeploys.
 
 ## Readiness Score
 
-The system probes telemetry and produces a gamified readiness score (0-100):
+The system probes telemetry and produces a gamified readiness score (0-120):
 
 | Signal | Points | Status |
 |--------|--------|--------|
 | Traffic (pageViews) | 20 | Required |
 | Sessions | 15 | Required |
-| Backend performance | 15 | Required |
-| Custom events | 15 | Recommended |
-| Geo enrichment | 10 | Optional |
-| Browser timings | 10 | Optional |
+| Backend performance (requests) | 15 | Required |
 | Custom user IDs | 15 | Recommended |
+| Device & browser | 10 | Recommended |
+| Geo enrichment | 10 | Optional |
+| Browser timings | 15 | Optional |
+| Dependencies | 10 | Recommended |
+| Exceptions | 10 | Recommended |
 
 The score drives engagement: users are motivated to improve their telemetry
 coverage, which in turn makes the dashboard more valuable.

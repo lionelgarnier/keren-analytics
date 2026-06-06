@@ -6,11 +6,11 @@ deterministic pipeline that discovers resources, checks readiness, builds mappin
 and runs KQL templates to render the Overview dashboard.
 
 Key components:
-- Frontend: static HTML/CSS/JS in `public/` (tab-based: Marketing/Technical/Readiness)
+- Frontend: static HTML/CSS/JS in `public/` (tab-based: Marketing/Technical/Backend/Readiness)
 - API server: Express app in `src/server.js`
 - Orchestrator: `src/core/orchestrator.js`
 - Dashboard builder: `src/core/dashboard.js`
-- Readiness score: `src/core/readinessScore.js` (gamified 0-100 score)
+- Readiness score: `src/core/readinessScore.js` (gamified 0-120 score)
 - Prompt generator: `src/core/promptGenerator.js` (LLM-ready prompts)
 - Recommendations: `src/core/recommendations.js`
 - Azure clients: `src/providers/azure/mockClient.js` and `src/providers/azure/realClient.js`
@@ -69,7 +69,7 @@ All queries are stored as templates in `kql/*.kql` and rendered with safe,
 whitelisted parameters:
 
 ### Discovery and profiling
-- readiness-probes.kql — signal availability checks (pageViews, requests, geo, browserTimings, etc.)
+- readiness-probes.kql — signal availability checks (pageViews, requests, geo, browserTimings, dependencies, exceptions, cloud roles, etc.)
 - schema-tables.kql — available tables and row counts
 - schema-custom-dimensions.kql — custom dimension key discovery
 
@@ -92,6 +92,15 @@ whitelisted parameters:
 - slow-endpoints.kql — top 10 slowest endpoints by p95
 - browser-timings.kql — frontend network/send/receive/processing durations
 - endpoint-detail.kql — per-endpoint performance over time (drill-down)
+
+### Backend / APM queries
+- dependency-overview.kql — outbound call volume, failure rate and p95 latency
+- slow-dependencies.kql — slowest dependencies by target + type (DB, HTTP, queue, cache)
+- dependency-types.kql — dependency call mix by type (SQL/HTTP/Redis/blob/queue)
+- top-exceptions.kql — top server exceptions by type + problemId (PII boundary:
+  no raw messages or stack traces leave the workspace, only types + counts)
+- service-health.kql — per-service (cloud_RoleName) requests, latency and 5xx rate
+- status-codes.kql — HTTP response-class distribution (2xx/3xx/4xx/5xx)
 
 ### Tech distribution
 - tech-browser.kql — top 5 browsers
