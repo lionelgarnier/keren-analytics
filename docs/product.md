@@ -213,6 +213,31 @@ When signals are missing, the system generates:
 This creates a virtuous cycle: better telemetry leads to a richer dashboard,
 which increases perceived value and drives continued improvement.
 
+## Telemetry Contract (instrument-first)
+
+Smart Recommendations help *after* the fact — they tell you what your existing
+telemetry is missing. The **Telemetry Contract** is the mirror image: a public,
+versioned spec a coding agent (Cursor, Copilot, Claude Code) can read *before*
+or *during* instrumentation, so a new app renders the full dashboard from its
+very first scan — no manual mapping step.
+
+It answers, in machine- and LLM-readable form:
+- **Which signals to emit** and what each is worth toward the readiness score.
+- **How to name custom dimensions** so Keren auto-detects them (e.g. call your
+  user id `userId` and it maps with zero setup).
+- **Config best practices** — pseudonymize user ids, never send PII, exclude
+  health-check endpoints, flush on shutdown, set a per-service role name.
+- **A ready-to-paste prompt per signal**, the same ones the in-app
+  recommendations use.
+
+It's available with no sign-in at `https://keren.run/.well-known/telemetry-contract.json`
+(machine-readable) and `https://keren.run/llms.txt` (readable brief). Nothing
+in it is your data — only the contract and the scoring rules.
+
+Roadmap: this contract is the foundation for an MCP server that lets agents
+query it interactively and, eventually, validate a proposed instrumentation
+plan and confirm the live result.
+
 ## Data Sources
 
 Primary:

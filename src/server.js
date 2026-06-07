@@ -28,6 +28,7 @@ import { runWithToken } from "./providers/azure/tokenStore.js";
 import { createRateLimiter } from "./core/rateLimit.js";
 import { startBackupScheduler, restoreLatestSnapshot } from "./core/backupScheduler.js";
 import { createAzureFoundryProvider } from "./ai/azureFoundry.js";
+import { buildTelemetryContract, renderContractMarkdown } from "./core/telemetryContract.js";
 
 const app = express();
 const azureClient = getAzureClient();
@@ -104,6 +105,23 @@ app.use(
  *   - JS/CSS: short max-age + revalidate so a deploy isn't masked by a
  *     stale bundle while still saving most re-fetches.
  */
+/* ========== Public telemetry contract (ADR 0006) ==========
+ * Served dynamically from src/core/telemetryContract.js so the live spec is
+ * always derived from the current scorer/mapping/prompts — the committed
+ * snapshots under public/ are just a discoverable copy. Registered before
+ * express.static so the dynamic handler is authoritative, and before the rate
+ * limiters since these are public, cacheable discovery endpoints with no
+ * tenant data. */
+app.get("/.well-known/telemetry-contract.json", (_req, res) => {
+  res.set("Cache-Control", "public, max-age=3600");
+  res.json(buildTelemetryContract());
+});
+app.get("/llms.txt", (_req, res) => {
+  res.set("Content-Type", "text/plain; charset=utf-8");
+  res.set("Cache-Control", "public, max-age=3600");
+  res.send(renderContractMarkdown());
+});
+
 const MEDIA_EXTENSIONS = new Set([
   ".webp", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".woff", ".woff2",
 ]);
