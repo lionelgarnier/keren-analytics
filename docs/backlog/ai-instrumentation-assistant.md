@@ -1,5 +1,15 @@
 # AI Instrumentation Assistant
 
+> **Phase 0 shipped (2026-06-07, ADR 0006):** the *instrument-first* foundation
+> of this surface now exists as a public, versioned **telemetry contract**
+> (`src/core/telemetryContract.js`, served at `/.well-known/telemetry-contract.json`
+> + `/llms.txt`). It derives the signals, custom-dimension naming, config best
+> practices and per-signal prompts from the same modules that drive the product,
+> so coding agents get "billes" to instrument correctly before the first scan —
+> with no LLM call. The MCP delivery channel and the LLM-driven, business-event
+> recommendations described below remain the post-launch roadmap (Phases 1-3 in
+> ADR 0006). Read ADR 0006 before extending either.
+
 ## Summary
 
 Turn the existing prompt generator into a continuous, contextual coach that

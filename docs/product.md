@@ -125,6 +125,26 @@ Tables:
 Session analysis:
 - Session timelines (reconstructed user journeys from page view events)
 
+### Backend View
+Server-side / APM telemetry beyond request latency, mined from the
+`dependencies`, `exceptions` and `cloud_RoleName` signals.
+
+KPIs:
+- Dependency calls and distinct targets
+- Dependency failure rate
+- Dependency P95 latency
+- Exception count (and distinct exception types)
+
+Charts:
+- Dependency type mix (SQL/HTTP/Redis/blob/queue doughnut)
+- Response status-code distribution (2xx/3xx/4xx/5xx)
+
+Tables:
+- Slow dependencies (target + type, p50/p95, calls, failure rate)
+- Top exceptions (type, count, affected operations and users — **no raw
+  messages or stack traces**, only types and aggregate counts)
+- Service health (per `cloud_RoleName`: requests, avg/p95 latency, 5xx rate)
+
 ## User Journey
 1. Connect Azure tenant (OAuth SSO via Entra ID).
 2. Discover App Insights resources and linked workspaces.
@@ -133,8 +153,8 @@ Session analysis:
    hub and go straight to setup.
 4. **AI setup wizard** (per resource, see below) — scan → AI findings →
    one-click build.
-5. Show the overview dashboard (Marketing / Technical / Readiness) reusing
-   the validated config snapshot — no re-scan or LLM call per load.
+5. Show the overview dashboard (Marketing / Technical / Backend / Readiness)
+   reusing the validated config snapshot — no re-scan or LLM call per load.
 6. Display recommendations with actionable, copy-paste prompts.
 
 ## AI Setup Wizard
@@ -165,17 +185,19 @@ service redeploys.
 
 ## Readiness Score
 
-The system probes telemetry and produces a gamified readiness score (0-100):
+The system probes telemetry and produces a gamified readiness score (0-120):
 
 | Signal | Points | Status |
 |--------|--------|--------|
 | Traffic (pageViews) | 20 | Required |
 | Sessions | 15 | Required |
-| Backend performance | 15 | Required |
-| Custom events | 15 | Recommended |
-| Geo enrichment | 10 | Optional |
-| Browser timings | 10 | Optional |
+| Backend performance (requests) | 15 | Required |
 | Custom user IDs | 15 | Recommended |
+| Device & browser | 10 | Recommended |
+| Geo enrichment | 10 | Optional |
+| Browser timings | 15 | Optional |
+| Dependencies | 10 | Recommended |
+| Exceptions | 10 | Recommended |
 
 The score drives engagement: users are motivated to improve their telemetry
 coverage, which in turn makes the dashboard more valuable.
@@ -190,6 +212,31 @@ When signals are missing, the system generates:
 
 This creates a virtuous cycle: better telemetry leads to a richer dashboard,
 which increases perceived value and drives continued improvement.
+
+## Telemetry Contract (instrument-first)
+
+Smart Recommendations help *after* the fact — they tell you what your existing
+telemetry is missing. The **Telemetry Contract** is the mirror image: a public,
+versioned spec a coding agent (Cursor, Copilot, Claude Code) can read *before*
+or *during* instrumentation, so a new app renders the full dashboard from its
+very first scan — no manual mapping step.
+
+It answers, in machine- and LLM-readable form:
+- **Which signals to emit** and what each is worth toward the readiness score.
+- **How to name custom dimensions** so Keren auto-detects them (e.g. call your
+  user id `userId` and it maps with zero setup).
+- **Config best practices** — pseudonymize user ids, never send PII, exclude
+  health-check endpoints, flush on shutdown, set a per-service role name.
+- **A ready-to-paste prompt per signal**, the same ones the in-app
+  recommendations use.
+
+It's available with no sign-in at `https://keren.run/.well-known/telemetry-contract.json`
+(machine-readable) and `https://keren.run/llms.txt` (readable brief). Nothing
+in it is your data — only the contract and the scoring rules.
+
+Roadmap: this contract is the foundation for an MCP server that lets agents
+query it interactively and, eventually, validate a proposed instrumentation
+plan and confirm the live result.
 
 ## Data Sources
 

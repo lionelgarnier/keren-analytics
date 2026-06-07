@@ -10,7 +10,7 @@
  * assume nothing exists, which is almost never the case in real projects.
  */
 
-const STACK_HINTS = {
+export const STACK_HINTS = {
   react: { name: "React (SPA)", sdk: "@microsoft/applicationinsights-react-js" },
   angular: { name: "Angular (SPA)", sdk: "@microsoft/applicationinsights-web" },
   vue: { name: "Vue.js (SPA)", sdk: "@microsoft/applicationinsights-web" },
@@ -42,7 +42,7 @@ function detectStack(schemaProfile) {
   return "generic";
 }
 
-const PROMPT_TEMPLATES = {
+export const PROMPT_TEMPLATES = {
   pageViews: (stack, resource) => `My ${stack.name} application is connected to Azure Application Insights (resource: ${resource || "[your-resource-name]"}), but **no pageView telemetry is reaching Application Insights**.
 
 ## What I need
@@ -207,7 +207,7 @@ export function generatePrompts({ readinessReport, schemaProfile, resourceName }
   return prompts;
 }
 
-function signalLabel(signal) {
+export function signalLabel(signal) {
   const labels = {
     pageViews: "Page View Tracking",
     requests: "Backend Request Tracking",

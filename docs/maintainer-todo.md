@@ -50,6 +50,38 @@ links to the agent-side work that depends on it.
   `ca-keren-analytics` ; secrets `azure-client-secret` + `session-secret`
   présents ; OAuth real mode live (keren.run sert en HTTP 200).
 
+### Self-telemetry — Application Insights (dogfooding)
+- **Why**: Keren now emits its own telemetry so a Keren dashboard can be
+  pointed at Keren itself to watch the launch (Marketing map + funnel,
+  Technical health). Server SDK (`applicationinsights`, stage A) +
+  browser SDK (page-served `/telemetry.js`, stage B). Provisioned by
+  `infra/main.bicep` (`appi-keren-analytics`, workspace-based on the
+  existing Log Analytics).
+- **Important — local auth stays enabled**: `DisableLocalAuth: false` on
+  the App Insights component is **deliberate**. The browser SDK
+  authenticates with the connection string's ingestion key, which is
+  **write-only by design** (it can post telemetry, never read it). Do not
+  flip this to Entra-only or stage B (pageViews/sessions/geo — i.e. the
+  whole Marketing + Readiness surface, 85/100 readiness points) goes dark.
+- **CSP**: the browser SDK is loaded from the `js.monitor.azure.com` CDN
+  (per the maintainer's choice). This adds a CDN origin to `scriptSrc` /
+  `connectSrc` — same supply-chain class as the existing jsdelivr/unpkg
+  origins (tracked under CLAUDE.md known gaps). Self-host under
+  `public/vendor/` if/when the supply-chain gap is closed.
+- **Kill-switch**: set Bicep param `telemetryEnabled=false` (or env
+  `TELEMETRY_ENABLED` ≠ `true`) to disable both stages — `/telemetry.js`
+  then serves a no-op stub and the server SDK never loads.
+- **To use it**: in the Keren UI, connect to the subscription holding
+  `appi-keren-analytics` and select it as the App Insights resource — you
+  get Keren's own Marketing/Technical/Readiness views. Funnel events land
+  in `customEvents`: `tenant_connected`, `setup_scan_completed`,
+  `validation_accepted`, `dashboard_rendered` (tenant ids are SHA-256
+  hashed — no PII).
+- **Status**: code + infra shipped on branch
+  `claude/app-insights-telemetry-check`. **Maintainer action**: redeploy
+  `infra/main.bicep` so `appi-keren-analytics` is provisioned and the
+  connection string is wired into the Container App.
+
 ### Demo deploy target
 - **Why**: the Show HN / Reddit launch needs a clickable URL.
 - **When**: launch eve.
@@ -152,6 +184,22 @@ links to the agent-side work that depends on it.
   preserve `AZURE_REDIRECT_URI=https://keren.run/auth/callback`
   and the custom-domain binding. A what-if dry-run before the next deploy
   is still good hygiene.
+
+---
+
+### `AZURE_FOUNDRY_REGION` (setup AI disclosure)
+- **What**: the human-readable region shown to users in the setup
+  "Configure with AI" menu + data popover ("where your sanitized metadata
+  is processed"). Added 2026-06-05 with the per-resource AI opt-out work.
+- **Why manual**: the Foundry **project** endpoint hostname
+  (`<project>.services.ai.azure.com`) does **not** encode the region, so it
+  can't be derived in code. The disclosure would otherwise show a default.
+- **When**: only if the Foundry deployment is **not** France Central. The
+  code default is `France Central (UE)` (matches ADR 0004), so prod is
+  already correct and **no action is needed unless you move regions**.
+- **How**: set the `AZURE_FOUNDRY_REGION` env var on the Container App (or in
+  Key Vault wiring) to the actual region label, e.g. `West Europe (UE)`.
+  Not in Bicep yet — set it alongside the other `AZURE_FOUNDRY_*` vars.
 
 ---
 

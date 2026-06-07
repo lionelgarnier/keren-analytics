@@ -1,3 +1,4 @@
+// Top page paths by view count and share for the Marketing pages view
 let start={{timeStart}};
 let end={{timeEnd}};
 let total = toscalar(

@@ -1,3 +1,4 @@
+// Prior-period visitor, session, and page-view totals for KPI delta comparisons
 let start={{timeStart}};
 let end={{timeEnd}};
 {{tableName}}

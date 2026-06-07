@@ -43,6 +43,23 @@ test("landing page (A5): tagline, comparison table, FAQ, footer present", async 
   assert.match(body, /garniel6@gmail\.com/);
 });
 
+test("static assets carry type-appropriate Cache-Control (HN-spike hardening)", async () => {
+  const request = supertest(app);
+
+  // Stable media: cached hard so a traffic spike serves them from the
+  // browser cache instead of re-hitting the single replica.
+  const img = await request.get("/og-image.png").expect(200);
+  assert.equal(img.headers["cache-control"], "public, max-age=604800");
+
+  // JS/CSS: short cache + revalidate (filenames aren't content-hashed).
+  const css = await request.get("/styles.css").expect(200);
+  assert.equal(css.headers["cache-control"], "public, max-age=300, must-revalidate");
+
+  // HTML shell: must revalidate so a deploy lands immediately.
+  const html = await request.get("/").expect(200);
+  assert.equal(html.headers["cache-control"], "no-cache");
+});
+
 test("healthz returns liveness status and mode", async () => {
   const request = supertest(app);
   const res = await request.get("/healthz").expect(200);
@@ -80,6 +97,15 @@ test("mock auth and dashboard overview flow", async () => {
   assert.ok(Number.isFinite(kpis.errorRate), "kpis.errorRate is numeric");
   assert.ok(Number.isFinite(kpis.clientErrorRate), "kpis.clientErrorRate is numeric");
 
+  // Backend / APM expansion — mock telemetry carries dependencies + exceptions.
+  const backend = dashboard.body.dashboard.backend;
+  assert.ok(backend, "dashboard payload should include a backend block");
+  assert.ok(backend.dependencyCalls > 0, "backend dependency calls populated");
+  assert.ok(dashboard.body.dashboard.tables.slowDependencies.length > 0, "slowDependencies populated");
+  assert.ok(dashboard.body.dashboard.tables.topExceptions.length > 0, "topExceptions populated");
+  assert.equal(dashboard.body.dashboard.availability.hasDependencies, true);
+  assert.equal(dashboard.body.dashboard.availability.hasExceptions, true);
+
   // Period-over-period comparison (B4) — 7d range has prev7d as predecessor.
   const cmp = dashboard.body.dashboard.kpis.comparison;
   assert.ok(cmp, "dashboard.kpis.comparison should be present for 7d range");
@@ -114,7 +140,10 @@ test("dashboard overview stream emits per-card messages then one done", async ()
 
   // Every card name resolves; mock mode never fails a query.
   const cardNames = new Set(cards.map((c) => c.name));
-  for (const expected of ["marketingKpis", "technicalKpis", "dailyTrend", "topPages", "geo"]) {
+  for (const expected of [
+    "marketingKpis", "technicalKpis", "dailyTrend", "topPages", "geo",
+    "backendKpis", "dependencies", "exceptions", "serviceHealth", "statusCodes",
+  ]) {
     assert.ok(cardNames.has(expected), `expected a '${expected}' card`);
   }
   assert.ok(!cards.some((c) => c.data && c.data.error), "no card should carry an error in mock mode");
@@ -271,4 +300,36 @@ test("dashboard: an assembler transform exception is isolated to its card", asyn
   assert.equal(cards.userFlow?.error, true, "userFlow card is flagged after its assembler threw");
   assert.equal(cards.topPages?.error, undefined, "unrelated cards are unaffected");
   assert.equal(cards.geo?.error, undefined, "unrelated cards are unaffected");
+});
+
+test("self-telemetry: /telemetry.js serves a disabled stub in test mode", async () => {
+  const request = supertest(app);
+  const res = await request.get("/telemetry.js").expect(200);
+  // NODE_ENV=test => telemetry disabled => the browser bootstrap is a no-op
+  // stub, never the App Insights loader (no CDN script, no connection string).
+  assert.match(res.headers["content-type"], /javascript/);
+  assert.match(res.text, /disabled/);
+  assert.doesNotMatch(res.text, /js\.monitor\.azure\.com/);
+});
+
+test("telemetry contract: /.well-known/telemetry-contract.json is served, versioned, derived from signals", async () => {
+  const request = supertest(app);
+  const res = await request.get("/.well-known/telemetry-contract.json").expect(200);
+  assert.match(res.headers["content-type"], /json/);
+  assert.match(res.headers["cache-control"], /max-age=3600/);
+  assert.ok(res.body.contractVersion, "contract is versioned");
+  // pageViews is the highest-weighted required signal — it must be advertised.
+  const pageViews = res.body.signals.find((s) => s.id === "pageViews");
+  assert.ok(pageViews && pageViews.points === 20);
+  // userIdDegraded is a scorer-internal variant, never an instrumentation target.
+  assert.equal(res.body.signals.some((s) => s.id === "userIdDegraded"), false);
+});
+
+test("telemetry contract: /llms.txt is a plain-text brief, not the SPA shell", async () => {
+  const request = supertest(app);
+  const res = await request.get("/llms.txt").expect(200);
+  assert.match(res.headers["content-type"], /text\/plain/);
+  assert.match(res.text, /Telemetry Contract/);
+  assert.match(res.text, /Custom dimension naming/);
+  assert.doesNotMatch(res.text, /<!DOCTYPE html>/);
 });

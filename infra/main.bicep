@@ -112,6 +112,9 @@ param backupIntervalHours int = 1
 @maxValue(168)
 param backupMaxSnapshots int = 24
 
+@description('Enable self-telemetry: the app emits its own telemetry to the provisioned Application Insights so a Keren dashboard can be pointed at Keren itself (dogfooding). Server SDK feeds the Technical view; the browser SDK feeds the Marketing/Readiness views.')
+param telemetryEnabled bool = true
+
 // --- Globally-unique names (ACR + Storage Account must be unique across all of Azure) ---
 var uniqueSuffix = uniqueString(resourceGroup().id)
 var acrName = toLower(replace('${namePrefix}${uniqueSuffix}', '-', ''))
@@ -119,6 +122,7 @@ var acrName = toLower(replace('${namePrefix}${uniqueSuffix}', '-', ''))
 var storageAccountName = toLower(take(replace('stkbk${namePrefix}${uniqueSuffix}', '-', ''), 24))
 var backupContainerName = 'sqlite-backups'
 var logAnalyticsName = 'la-${namePrefix}'
+var appInsightsName = 'appi-${namePrefix}'
 var containerEnvName = 'cae-${namePrefix}'
 var containerAppName = 'ca-${namePrefix}'
 var managedIdentityName = 'id-${namePrefix}'
@@ -161,6 +165,24 @@ resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   properties: {
     sku: { name: 'PerGB2018' }
     retentionInDays: 30
+  }
+}
+
+// --- Application Insights (self-telemetry — Keren observing itself) ---
+// Workspace-based, reusing the Log Analytics above (no second workspace).
+// DisableLocalAuth stays FALSE on purpose: the browser SDK authenticates
+// with the connection string's ingestion key (write-only — it can post
+// telemetry, never read it), which Entra-only ingestion would forbid. The
+// server SDK uses the same connection string. See docs/maintainer-todo.md.
+resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
+  name: appInsightsName
+  location: location
+  kind: 'web'
+  properties: {
+    Application_Type: 'web'
+    WorkspaceResourceId: logAnalytics.id
+    DisableLocalAuth: false
+    IngestionMode: 'LogAnalytics'
   }
 }
 
@@ -319,6 +341,12 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'BACKUP_BLOB_CONTAINER', value: backupContainerName }
             { name: 'BACKUP_INTERVAL_MS', value: string(backupIntervalHours * 3600000) }
             { name: 'BACKUP_MAX_SNAPSHOTS', value: string(backupMaxSnapshots) }
+            // Self-telemetry. The same connection string drives the server
+            // SDK and the page-served browser bootstrap (/telemetry.js); the
+            // ingestion key it carries is write-only by design.
+            { name: 'TELEMETRY_ENABLED', value: telemetryEnabled ? 'true' : 'false' }
+            { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: telemetryEnabled ? appInsights.properties.ConnectionString : '' }
+            { name: 'TELEMETRY_SERVICE_NAME', value: containerAppName }
           ]
           probes: [
             {
@@ -358,6 +386,7 @@ output containerAppName string = containerApp.name
 output containerAppFqdn string = containerApp.properties.configuration.ingress.fqdn
 output containerEnvName string = containerEnv.name
 output storageAccountName string = storageAccount.name
+output appInsightsName string = appInsights.name
 output backupContainerName string = backupContainerName
 output effectiveRedirectUri string = effectiveRedirectUri
 output customDomainConfigured bool = !empty(customDomainName) && !empty(customDomainCertificateName)

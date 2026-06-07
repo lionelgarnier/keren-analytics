@@ -1,3 +1,4 @@
+// Top countries by event share for the Marketing geo distribution view
 let start={{timeStart}};
 let end={{timeEnd}};
 let total = toscalar(

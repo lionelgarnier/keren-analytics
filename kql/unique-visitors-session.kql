@@ -1,3 +1,4 @@
+// Distinct visitors estimated from session IDs for the selected range
 let start={{timeStart}};
 let end={{timeEnd}};
 {{tableName}}

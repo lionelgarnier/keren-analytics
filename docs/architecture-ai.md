@@ -280,6 +280,37 @@ sent. The schema profile context attached to it remains sanitized.
 Self-hosters get **zero outbound AI traffic** with `AI_PROVIDER=ollama`. This
 is the answer for "we cannot accept any third-party LLM call".
 
+## Per-resource AI opt-out + setup disclosure
+
+`AI_PROVIDER` is a **deployment-wide** switch (env-only, frozen at boot). On
+top of it, the hosted product gives the user a **per-resource** choice at the
+moment they configure a service, without adding a wizard step:
+
+- The Services-hub "Configure" button is a split-button. Its menu — derived
+  from `buildAiDisclosure(config)` in `src/ai/disclosure.js` — lists the
+  configured AI provider (with its name + region, e.g. *Azure OpenAI · France
+  Central (UE)*) and a **"Configurer sans IA"** option, plus an inline
+  *"Quelles données sont envoyées ?"* popover that renders the Privacy
+  boundary table above (sent vs never sent). Picking a labelled item is the
+  user's informed consent.
+- The choice is persisted per `(tenant_id, resource_id)` as `aiPreferences`
+  on the tenant row (`metadataStore.getResourceAiOptOut` /
+  `setResourceAiOptOut`) — never tenant-global, mirroring the
+  scans/validations invariant.
+- When a resource is opted out, `runSetupScan` passes `optOut: true` to
+  `getOrComputeMapping`, which **builds no prompt** and persists the
+  deterministic fallback (reason `ai_disabled_by_user`). Nothing leaves the
+  box — the only outbound scan stage (`ai`) is skipped, and the wizard's scan
+  tree shows `✓ AI off` instead of `✓ heuristic`.
+
+Disclosure is config-derived (no hardcoded provider/region in the UI). The
+region can't be parsed from the Foundry project endpoint hostname, so it comes
+from `AZURE_FOUNDRY_REGION` (see Configuration below).
+
+`GET /api/ai/disclosure[?resourceId=…]` exposes the payload (provider,
+`available` options, `dataContract`, and the resource's current `optOut`).
+`POST /api/setup/ai-preference {resourceId, optOut}` records the choice.
+
 ## Configuration
 
 ```env
@@ -290,6 +321,11 @@ AI_PROVIDER=none|azure-foundry          # `ollama` planned, not yet wired
 # Full project Responses API URL (incl. /openai/v1/responses path).
 AZURE_FOUNDRY_ENDPOINT=https://<project>.services.ai.azure.com/api/projects/<project>/openai/v1/responses
 AZURE_FOUNDRY_DEPLOYMENT=gpt-5.4-mini
+# Human-readable region shown in the setup AI disclosure so the user sees
+# where their (sanitized) metadata is processed. The project endpoint
+# hostname does NOT encode the region, so it can't be derived — set it
+# explicitly. Defaults to the canonical hosted deployment (ADR 0004).
+AZURE_FOUNDRY_REGION=France Central (UE)
 # Optional: client ID of the user-assigned Managed Identity to use in
 # Container Apps (when AZURE_CLIENT_ID is reserved for the OAuth user app).
 AZURE_FOUNDRY_CLIENT_ID=<uami-client-id>

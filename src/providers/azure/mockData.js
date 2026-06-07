@@ -564,12 +564,17 @@ function generateBaseline() {
         deviceCount: vary(3200, 8, rng),
         geoCount: vary(3000, 10, rng),
         browserTimingsCount: vary(900, 15, rng),
+        dependenciesCount: vary(5200, 10, rng),
+        exceptionsCount: vary(180, 18, rng),
+        roleCount: 3,
         latestTimestamp: new Date().toISOString(),
       },
     ],
     schemaTables: [
       { tableName: "pageViews", count: vary(4200, 10, rng) },
       { tableName: "requests", count: vary(3900, 10, rng) },
+      { tableName: "dependencies", count: vary(5200, 10, rng) },
+      { tableName: "exceptions", count: vary(180, 18, rng) },
       { tableName: "browserTimings", count: vary(900, 15, rng) },
     ],
     schemaCustomDimensions: [
@@ -685,6 +690,53 @@ function generateBaseline() {
       { path: "/api/products", p50: vary(180, 12, rng), p95: vary(650, 10, rng), p99: vary(1500, 10, rng), avgDuration: vary(280, 12, rng), count: vary(890, 12, rng), errorRate: 0.005 },
       { path: "/api/users/me", p50: vary(45, 20, rng), p95: vary(180, 15, rng), p99: vary(450, 12, rng), avgDuration: vary(80, 18, rng), count: vary(1200, 10, rng), errorRate: 0.002 },
     ],
+    // ===== Backend / APM (dependencies, exceptions, services) =====
+    // The external payment gateway is the deliberate "fix this first" outlier:
+    // slowest p95 + the highest failure rate, and it's the same culprit behind
+    // the /api/checkout latency on the Technical tab.
+    dependencyOverview: [
+      {
+        totalCalls: vary(5200, 10, rng),
+        failedCalls: vary(118, 16, rng),
+        avgDuration: vary(64, 14, rng),
+        p95Duration: vary(420, 12, rng),
+        distinctTargets: 6,
+        failureRate: Math.round((0.018 + seededRandom(sessionSeed()) * 0.01) * 1000) / 1000,
+      },
+    ],
+    slowDependencies: [
+      { target: "api.stripe.com", type: "HTTP", p50: vary(180, 12, rng), p95: vary(1850, 10, rng), p99: vary(4200, 10, rng), avgDuration: vary(360, 12, rng), count: vary(640, 14, rng), failureRate: 0.067 },
+      { target: "orders-db.postgres", type: "SQL", p50: vary(40, 14, rng), p95: vary(720, 12, rng), p99: vary(2100, 10, rng), avgDuration: vary(120, 14, rng), count: vary(1880, 12, rng), failureRate: 0.012 },
+      { target: "search.elastic.internal", type: "HTTP", p50: vary(55, 16, rng), p95: vary(540, 12, rng), p99: vary(1400, 12, rng), avgDuration: vary(110, 16, rng), count: vary(720, 14, rng), failureRate: 0.008 },
+      { target: "redis-cache:6379", type: "Redis", p50: vary(2, 25, rng), p95: vary(18, 20, rng), p99: vary(60, 18, rng), avgDuration: vary(4, 22, rng), count: vary(4200, 10, rng), failureRate: 0.001 },
+      { target: "blobstore.core.windows.net", type: "Azure blob", p50: vary(28, 18, rng), p95: vary(310, 14, rng), p99: vary(820, 12, rng), avgDuration: vary(62, 16, rng), count: vary(540, 16, rng), failureRate: 0.004 },
+      { target: "notifications-queue", type: "Azure Service Bus", p50: vary(12, 20, rng), p95: vary(95, 16, rng), p99: vary(240, 14, rng), avgDuration: vary(24, 18, rng), count: vary(380, 18, rng), failureRate: 0.0 },
+    ],
+    dependencyTypes: [
+      { type: "Redis", count: vary(4200, 10, rng), failureRate: 0.001 },
+      { type: "SQL", count: vary(1880, 12, rng), failureRate: 0.012 },
+      { type: "HTTP", count: vary(1360, 12, rng), failureRate: 0.038 },
+      { type: "Azure blob", count: vary(540, 16, rng), failureRate: 0.004 },
+      { type: "Azure Service Bus", count: vary(380, 18, rng), failureRate: 0.0 },
+    ],
+    topExceptions: [
+      { type: "System.TimeoutException", problemId: "System.TimeoutException at PaymentClient.Charge", count: vary(64, 16, rng), affectedOperations: 2, affectedUsers: vary(38, 18, rng), lastSeen: new Date(Date.now() - vary(900, 30, rng) * 1000).toISOString() },
+      { type: "Npgsql.PostgresException", problemId: "Npgsql.PostgresException at OrderRepository.Save", count: vary(31, 18, rng), affectedOperations: 1, affectedUsers: vary(22, 20, rng), lastSeen: new Date(Date.now() - vary(2400, 25, rng) * 1000).toISOString() },
+      { type: "System.NullReferenceException", problemId: "System.NullReferenceException at CartService.Total", count: vary(22, 20, rng), affectedOperations: 3, affectedUsers: vary(15, 22, rng), lastSeen: new Date(Date.now() - vary(5400, 20, rng) * 1000).toISOString() },
+      { type: "HttpRequestException", problemId: "HttpRequestException at SearchClient.Query", count: vary(14, 22, rng), affectedOperations: 1, affectedUsers: vary(11, 24, rng), lastSeen: new Date(Date.now() - vary(9000, 18, rng) * 1000).toISOString() },
+      { type: "ValidationException", problemId: "ValidationException at CheckoutController.Post", count: vary(9, 25, rng), affectedOperations: 1, affectedUsers: vary(8, 26, rng), lastSeen: new Date(Date.now() - vary(12600, 15, rng) * 1000).toISOString() },
+    ],
+    serviceHealth: [
+      { role: "web-frontend", count: vary(2100, 10, rng), avgDuration: vary(140, 12, rng), p95: vary(620, 12, rng), errorRate: 0.011 },
+      { role: "api-gateway", count: vary(1680, 12, rng), avgDuration: vary(310, 12, rng), p95: vary(1180, 10, rng), errorRate: 0.034 },
+      { role: "checkout-worker", count: vary(420, 16, rng), avgDuration: vary(680, 12, rng), p95: vary(2400, 10, rng), errorRate: 0.072 },
+    ],
+    statusCodes: [
+      { codeClass: "2xx", count: vary(3520, 10, rng) },
+      { codeClass: "3xx", count: vary(180, 18, rng) },
+      { codeClass: "4xx", count: vary(140, 18, rng) },
+      { codeClass: "5xx", count: vary(62, 20, rng) },
+    ],
     geoDistribution: [
       { country: "United States", count: vary(1200, 10, rng), share: 0.31 },
       { country: "France", count: vary(450, 14, rng), share: 0.12 },
@@ -782,6 +834,31 @@ export function getMockRows(queryName, timeRangeKey) {
   }
   if (queryName === "slowEndpoints") {
     return baseline.slowEndpoints.map((r) => ({ ...r, count: scale(r.count, rk) }));
+  }
+
+  // Backend / APM — scale call/event counts by range, keep rates/latency stable
+  if (queryName === "dependencyOverview") {
+    const o = baseline.dependencyOverview[0];
+    return [{ ...o, totalCalls: scale(o.totalCalls, rk), failedCalls: scale(o.failedCalls, rk) }];
+  }
+  if (queryName === "slowDependencies") {
+    return baseline.slowDependencies.map((r) => ({ ...r, count: scale(r.count, rk) }));
+  }
+  if (queryName === "dependencyTypes") {
+    return baseline.dependencyTypes.map((r) => ({ ...r, count: scale(r.count, rk) }));
+  }
+  if (queryName === "topExceptions") {
+    return baseline.topExceptions.map((r) => ({
+      ...r,
+      count: scale(r.count, rk),
+      affectedUsers: scale(r.affectedUsers, rk),
+    }));
+  }
+  if (queryName === "serviceHealth") {
+    return baseline.serviceHealth.map((r) => ({ ...r, count: scale(r.count, rk) }));
+  }
+  if (queryName === "statusCodes") {
+    return baseline.statusCodes.map((r) => ({ ...r, count: scale(r.count, rk) }));
   }
   if (queryName === "geoDistribution") {
     return baseline.geoDistribution.map((r) => ({ ...r, count: scale(r.count, rk) }));

@@ -1,0 +1,11 @@
+// Outbound dependency call mix by type (SQL, HTTP, Azure blob, queue…) for the
+// Backend dependency-type breakdown chart
+let start={{timeStart}};
+let end={{timeEnd}};
+dependencies
+| where timestamp between (start..end)
+| extend depType = iif(isempty(type), "Other", type)
+| summarize count = count(), failures = countif(success == false) by depType
+| extend failureRate = iif(count == 0, 0.0, todouble(failures) / todouble(count))
+| project type = depType, count, failureRate
+| top 12 by count desc

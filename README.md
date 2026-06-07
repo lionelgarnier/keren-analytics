@@ -9,11 +9,9 @@
 > dashboards in under 2 minutes** — AI-mapped schema, deterministic KQL,
 > no raw telemetry persistence outside your tenant. MIT.
 
-<!--
-HERO GIF placeholder (A3 — see docs/maintainer-todo.md).
-30-45s screencast: connect → dashboard renders → tabs → readiness → copy prompt.
-Replace this block with: ![hero](docs/assets/hero.gif)
--->
+<p align="center">
+  <img src="public/demo.gif" alt="Keren Analytics — scan telemetry, AI-map the schema, render Marketing &amp; Technical dashboards in under 2 minutes" width="100%">
+</p>
 
 **Live demo** · [keren.run](https://keren.run) — sample
 dataset, sign in with any Microsoft work/school account to point it at your

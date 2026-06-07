@@ -1,3 +1,4 @@
+// Time-bucketed visitors and page views for dashboard trend charts
 let start={{timeStart}};
 let end={{timeEnd}};
 {{tableName}}

@@ -1,4 +1,7 @@
 import "dotenv/config";
+// Imported before Express so the App Insights Node SDK can patch the http
+// stack before any server module loads. See src/telemetry.js.
+import { trackEvent, flushTelemetry } from "./telemetry.js";
 import crypto from "node:crypto";
 import express from "express";
 import helmet from "helmet";
@@ -12,7 +15,8 @@ import { runOverviewPipeline, runSetupScan } from "./core/orchestrator.js";
 import { buildRecommendations } from "./core/recommendations.js";
 import { computeReadinessScore } from "./core/readinessScore.js";
 import { generatePrompts } from "./core/promptGenerator.js";
-import { getTenant, updateTenant } from "./core/metadataStore.js";
+import { getTenant, updateTenant, setResourceAiOptOut, getResourceAiOptOut } from "./core/metadataStore.js";
+import { buildAiDisclosure } from "./ai/disclosure.js";
 import { getLatestScan, getScannedResourceIds } from "./core/scanStore.js";
 import { getLatestMapping } from "./core/mappingStore.js";
 import {
@@ -24,6 +28,7 @@ import { runWithToken } from "./providers/azure/tokenStore.js";
 import { createRateLimiter } from "./core/rateLimit.js";
 import { startBackupScheduler, restoreLatestSnapshot } from "./core/backupScheduler.js";
 import { createAzureFoundryProvider } from "./ai/azureFoundry.js";
+import { buildTelemetryContract, renderContractMarkdown } from "./core/telemetryContract.js";
 
 const app = express();
 const azureClient = getAzureClient();
@@ -52,10 +57,21 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "https://cdn.jsdelivr.net", "https://unpkg.com"],
+        // js.monitor.azure.com: App Insights browser SDK (self-telemetry,
+        // stage B). The /telemetry.js bootstrap injects this CDN script.
+        scriptSrc: ["'self'", "https://cdn.jsdelivr.net", "https://unpkg.com", "https://js.monitor.azure.com"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com"],
         imgSrc: ["'self'", "data:", "https://*.tile.openstreetmap.org"],
-        connectSrc: ["'self'", "https://cdn.jsdelivr.net", "https://unpkg.com"],
+        // *.in.applicationinsights / *.livediagnostics: App Insights ingestion
+        // + Live Metrics endpoints the browser SDK posts telemetry to.
+        connectSrc: [
+          "'self'",
+          "https://cdn.jsdelivr.net",
+          "https://unpkg.com",
+          "https://js.monitor.azure.com",
+          "https://*.in.applicationinsights.azure.com",
+          "https://*.livediagnostics.monitor.azure.com",
+        ],
       },
     },
   })
@@ -76,7 +92,53 @@ app.use(
     },
   })
 );
-app.use(express.static(path.resolve(__dirname, "..", "public")));
+/*
+ * Static asset caching. No bundler → filenames aren't content-hashed, so
+ * we can't blanket-cache everything as immutable: a deploy must be able to
+ * push fresh JS/CSS/HTML. We split by type:
+ *   - HTML (SPA shell + marketing pages): no-cache so a deploy lands at
+ *     once; the ETag still yields cheap 304s.
+ *   - Stable media/fonts: cache hard (7d). These are the bulk of an
+ *     anonymous landing-page hit (demo.gif, og-image, demo-*.webp), so a
+ *     traffic spike — e.g. an HN front-page post — serves them from the
+ *     browser cache and never touches the single replica a second time.
+ *   - JS/CSS: short max-age + revalidate so a deploy isn't masked by a
+ *     stale bundle while still saving most re-fetches.
+ */
+/* ========== Public telemetry contract (ADR 0006) ==========
+ * Served dynamically from src/core/telemetryContract.js so the live spec is
+ * always derived from the current scorer/mapping/prompts — the committed
+ * snapshots under public/ are just a discoverable copy. Registered before
+ * express.static so the dynamic handler is authoritative, and before the rate
+ * limiters since these are public, cacheable discovery endpoints with no
+ * tenant data. */
+app.get("/.well-known/telemetry-contract.json", (_req, res) => {
+  res.set("Cache-Control", "public, max-age=3600");
+  res.json(buildTelemetryContract());
+});
+app.get("/llms.txt", (_req, res) => {
+  res.set("Content-Type", "text/plain; charset=utf-8");
+  res.set("Cache-Control", "public, max-age=3600");
+  res.send(renderContractMarkdown());
+});
+
+const MEDIA_EXTENSIONS = new Set([
+  ".webp", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".woff", ".woff2",
+]);
+app.use(
+  express.static(path.resolve(__dirname, "..", "public"), {
+    setHeaders: (res, filePath) => {
+      const ext = path.extname(filePath).toLowerCase();
+      if (ext === ".html") {
+        res.setHeader("Cache-Control", "no-cache");
+      } else if (MEDIA_EXTENSIONS.has(ext)) {
+        res.setHeader("Cache-Control", "public, max-age=604800");
+      } else if (ext === ".js" || ext === ".css") {
+        res.setHeader("Cache-Control", "public, max-age=300, must-revalidate");
+      }
+    },
+  })
+);
 
 /* ========== Rate limiting ==========
  *
@@ -113,6 +175,12 @@ app.use(apiLimiter);
 
 function isValidTenantId(tenantId) {
   return typeof tenantId === "string" && /^[a-zA-Z0-9_-]{1,128}$/.test(tenantId);
+}
+
+// Stable, non-reversible id for telemetry. We want to count distinct tenants
+// in the funnel without ever sending a raw tenant GUID or PII to App Insights.
+function hashForTelemetry(value) {
+  return crypto.createHash("sha256").update(String(value)).digest("hex").slice(0, 16);
 }
 
 function decodeJwtPayload(token) {
@@ -395,6 +463,7 @@ app.get("/auth/callback", async (req, res) => {
     req.session.userUpn = payload?.upn || payload?.preferred_username || null;
     ensureCsrfToken(req);
 
+    trackEvent("tenant_connected", { tenant: hashForTelemetry(req.session.tenantId) });
     res.redirect("/");
   } catch (err) {
     console.error("Token exchange error:", err.message);
@@ -594,6 +663,7 @@ app.get("/dashboard/overview", ensureAuth, async (req, res) => {
         send({ type: "error", ...result });
       } else {
         const readinessScore = computeReadinessScore(result.readinessReport);
+        trackEvent("dashboard_rendered", { tenant: hashForTelemetry(tenantId), range: rangeKey, score: readinessScore?.score, streamed: true });
         send({ type: "done", dashboard: result.dashboard, readiness: result.readinessReport, readinessScore, schemaProfile: result.schemaProfile, mapping: result.mapping, recommendations: buildRecommendations(result.readinessReport) });
       }
     } catch (error) {
@@ -621,6 +691,7 @@ app.get("/dashboard/overview", ensureAuth, async (req, res) => {
       return res.status(errorStatusCode(result)).json(result);
     }
     const readinessScore = computeReadinessScore(result.readinessReport);
+    trackEvent("dashboard_rendered", { tenant: hashForTelemetry(tenantId), range: rangeKey, score: readinessScore?.score });
     res.json({
       dashboard: result.dashboard,
       readiness: result.readinessReport,
@@ -759,6 +830,25 @@ app.get("/api/setup/state", ensureAuth, (req, res) => {
   });
 });
 
+// Per-resource "configure with / without AI" choice, set from the Services
+// hub split-button before the scan runs. `optOut: true` means the next scan
+// for this resource skips the LLM entirely (deterministic mapping only, zero
+// outbound). Scoped by resourceId — never tenant-global (see CLAUDE.md
+// invariant: setup state is per-resource).
+app.post("/api/setup/ai-preference", ensureAuth, verifyCsrf, (req, res) => {
+  const tenantId = req.session.tenantId;
+  const { resourceId, optOut } = req.body || {};
+  if (typeof resourceId !== "string" || !resourceId) {
+    return res.status(400).json({ error: "MISSING_RESOURCE_ID", message: "resourceId is required" });
+  }
+  if (typeof optOut !== "boolean") {
+    return res.status(400).json({ error: "INVALID_OPT_OUT", message: "optOut must be a boolean" });
+  }
+  setResourceAiOptOut(tenantId, resourceId, optOut);
+  res.set("Cache-Control", "no-store");
+  res.json({ ok: true, resourceId, optOut });
+});
+
 // Trigger the CONFIG phase: a fresh scan + AI analysis for the selected
 // resource. This is the only entry point that re-runs the scan/LLM —
 // dashboard loads reuse its snapshot and never re-config.
@@ -773,6 +863,10 @@ app.post("/api/setup/scan", ensureAuth, verifyCsrf, async (req, res) => {
       return res.status(403).json({ error: "NO_ACCESS", message: result.message });
     }
     res.set("Cache-Control", "no-store");
+    trackEvent("setup_scan_completed", {
+      tenant: hashForTelemetry(tenantId),
+      overallStatus: result.readinessReport?.overallStatus,
+    });
     res.json({
       ok: true,
       scanId: result.scanId || null,
@@ -834,6 +928,11 @@ app.get("/api/setup/scan/stream", ensureAuth, async (req, res) => {
     } else if (result.error === "NO_ACCESS") {
       send("fail", { error: "NO_ACCESS", message: result.message });
     } else {
+      trackEvent("setup_scan_completed", {
+        tenant: hashForTelemetry(tenantId),
+        overallStatus: result.readinessReport?.overallStatus,
+        streamed: true,
+      });
       send("done", {
         ok: true,
         scanId: result.scanId || null,
@@ -1001,6 +1100,7 @@ app.post("/api/setup/validate", ensureAuth, verifyCsrf, (req, res) => {
     decision,
     overrides: cleanedOverrides,
   });
+  trackEvent("validation_accepted", { tenant: hashForTelemetry(tenantId), decision });
   res.json({ ok: true, validation: persisted });
 });
 
@@ -1093,6 +1193,22 @@ app.get("/healthz", (_req, res) => {
   res.json({ ok: true, mode: config.azureMode, aiProvider: config.aiProvider });
 });
 
+// What the AI does with telemetry, derived from config — drives the Services
+// hub "Configure" menu (which providers are offered) and its inline data
+// popover (what's sent / never sent, and where). Per-resource opt-out state
+// is attached when ?resourceId= is supplied so the hub can reflect a prior
+// choice. No secrets in the payload — it's a config read.
+app.get("/api/ai/disclosure", ensureAuth, (req, res) => {
+  const tenantId = req.session.tenantId;
+  const disclosure = buildAiDisclosure(config);
+  const resourceId = typeof req.query.resourceId === "string" ? req.query.resourceId : null;
+  res.set("Cache-Control", "no-store");
+  res.json({
+    ...disclosure,
+    optOut: resourceId ? getResourceAiOptOut(tenantId, resourceId) : false,
+  });
+});
+
 app.get("/api/ai/ping", async (_req, res) => {
   if (config.aiProvider !== "azure-foundry") {
     return res.json({
@@ -1153,6 +1269,51 @@ app.get("/privacy", (_req, res) => {
   res.sendFile(path.resolve(__dirname, "..", "public", "privacy.html"));
 });
 
+/* ========== Self-telemetry: browser bootstrap (stage B) ========== */
+// Served as JS from 'self' (CSP-friendly, no inline script) and rendered
+// per-request so the connection string is injected server-side and the
+// authenticated-user id is a *hashed* tenant id — never the raw tenant GUID
+// or any PII (privacy invariant). The browser SDK feeds pageViews/sessions/
+// geo/browserTimings, which power the Marketing + Readiness views when a
+// Keren dashboard is pointed at Keren's own App Insights resource.
+app.get("/telemetry.js", (req, res) => {
+  res.set("Content-Type", "application/javascript; charset=utf-8");
+  res.set("Cache-Control", "no-store");
+  if (!config.telemetry.enabled || !config.telemetry.browserConnectionString) {
+    return res.send("/* keren self-telemetry disabled */\n");
+  }
+  const cs = JSON.stringify(config.telemetry.browserConnectionString);
+  const tenantId = req.session?.tenantId;
+  const authUser = tenantId ? JSON.stringify(hashForTelemetry(tenantId)) : "null";
+  res.send(
+    `(function () {
+  var cs = ${cs};
+  var authUser = ${authUser};
+  var s = document.createElement("script");
+  s.src = "https://js.monitor.azure.com/scripts/b/ai.3.gbl.min.js";
+  s.crossOrigin = "anonymous";
+  s.onload = function () {
+    try {
+      var ai = new Microsoft.ApplicationInsights.ApplicationInsights({
+        config: {
+          connectionString: cs,
+          enableAutoRouteTracking: true,
+          autoTrackPageVisitTime: true,
+          disableFetchTracking: false
+        }
+      });
+      ai.loadAppInsights();
+      if (authUser) { ai.setAuthenticatedUserContext(authUser); }
+      ai.trackPageView();
+      window.appInsights = ai;
+    } catch (e) { /* telemetry is best-effort */ }
+  };
+  document.head.appendChild(s);
+})();
+`
+  );
+});
+
 /* ========== SPA catch-all (History API routing) ========== */
 const API_ROUTE = /^\/(auth|azure|dashboard|readiness|recommendations|prompts|docs|api|setup)(\/|$)/;
 app.get("/{*splat}", (req, res, next) => {
@@ -1211,6 +1372,7 @@ if (process.env.NODE_ENV !== "test") {
       } catch (err) {
         console.error("[backup] final snapshot failed:", err?.message || err);
       }
+      await flushTelemetry();
       server.close(() => process.exit(0));
     };
     process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));

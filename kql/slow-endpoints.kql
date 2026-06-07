@@ -1,3 +1,4 @@
+// Slowest request paths with latency percentiles and error rates for the Technical view
 let start={{timeStart}};
 let end={{timeEnd}};
 requests

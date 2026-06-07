@@ -1,3 +1,4 @@
+// Earliest and latest timestamps plus event counts per telemetry table for setup analysis
 let start={{timeStart}};
 let end={{timeEnd}};
 union isfuzzy=true withsource=tableName pageViews, requests, customEvents, dependencies, exceptions, traces, browserTimings

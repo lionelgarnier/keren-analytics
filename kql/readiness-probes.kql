@@ -1,3 +1,4 @@
+// Readiness signal counts and latest telemetry timestamp for the Readiness view
 let start={{timeStart}};
 let end={{timeEnd}};
 let events = union isfuzzy=true withsource=tableName pageViews, requests
@@ -17,6 +18,9 @@ let browserTimingsCount = toscalar(union isfuzzy=true browserTimings | where tim
 let urlPopulatedCount = toscalar(events | where isnotempty(url) | count);
 let namePopulatedCount = toscalar(events | where isnotempty(name) | count);
 let headerRefererCount = toscalar(events | where isnotempty(tostring(customDimensions["http.request.header.referer"])) | count);
+let dependenciesCount = toscalar(union isfuzzy=true dependencies | where timestamp between (start..end) | count);
+let exceptionsCount = toscalar(union isfuzzy=true exceptions | where timestamp between (start..end) | count);
+let roleCount = toscalar(events | where isnotempty(cloud_RoleName) | summarize dcount(cloud_RoleName));
 print pageViewsCount = pageViewsCount, requestsCount = requestsCount,
       userAuthCount = userAuthCount, userAnonCount = userAnonCount,
       sessionCount = sessionCount, requestSessionCount = requestSessionCount,
@@ -24,4 +28,6 @@ print pageViewsCount = pageViewsCount, requestsCount = requestsCount,
       geoCount = geoCount, browserTimingsCount = browserTimingsCount,
       latestTimestamp = latestTimestamp,
       urlPopulatedCount = urlPopulatedCount, namePopulatedCount = namePopulatedCount,
-      headerRefererCount = headerRefererCount
+      headerRefererCount = headerRefererCount,
+      dependenciesCount = dependenciesCount, exceptionsCount = exceptionsCount,
+      roleCount = roleCount

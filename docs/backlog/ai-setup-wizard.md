@@ -131,6 +131,28 @@ Verified end-to-end in mock mode: land on `/setup` → scan auto-advances to
 findings (0 clicks) → "Build my dashboard →" → `/service/<name>` (1 click);
 `/setup?mode=mapping` still opens the validate editor directly.
 
+### Per-resource AI opt-out + data disclosure (2026-06-05)
+
+The setup IA was all-or-nothing at the deployment level (`AI_PROVIDER`).
+Privacy-conscious users had no way to configure a resource **without** the
+LLM, and no in-product statement of what metadata is sent where. Added both
+**without a new wizard step** — the choice rides on the existing "Configure"
+action on the Services hub.
+
+| Area | Change | Code |
+|------|--------|------|
+| Hub split-button | Each service card's "Configure" gained a caret → menu listing the configured provider (*Azure OpenAI · France Central (UE)*) + **"Configurer sans IA"**, plus an inline **"Quelles données sont envoyées ?"** popover (sent / never-sent contract). Plain card click keeps the default (AI on). | `openConfigureMenu` / `openAiDataPopover` in [`app.js`](../../public/app.js), styles in [`styles.css`](../../public/styles.css) |
+| Disclosure source | Single config-derived source of truth (provider, region, data contract). Region from `AZURE_FOUNDRY_REGION` (not derivable from the endpoint). | [`src/ai/disclosure.js`](../../src/ai/disclosure.js) |
+| Per-resource state | `aiPreferences` map on the tenant row, scoped by `resourceId`. Helpers `getResourceAiOptOut` / `setResourceAiOptOut`. DB migration adds `tenants.ai_preferences`. | [`metadataStore.js`](../../src/core/metadataStore.js), [`db.js`](../../src/core/db.js) |
+| Pipeline | `runSetupScan` reads the per-resource opt-out and passes `optOut` to `getOrComputeMapping`, which builds **no prompt** and persists the deterministic fallback (`ai_disabled_by_user`). Scan `ai` step carries a `disabled` flag → tree shows `✓ AI off`. | [`orchestrator.js`](../../src/core/orchestrator.js), [`aiMappingService.js`](../../src/core/aiMappingService.js) |
+| Endpoints | `GET /api/ai/disclosure[?resourceId]`, `POST /api/setup/ai-preference {resourceId, optOut}` (CSRF). | [`server.js`](../../src/server.js) |
+
+Rationale & contract: see [`architecture-ai.md`](../architecture-ai.md)
+§ "Per-resource AI opt-out + setup disclosure". Positioning: the hosted
+product targets individual users; anyone who can't accept any third-party LLM
+call self-hosts (`AI_PROVIDER=ollama|none`, zero outbound). Tests in
+[`tests/aiDisclosure.test.js`](../../tests/aiDisclosure.test.js).
+
 ### Design intent vs. what shipped
 
 The original narrative below describes the **end-state** experience —

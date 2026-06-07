@@ -66,6 +66,22 @@ function buildRecommendedActions(signals) {
       message: "Enable browser timings to see frontend performance.",
     });
   }
+  if (!signals.dependencies) {
+    actions.push({
+      id: "enable-dependencies",
+      title: "Track outbound dependencies",
+      message:
+        "No dependency telemetry — enable App Insights auto-collection (or the SDK's dependency tracking) to see SQL, HTTP and queue latency / failures.",
+    });
+  }
+  if (!signals.exceptions) {
+    actions.push({
+      id: "enable-exceptions",
+      title: "Capture server exceptions",
+      message:
+        "No exception telemetry — wire trackException() (or the auto-collection module) so backend errors surface here instead of staying buried in logs.",
+    });
+  }
   return actions.slice(0, 5);
 }
 
@@ -90,6 +106,9 @@ export function buildReadinessReport({ probeResult, window }) {
     userAgent: (probeResult.browserCount || 0) + (probeResult.osCount || 0) + (probeResult.deviceCount || 0) > 0,
     geo: (probeResult.geoCount || 0) > 0,
     browserTimings: (probeResult.browserTimingsCount || 0) > 0,
+    dependencies: (probeResult.dependenciesCount || 0) > 0,
+    exceptions: (probeResult.exceptionsCount || 0) > 0,
+    multiService: (probeResult.roleCount || 0) > 1,
     urlField: urlPopulated,
     nameField: namePopulated,
     headerReferer,
@@ -127,6 +146,9 @@ export function buildReadinessReport({ probeResult, window }) {
       deviceCount: probeResult.deviceCount || 0,
       geoCount: probeResult.geoCount || 0,
       browserTimingsCount: probeResult.browserTimingsCount || 0,
+      dependenciesCount: probeResult.dependenciesCount || 0,
+      exceptionsCount: probeResult.exceptionsCount || 0,
+      roleCount: probeResult.roleCount || 0,
       urlPopulatedCount: probeResult.urlPopulatedCount || 0,
       namePopulatedCount: probeResult.namePopulatedCount || 0,
       headerRefererCount: probeResult.headerRefererCount || 0,

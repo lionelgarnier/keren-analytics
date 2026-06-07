@@ -58,3 +58,54 @@ test("error-rate templates separate server (5xx) from client (4xx) errors", () =
   const slow = renderTemplate(loadKqlTemplate("slow-endpoints"), params);
   assert.ok(slow.includes("statusCode >= 500"), "slow-endpoints counts 5xx as server errors");
 });
+
+test("backend APM templates render and target the right tables", () => {
+  clearTemplateCache();
+  const params = {
+    timeStart: 'datetime("2024-01-01T00:00:00Z")',
+    timeEnd: 'datetime("2024-01-08T00:00:00Z")',
+  };
+
+  const depOverview = renderTemplate(loadKqlTemplate("dependency-overview"), params);
+  assert.ok(/^dependencies/m.test(depOverview) || depOverview.includes("\ndependencies"), "dependency-overview reads the dependencies table");
+  assert.ok(depOverview.includes("failureRate"), "dependency-overview exposes failureRate");
+
+  const slowDeps = renderTemplate(loadKqlTemplate("slow-dependencies"), params);
+  assert.ok(slowDeps.includes("percentile(duration, 95)"), "slow-dependencies computes p95");
+  assert.ok(slowDeps.includes("by depTarget, depType"), "slow-dependencies groups by target + type");
+
+  const depTypes = renderTemplate(loadKqlTemplate("dependency-types"), params);
+  assert.ok(depTypes.includes("by depType"), "dependency-types groups by type");
+
+  const svc = renderTemplate(loadKqlTemplate("service-health"), params);
+  assert.ok(svc.includes("cloud_RoleName"), "service-health pivots on cloud_RoleName");
+  assert.ok(svc.includes("statusCode >= 500"), "service-health counts 5xx as server errors");
+
+  const codes = renderTemplate(loadKqlTemplate("status-codes"), params);
+  assert.ok(codes.includes('"5xx"') && codes.includes('"2xx"'), "status-codes buckets response classes");
+});
+
+test("top-exceptions template never projects raw exception messages (PII guard)", () => {
+  clearTemplateCache();
+  const rendered = renderTemplate(loadKqlTemplate("top-exceptions"), {
+    timeStart: 'datetime("2024-01-01T00:00:00Z")',
+    timeEnd: 'datetime("2024-01-08T00:00:00Z")',
+  });
+  assert.ok(rendered.includes("problemId"), "exceptions surface the safe problemId");
+  // Raw message / stack-trace fields routinely carry user PII — they must
+  // never leave the workspace.
+  assert.ok(!/outerMessage/i.test(rendered), "no outerMessage");
+  assert.ok(!/\bmessage\b/i.test(rendered), "no raw message field");
+  assert.ok(!/details/i.test(rendered), "no exception details blob");
+});
+
+test("readiness-probes template probes backend signals", () => {
+  clearTemplateCache();
+  const rendered = renderTemplate(loadKqlTemplate("readiness-probes"), {
+    timeStart: 'datetime("2024-01-01T00:00:00Z")',
+    timeEnd: 'datetime("2024-01-08T00:00:00Z")',
+  });
+  assert.ok(rendered.includes("dependenciesCount"), "probes dependency volume");
+  assert.ok(rendered.includes("exceptionsCount"), "probes exception volume");
+  assert.ok(rendered.includes("roleCount"), "probes distinct cloud roles");
+});
