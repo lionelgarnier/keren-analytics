@@ -466,6 +466,10 @@
             <summary>Is the AI part required?<span class="lv2-faq-plus">+</span></summary>
             <p>No. Launch ships with deterministic schema mapping (alias + regex covering ~80% of real-world naming) and a deterministic Environment Analysis panel. Real Azure OpenAI is opt-in, post-launch.</p>
           </details>
+          <details>
+            <summary>Can my coding agent instrument it for me?<span class="lv2-faq-plus">+</span></summary>
+            <p>Yes. We publish a public <a href="/llms.txt">telemetry contract</a> — which signals to emit, how to name custom dimensions, config best practices — that Cursor, Copilot or Claude Code can read so a new app renders the full dashboard from its first scan, no manual mapping. Machine-readable at <a href="/.well-known/telemetry-contract.json">/.well-known/telemetry-contract.json</a>.</p>
+          </details>
         </section>
 
         <!-- ── CTA ───────────────────────────────────────────────────────── -->
@@ -484,6 +488,7 @@
           <div class="lv2-footer-links">
             <a href="https://github.com/lionelgarnier/keren-analytics" target="_blank" rel="noopener">GitHub</a>
             <a href="/docs">Docs</a>
+            <a href="/llms.txt">Telemetry contract</a>
             <a href="https://github.com/lionelgarnier/keren-analytics/blob/main/SECURITY.md" target="_blank" rel="noopener">Security</a>
             <a href="mailto:garniel6@gmail.com">Contact</a>
           </div>

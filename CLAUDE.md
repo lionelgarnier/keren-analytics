@@ -39,9 +39,23 @@ Status: **Phase 1 + Phase 2 + Phase A + Track F DONE**.
   [`docs/architecture-ai.md`](docs/architecture-ai.md) divergences 4 & 5
   for the schema + merge contract evolution.
 
+- **Telemetry contract Phase 0 (ADR 0006)** shipped 2026-06-07: the
+  *inverse* of readiness diagnosis — a public, versioned spec telling
+  coding agents what to emit so an app renders green from day one.
+  [`src/core/telemetryContract.js`](src/core/telemetryContract.js)
+  **derives** the whole contract from `SIGNAL_WEIGHTS`/`GRADE_THRESHOLDS`
+  (readinessScore), `ALIASES`/`mappingExpressions` (mapping) and
+  `STACK_HINTS`/`PROMPT_TEMPLATES` (promptGenerator) — never restate those
+  values by hand, the non-drift test enforces it. Served at
+  `/.well-known/telemetry-contract.json` + `/llms.txt`; committed snapshots
+  under `public/` regenerated via `npm run build:contract`. The MCP delivery
+  channel + interactive validation are the post-launch roadmap (Phases 1-3,
+  ADR 0006 / `docs/backlog/ai-instrumentation-assistant.md`).
+
 **Post-launch / deferred**: Phase 3 multi-tenant Postgres (single-instance
 SQLite suffices for V1), Phase 4 multi-cloud, the other AI surfaces
-(natural-language queries, instrumentation assistant). ADR 0001
+(natural-language queries, instrumentation assistant — its Phase 0
+contract foundation now shipped, see ADR 0006). ADR 0001
 (portfolio pivot) + ADR 0004 (Azure-first) + ADR 0005 (AI-first scope)
 together replace the original SaaS-track gate logic.
 
@@ -90,7 +104,8 @@ together replace the original SaaS-track gate logic.
 ```bash
 npm install            # install deps (supertest is required for api/rbac tests)
 npm run dev            # start server on :3000 (mock mode by default)
-npm test               # node --env-file=.env.test --test (180 tests)
+npm test               # node --env-file=.env.test --test (211 tests)
+npm run build:contract # regenerate public/ telemetry-contract snapshots (ADR 0006)
 docker compose up --build
 ```
 
@@ -141,6 +156,9 @@ src/
     readiness.js         # readiness probe results
     readinessScore.js    # 0-100 score from 7 weighted signals
     promptGenerator.js   # LLM-ready prompts for missing signals
+    telemetryContract.js # ADR 0006: public telemetry contract, DERIVED from
+                         #   readinessScore/mapping/promptGenerator (no copy);
+                         #   served at /.well-known/… + /llms.txt
     recommendations.js
     dashboard.js         # builds dashboard payload from KQL results
     timeRange.js
@@ -164,6 +182,7 @@ scripts/
   security-audit.mjs           # repo scan for accidental secrets
   build-strategy-bundle.sh     # docs export
   backup-sqlite.mjs            # hourly VACUUM INTO snapshot of data/keren.db
+  build-telemetry-contract.mjs # regenerate public/ telemetry-contract snapshots
 docs/                    # product, technical, multicloud, backlog/, adr/
 ```
 
@@ -237,6 +256,10 @@ If a task explicitly asks to harden one of these, do it. Otherwise leave alone.
 - **`docs/adr/0005-ai-first-scope.md`** — the strategic decision behind
   Track F (why AI-first is pre-launch, SQLite vs Postgres, Foundry vs
   OpenAI direct).
+- **`docs/adr/0006-telemetry-contract-mcp.md`** — the public telemetry
+  contract (instrument-first inversion of readiness) + the MCP roadmap.
+  Read before touching `telemetryContract.js` or the source modules it
+  derives from (don't break the "derive, never copy" invariant).
 - **`docs/launch-strategy.md`** — go-to-market, traction gates, what's
   in/out of scope for the pre-launch sprint (read this first if the work
   touches the public surface)

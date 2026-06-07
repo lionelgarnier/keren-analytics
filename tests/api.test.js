@@ -303,3 +303,25 @@ test("self-telemetry: /telemetry.js serves a disabled stub in test mode", async 
   assert.match(res.text, /disabled/);
   assert.doesNotMatch(res.text, /js\.monitor\.azure\.com/);
 });
+
+test("telemetry contract: /.well-known/telemetry-contract.json is served, versioned, derived from signals", async () => {
+  const request = supertest(app);
+  const res = await request.get("/.well-known/telemetry-contract.json").expect(200);
+  assert.match(res.headers["content-type"], /json/);
+  assert.match(res.headers["cache-control"], /max-age=3600/);
+  assert.ok(res.body.contractVersion, "contract is versioned");
+  // pageViews is the highest-weighted required signal — it must be advertised.
+  const pageViews = res.body.signals.find((s) => s.id === "pageViews");
+  assert.ok(pageViews && pageViews.points === 20);
+  // userIdDegraded is a scorer-internal variant, never an instrumentation target.
+  assert.equal(res.body.signals.some((s) => s.id === "userIdDegraded"), false);
+});
+
+test("telemetry contract: /llms.txt is a plain-text brief, not the SPA shell", async () => {
+  const request = supertest(app);
+  const res = await request.get("/llms.txt").expect(200);
+  assert.match(res.headers["content-type"], /text\/plain/);
+  assert.match(res.text, /Telemetry Contract/);
+  assert.match(res.text, /Custom dimension naming/);
+  assert.doesNotMatch(res.text, /<!DOCTYPE html>/);
+});

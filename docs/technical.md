@@ -44,6 +44,8 @@ State transitions are persisted to the metadata store for debugging.
 - GET /recommendations (includes readinessScore)
 - GET /prompts (LLM-ready prompts for missing signals)
 - GET /preview/dashboard?range=today|7d|30d (no auth, sample data)
+- GET /.well-known/telemetry-contract.json (no auth, public telemetry contract — see below)
+- GET /llms.txt (no auth, Markdown companion to the telemetry contract)
 
 ## Configuration
 Environment variables:
@@ -118,6 +120,39 @@ If a signal is missing, queries fall back to available sources without failing.
 ## Readiness Probes
 Readiness probes are lightweight KQL queries to determine signal availability.
 The probe window defaults to last 24h and falls back to 7d when volume is low.
+
+## Public Telemetry Contract (ADR 0006)
+The *inverse* of the readiness diagnosis: instead of telling a tenant what its
+existing telemetry is missing, the contract tells coding agents (Cursor /
+Copilot / Claude Code) what to emit so an app renders green from day one — the
+signals and their points, how to name custom dimensions for auto-mapping, the
+config best practices, and a ready-to-paste prompt per signal.
+
+`src/core/telemetryContract.js` (`buildTelemetryContract()`) **derives** the
+whole contract from existing source-of-truth modules — `SIGNAL_WEIGHTS` +
+`GRADE_THRESHOLDS` (`readinessScore.js`), `ALIASES` + `mappingExpressions`
+(`mapping.js`), `STACK_HINTS` + `PROMPT_TEMPLATES` (`promptGenerator.js`).
+Nothing about "what Keren wants" is restated by hand, so the published contract
+cannot drift from runtime behaviour. The only contract-owned knowledge is the
+App Insights specifics that live in no scorer (target table/field per signal,
+verification KQL, config advice).
+
+Served dynamically (always fresh) at two stable URLs, before `express.static`
+and the rate limiters since they're public, cacheable, and carry no tenant
+data:
+- `GET /.well-known/telemetry-contract.json` — machine-readable, versioned
+  (`contractVersion` = content hash, stable across `generatedAt`).
+- `GET /llms.txt` — Markdown companion.
+
+Committed snapshots live under `public/` and are regenerated with
+`npm run build:contract`; `tests/telemetryContract.test.js` fails if they fall
+out of sync with the module. The contract returns only metadata and scores —
+never raw logs or PII (privacy invariant preserved).
+
+Roadmap (post-launch, not shipped): an MCP server exposing the same contract as
+read-only tools, then a `score_telemetry_plan` validation tool reusing
+`computeReadinessScore`, then a closed-loop `verify_resource` check. Tracked in
+`docs/backlog/ai-instrumentation-assistant.md`.
 
 ## Caching
 Cache keys include:

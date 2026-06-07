@@ -6,7 +6,7 @@
  * path to improve telemetry coverage.
  */
 
-const SIGNAL_WEIGHTS = {
+export const SIGNAL_WEIGHTS = {
   pageViews:       { points: 20, label: "Page Views",       category: "required",    description: "Frontend page view tracking" },
   requests:        { points: 15, label: "Backend Requests",  category: "required",    description: "Server-side request telemetry" },
   sessionId:       { points: 15, label: "Session Tracking",  category: "required",    description: "Session identification" },
@@ -76,11 +76,20 @@ export function computeReadinessScore(readinessReport) {
   };
 }
 
+// Minimum percentage for each grade, highest-first. Shared with the public
+// telemetry contract (src/core/telemetryContract.js) so the grading scale
+// advertised to instrumentation agents can't drift from the scorer.
+export const GRADE_THRESHOLDS = [
+  { grade: "A", minPercentage: 90 },
+  { grade: "B", minPercentage: 75 },
+  { grade: "C", minPercentage: 55 },
+  { grade: "D", minPercentage: 35 },
+];
+
 function gradeFromScore(score, maxScore) {
   const pct = (score / maxScore) * 100;
-  if (pct >= 90) return "A";
-  if (pct >= 75) return "B";
-  if (pct >= 55) return "C";
-  if (pct >= 35) return "D";
+  for (const { grade, minPercentage } of GRADE_THRESHOLDS) {
+    if (pct >= minPercentage) return grade;
+  }
   return "F";
 }
