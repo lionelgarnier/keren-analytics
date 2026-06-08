@@ -31,7 +31,7 @@ import { createRateLimiter } from "./core/rateLimit.js";
 import { startBackupScheduler, restoreLatestSnapshot } from "./core/backupScheduler.js";
 import { createAzureFoundryProvider } from "./ai/azureFoundry.js";
 import { buildTelemetryContract, renderContractMarkdown } from "./core/telemetryContract.js";
-import { loadKqlTemplate, renderTemplate } from "./core/kql.js";
+import { loadKqlTemplate, renderTemplate, validateKqlExpr } from "./core/kql.js";
 import { resolveTimeRange, toKqlDatetime } from "./core/timeRange.js";
 import { cacheStore, buildCacheKey } from "./core/cache.js";
 
@@ -1161,10 +1161,11 @@ app.post("/api/setup/validate", ensureAuth, verifyCsrf, (req, res) => {
     for (const [field, value] of Object.entries(overrides)) {
       if (!ALLOWED_OVERRIDE_FIELDS.has(field)) continue;
       if (!value || typeof value.expr !== "string" || typeof value.source !== "string") continue;
-      // Light KQL safety: forbid newlines/semicolons/pipe so user input can't
-      // smuggle a multi-statement KQL through the renderer's whitelist later.
-      if (/[;|\r\n]/.test(value.expr)) {
-        return res.status(400).json({ error: "INVALID_OVERRIDE_EXPR", field });
+      // KQL safety: strip-strings + allowlist + keyword denylist (kql.js). The
+      // free expression editor is the only path raw KQL reaches the renderer.
+      const check = validateKqlExpr(value.expr);
+      if (!check.ok) {
+        return res.status(400).json({ error: "INVALID_OVERRIDE_EXPR", field, message: check.reason });
       }
       cleanedOverrides[field] = { source: value.source.slice(0, 200), expr: value.expr.slice(0, 500) };
     }
@@ -1184,6 +1185,11 @@ app.post("/api/setup/validate", ensureAuth, verifyCsrf, (req, res) => {
     for (const row of effective) {
       if (!ALLOWED_OVERRIDE_FIELDS.has(row.canonical)) continue;
       if (!row.source || !row.expr) continue;
+      // AI-proposed (and deterministic) exprs also flow to the renderer via this
+      // snapshot — a prompt-injected proposal must not smuggle unsafe KQL. Drop
+      // any field whose expr fails validation; it falls back to the
+      // deterministic mapping at render time (mergeWithValidation).
+      if (!validateKqlExpr(row.expr).ok) continue;
       snapshot[row.canonical] = { source: row.source, expr: row.expr };
     }
     cleanedOverrides = Object.keys(snapshot).length > 0 ? snapshot : null;
@@ -1213,8 +1219,9 @@ app.post("/api/setup/mapping-preview", ensureAuth, verifyCsrf, async (req, res) 
   if (!expr) {
     return res.status(400).json({ error: "MISSING_EXPR", message: "expr is required" });
   }
-  if (expr.length > 500 || /[;|&\r\n]/.test(expr)) {
-    return res.status(400).json({ error: "INVALID_EXPR", message: "expr is too long or contains disallowed characters" });
+  const exprCheck = validateKqlExpr(expr);
+  if (!exprCheck.ok) {
+    return res.status(400).json({ error: "INVALID_EXPR", message: exprCheck.reason });
   }
 
   // Pick the event table the dashboard would query for this resource.
@@ -1227,7 +1234,10 @@ app.post("/api/setup/mapping-preview", ensureAuth, verifyCsrf, async (req, res) 
     const kql = renderTemplate(
       loadKqlTemplate("mapping-preview"),
       { timeStart: toKqlDatetime(timeRange.start), timeEnd: toKqlDatetime(timeRange.end), tableName, expr },
-      { tableName: ["pageViews", "requests"], expr: "any" }
+      // expr already passed validateKqlExpr above; self-whitelist it so the
+      // renderer's "any" sanitizer doesn't reject a legit `|` inside a regex
+      // string literal.
+      { tableName: ["pageViews", "requests"], expr: [expr] }
     );
     const result = await azureClient.queryWorkspace({
       resourceId: resource.resourceId,

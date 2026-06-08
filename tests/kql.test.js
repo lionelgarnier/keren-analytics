@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { renderTemplate, loadKqlTemplate, clearTemplateCache } from "../src/core/kql.js";
+import { renderTemplate, loadKqlTemplate, clearTemplateCache, validateKqlExpr } from "../src/core/kql.js";
+import { mappingExpressions } from "../src/core/mapping.js";
 
 test("renderTemplate rejects disallowed params", () => {
   const template = "table {{tableName}}";
@@ -124,6 +125,46 @@ test("readiness-probes template probes backend signals", () => {
   assert.ok(rendered.includes("dependenciesCount"), "probes dependency volume");
   assert.ok(rendered.includes("exceptionsCount"), "probes exception volume");
   assert.ok(rendered.includes("roleCount"), "probes distinct cloud roles");
+});
+
+test("validateKqlExpr accepts every built-in mapping expression", () => {
+  // Includes the page-name extract() whose regex string literal contains a
+  // pipe — the string-stripping pass must not mistake it for an operator.
+  for (const bucket of Object.values(mappingExpressions)) {
+    for (const expr of Object.values(bucket)) {
+      const r = validateKqlExpr(expr);
+      assert.ok(r.ok, `should accept ${expr}: ${r.reason}`);
+    }
+  }
+  // A few more shapes an AI/user could legitimately produce.
+  for (const ok of [
+    "user_AuthenticatedId",
+    'tostring(customDimensions["uid"])',
+    "tostring(parse_url(url).Path)",
+    "coalesce(user_AuthenticatedId, user_Id)",
+    'extract("(?:GET|POST)\\s+([^?\\s]+)", 1, name)',
+  ]) {
+    assert.ok(validateKqlExpr(ok).ok, `should accept ${ok}`);
+  }
+});
+
+test("validateKqlExpr rejects injection vectors", () => {
+  for (const expr of [
+    "user_Id | take 1",                                    // pipe / operator chain
+    "user_Id; drop",                                        // statement separator
+    "client_Browser // comment",                            // line comment
+    "a /* b */ c",                                          // block comment
+    'toscalar(externaldata(x:string)[@"http://evil/"])',    // external data fetch
+    "cluster('x').database('y').T",                         // cross-cluster
+    "workspace('x').T",                                     // cross-workspace
+    "a & b",                                                 // smuggled operator
+    'broken "quote',                                         // unbalanced string
+    "x".repeat(501),                                         // too long
+  ]) {
+    assert.equal(validateKqlExpr(expr).ok, false, `should reject ${expr.slice(0, 40)}`);
+  }
+  assert.equal(validateKqlExpr("").ok, false);
+  assert.equal(validateKqlExpr(null).ok, false);
 });
 
 test("mapping-preview template substitutes a sanitized expr and summarizes non-null", () => {

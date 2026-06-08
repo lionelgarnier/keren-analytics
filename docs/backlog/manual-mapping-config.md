@@ -32,6 +32,31 @@ PII-scrubbed in [`schemaScan.js`](../../src/core/schemaScan.js)), `tables{}`,
 and `eventNames[]`. The frontend just ignores them. Phase 1 is mostly UI work
 exploiting data the backend already sends.
 
+## Security — free-KQL hardening (SHIPPED)
+
+The "Custom KQL…" escape hatch and the preview endpoint let an authenticated
+user supply a raw KQL expression that is substituted into a query template. The
+load-bearing control is unchanged: queries run via `queryWorkspace` against the
+caller's **own** `resourceId` with the caller's **own** token, so the blast
+radius is their own telemetry (no cross-tenant read, no escalation). On top of
+that, [`validateKqlExpr`](../../src/core/kql.js) replaces the original
+`[;|\r\n]` denylist with a stronger, string-aware check:
+
+1. **Strip string literals first**, then enforce a tight character allowlist on
+   the remainder — so a legitimate `extract("(?:GET|POST)…")` (pipe *inside* a
+   regex string) is accepted, while an operator-context `|`, `;`, `&`, `//`,
+   `/* */` is rejected.
+2. **Keyword denylist** for constructs that read external/other-scope data
+   without needing a pipe: `externaldata`, `toscalar`, `cluster`, `workspace`,
+   `database`, `http_request`, `evaluate`, `materialize`, …
+3. Wired to **all three paths**: `/api/setup/validate` (override),
+   `/api/setup/mapping-preview`, and the `accept_all` snapshot — the last so an
+   AI-proposed (potentially prompt-injected) expr can't smuggle unsafe KQL; a
+   failing field is dropped and falls back to the deterministic mapping.
+
+Sample values shown in the editor/preview are PII-scrubbed server-side and
+HTML-escaped in the UI (no stored XSS).
+
 ## Invariants — the 4 sync points
 
 Overriding a field traverses **four places that must stay aligned**. Any

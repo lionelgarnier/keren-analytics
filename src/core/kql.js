@@ -25,6 +25,54 @@ export function clearTemplateCache() {
   templateCache.clear();
 }
 
+// KQL functions/operators that can read external or other-scope data — or chain
+// a query — even when used as a nested expression (no leading pipe). The free
+// mapping-expression editor must never allow these; the allowlist below would
+// already block most via characters, this catches the keyword-only ones.
+const BLOCKED_KQL_KEYWORDS =
+  /\b(externaldata|toscalar|materialize|datatable|cluster|workspace|database|http_request|evaluate|range|print|union|join|search|find|invoke|consume)\b/i;
+
+// Characters allowed OUTSIDE string literals in a mapping expression. Covers
+// every built-in/AI expression we generate (identifiers, function calls,
+// customDimensions[...] access, dotted columns, numeric args) and nothing that
+// chains operators (`|`), ends a statement (`;`), opens a comment (`/`), or
+// smuggles a second clause (`&`, `=`, `<`, `>`, `{`, `}`, `@`, …).
+const ALLOWED_OUTSIDE_STRINGS = /[^A-Za-z0-9_ \t.,()[\]]/;
+
+/**
+ * Validate a user-supplied (or AI-proposed) KQL mapping expression before it is
+ * persisted/substituted into a template. Strategy: strip string literals first
+ * — so legitimate regex alternation like `extract("(?:GET|POST)…")` isn't
+ * mistaken for a pipe — then enforce a tight character allowlist on the rest
+ * plus a keyword denylist. Defence-in-depth: the query still runs scoped to the
+ * caller's own resource/token.
+ *
+ * @returns {{ ok: boolean, reason?: string }}
+ */
+export function validateKqlExpr(expr) {
+  if (typeof expr !== "string") return { ok: false, reason: "expr must be a string" };
+  const trimmed = expr.trim();
+  if (!trimmed) return { ok: false, reason: "expr is empty" };
+  if (trimmed.length > 500) return { ok: false, reason: "expr is too long" };
+
+  // Remove "...", '...' and @"..."/@'...' verbatim string literals (honouring
+  // backslash escapes), replacing each with a space so tokens inside them are
+  // ignored by the operator checks below.
+  const stripped = trimmed
+    .replace(/@?"(?:[^"\\]|\\.)*"/g, " ")
+    .replace(/@?'(?:[^'\\]|\\.)*'/g, " ");
+
+  // A leftover quote means an unbalanced/unterminated string — reject.
+  if (/["'`]/.test(stripped)) return { ok: false, reason: "unbalanced string literal" };
+  if (ALLOWED_OUTSIDE_STRINGS.test(stripped)) {
+    return { ok: false, reason: "disallowed character outside a string literal" };
+  }
+  if (BLOCKED_KQL_KEYWORDS.test(stripped)) {
+    return { ok: false, reason: "disallowed KQL keyword" };
+  }
+  return { ok: true };
+}
+
 export function renderTemplate(template, params, allowedValues = {}) {
   const placeholders = new Set();
   const pattern = /\{\{\s*([\w]+)\s*\}\}/g;
