@@ -91,6 +91,30 @@ test("/api/setup/findings exposes effectiveMapping with deterministic origin whe
   } finally { restore(); }
 });
 
+test("/api/setup/findings exposes a per-field source palette for the manual editor", async () => {
+  const restore = withFreshDb();
+  try {
+    const { agent } = await authedAgent("palette");
+    await agent.post("/api/setup/scan").expect(200);
+    const res = await agent.get("/api/setup/findings").expect(200);
+    const palette = res.body.palette;
+    assert.ok(palette && typeof palette === "object", "findings must include a palette");
+    assert.deepEqual(Object.keys(palette).sort(), [
+      "canonicalPagePath", "canonicalReferrer", "canonicalSessionId", "canonicalUserId",
+    ]);
+    // Each field offers at least one built-in column candidate to pick from.
+    for (const field of Object.keys(palette)) {
+      assert.ok(Array.isArray(palette[field]), `${field} palette must be an array`);
+      const kinds = new Set(palette[field].map((c) => c.kind));
+      assert.ok(kinds.has("builtin"), `${field} should offer a builtin candidate`);
+      for (const c of palette[field]) {
+        assert.equal(typeof c.source, "string");
+        assert.equal(typeof c.expr, "string");
+      }
+    }
+  } finally { restore(); }
+});
+
 test("/api/setup/scan can be re-run to refresh the scan (covers re-scan flow)", async () => {
   const restore = withFreshDb();
   try {

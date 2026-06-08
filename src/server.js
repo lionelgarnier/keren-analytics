@@ -19,6 +19,7 @@ import { getTenant, updateTenant, setResourceAiOptOut, getResourceAiOptOut } fro
 import { buildAiDisclosure } from "./ai/disclosure.js";
 import { getLatestScan, getScannedResourceIds } from "./core/scanStore.js";
 import { getLatestMapping } from "./core/mappingStore.js";
+import { buildFieldPalette } from "./core/fieldPalette.js";
 import {
   persistValidation,
   getActiveValidation,
@@ -1102,6 +1103,10 @@ app.get("/api/setup/findings", ensureAuth, (req, res) => {
     });
   }
   const effectiveMapping = buildEffectiveMapping(tenant.mapping, mapping);
+  // Per-field candidate sources for the manual mapping editor — derived from
+  // the discovered telemetry (custom dimensions + standard columns) so the
+  // user picks instead of typing a source/expr blind.
+  const palette = buildFieldPalette(scan.payload);
   res.set("Cache-Control", "no-store");
   res.json({
     selectedResource: tenant.selectedResource || null,
@@ -1116,6 +1121,7 @@ app.get("/api/setup/findings", ensureAuth, (req, res) => {
         }
       : null,
     effectiveMapping,
+    palette,
     validation: validation || null,
   });
 });

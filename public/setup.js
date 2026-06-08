@@ -51,6 +51,7 @@
     step: "scanning",
     findings: null,        // /api/setup/findings response
     overrides: {},         // user-edited canonical fields
+    customEditing: {},     // per-field: true when the user picked "Custom KQL…"
     activeSources: {},     // current "best guess" per canonical, used as form default
     csrfToken: null,
     resourceName: null,    // for the breadcrumb / scan tree title
@@ -852,11 +853,39 @@
   }
 
   // ── Step 3 — Validate ────────────────────────────────────────
+
+  // Compact number for option/inventory metadata (1234 -> "1.2k").
+  function formatNum(n) {
+    if (typeof n !== "number" || !isFinite(n)) return String(n ?? "");
+    if (n >= 1000) return (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace(/\.0$/, "") + "k";
+    return String(n);
+  }
+
+  // Plain-text label for a palette <option> (no HTML — it's an option).
+  function optionLabel(c) {
+    if (c.kind === "builtin") return `${c.label} (${c.source})`;
+    const m = c.meta || {};
+    const bits = [];
+    if (typeof m.cardinality === "number") bits.push(`${m.cardinality} distinct`);
+    if (typeof m.occurrences === "number") bits.push(`${formatNum(m.occurrences)} events`);
+    const meta = bits.length ? ` · ${bits.join(" · ")}` : "";
+    return `${c.recommended ? "★ " : ""}customDimensions.${c.label}${meta}`;
+  }
+
+  // Origin/confidence chip shown in the status column for a non-overridden row.
+  function originBadgeHtml(origin, confidence) {
+    const conf = confidence ? ` · ${escapeHtml(confidence)}` : "";
+    if (origin === "ai") return `<span class="map-badge map-badge--ai">AI${conf}</span>`;
+    if (origin === "deterministic") return `<span class="map-badge map-badge--heuristic">heuristic${conf}</span>`;
+    return `<span class="map-badge map-badge--empty">empty</span>`;
+  }
+
   function renderValidate() {
     const f = state.findings;
     const effective = Array.isArray(f?.effectiveMapping) ? f.effectiveMapping : [];
     const fields = CANONICAL_FIELDS;
     const byCanonical = Object.fromEntries(effective.map((r) => [r.canonical, r]));
+    const palette = (f && f.palette) || {};
 
     const lowConf = lowConfidenceFields();
     const warn = $("validateWarning");
@@ -865,7 +894,7 @@
       warn.innerHTML = `
         <strong>Heads up — low confidence on:</strong>
         ${lowConf.map((name) => `<code>${escapeHtml(name)}</code>`).join(", ")}.
-        Open the technical mapping below and confirm before saving.
+        Pick the right source below before saving.
       `;
       warn.classList.remove("hidden");
       disclosure.open = true;
@@ -882,62 +911,151 @@
     for (const field of fields) {
       const proposal = byCanonical[field];
       const ovr = state.overrides[field];
-      const active = ovr || proposal || { source: "(no source)", expr: "" };
+      const active = ovr || proposal || { source: "", expr: "", origin: null, confidence: "low" };
       const isOverridden = !!ovr;
+      const candidates = Array.isArray(palette[field]) ? palette[field] : [];
+      const custom = !!state.customEditing[field];
+
+      // Match the active source to a known candidate; otherwise it's an AI/free
+      // value surfaced as a synthetic "current" option so the select reflects it.
+      const matchIdx = candidates.findIndex((c) => c.source === active.source);
+      const selectValue = custom ? "__custom__" : (matchIdx >= 0 ? String(matchIdx) : "__current__");
+
+      const options = [];
+      if (matchIdx < 0 && !custom && active.source) {
+        options.push(`<option value="__current__" selected>${escapeHtml(active.source)} — current</option>`);
+      } else if (matchIdx < 0 && !custom) {
+        options.push(`<option value="__current__" selected>(no source)</option>`);
+      }
+      for (let i = 0; i < candidates.length; i++) {
+        const sel = selectValue === String(i) ? " selected" : "";
+        options.push(`<option value="${i}"${sel}>${escapeHtml(optionLabel(candidates[i]))}</option>`);
+      }
+      options.push(`<option value="__custom__"${custom ? " selected" : ""}>✎ Custom KQL…</option>`);
+
+      const status = isOverridden
+        ? `<span class="map-badge map-badge--manual">manual</span>`
+        : originBadgeHtml(active.origin, active.confidence);
+
       const tr = document.createElement("tr");
       tr.dataset.field = field;
       tr.innerHTML = `
-        <td><code>${escapeHtml(field)}</code></td>
         <td>
-          <input type="text" class="setup-input" data-bind="source"
-                 value="${escapeHtml(active.source || "")}" placeholder="customDimensions.uid"
-                 ${isOverridden ? "" : "readonly"} />
+          <div class="map-field-name">${escapeHtml(humanizeField(field))}</div>
+          <code class="map-field-code">${escapeHtml(field)}</code>
         </td>
         <td>
-          <input type="text" class="setup-input setup-input-mono" data-bind="expr"
-                 value="${escapeHtml(active.expr || "")}" placeholder='tostring(customDimensions["uid"])'
-                 ${isOverridden ? "" : "readonly"} />
+          <select class="setup-input map-select" data-bind="select">${options.join("")}</select>
+          ${custom
+            ? `<input type="text" class="setup-input map-custom-source" data-bind="source"
+                 value="${escapeHtml(active.source || "")}" placeholder="customDimensions.uid" />`
+            : ""}
         </td>
         <td>
-          ${isOverridden
-            ? `<button class="btn btn-ghost setup-row-btn" data-action="reset">Reset</button>`
-            : `<button class="btn btn-ghost setup-row-btn" data-action="edit">Override</button>`}
+          ${custom
+            ? `<input type="text" class="setup-input setup-input-mono" data-bind="expr"
+                 value="${escapeHtml(active.expr || "")}" placeholder='tostring(customDimensions["uid"])' />`
+            : `<code class="map-expr">${escapeHtml(active.expr || "—")}</code>`}
+        </td>
+        <td class="map-status">
+          ${status}
+          ${isOverridden ? `<button class="btn btn-ghost setup-row-btn" data-action="reset">Reset</button>` : ""}
         </td>
       `;
       tbody.appendChild(tr);
     }
 
-    tbody.querySelectorAll('button[data-action="edit"]').forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const tr = btn.closest("tr");
+    // Select change → pick a candidate, keep the current value, or go custom.
+    tbody.querySelectorAll('select[data-bind="select"]').forEach((sel) => {
+      sel.addEventListener("change", () => {
+        const tr = sel.closest("tr");
         const field = tr.dataset.field;
-        const proposal = byCanonical[field];
-        state.overrides[field] = proposal
-          ? { source: proposal.source, expr: proposal.expr }
-          : { source: "", expr: "" };
+        const candidates = Array.isArray(palette[field]) ? palette[field] : [];
+        const v = sel.value;
+        if (v === "__custom__") {
+          const cur = state.overrides[field] || byCanonical[field] || { source: "", expr: "" };
+          state.customEditing[field] = true;
+          state.overrides[field] = { source: cur.source || "", expr: cur.expr || "" };
+        } else if (v === "__current__") {
+          delete state.customEditing[field];
+          delete state.overrides[field];
+        } else {
+          const c = candidates[Number(v)];
+          delete state.customEditing[field];
+          if (c) state.overrides[field] = { source: c.source, expr: c.expr };
+        }
         renderValidate();
         updateValidateButtons();
       });
     });
     tbody.querySelectorAll('button[data-action="reset"]').forEach((btn) => {
       btn.addEventListener("click", () => {
-        const tr = btn.closest("tr");
-        const field = tr.dataset.field;
+        const field = btn.closest("tr").dataset.field;
         delete state.overrides[field];
+        delete state.customEditing[field];
         renderValidate();
         updateValidateButtons();
       });
     });
-    tbody.querySelectorAll(".setup-input").forEach((input) => {
+    tbody.querySelectorAll('input[data-bind="source"], input[data-bind="expr"]').forEach((input) => {
       input.addEventListener("input", () => {
-        const tr = input.closest("tr");
-        const field = tr.dataset.field;
-        if (!state.overrides[field]) return;
+        const field = input.closest("tr").dataset.field;
+        if (!state.overrides[field]) state.overrides[field] = { source: "", expr: "" };
         state.overrides[field][input.dataset.bind] = input.value;
       });
     });
 
+    renderInventoryPanel();
     updateValidateButtons();
+  }
+
+  // Read-only "what's in my telemetry" browser, populated from the scan the
+  // findings endpoint already returned — custom dimensions + event volumes.
+  function renderInventoryPanel() {
+    const host = $("inventoryBody");
+    if (!host) return;
+    const scan = state.findings?.scan || {};
+    const cds = Array.isArray(scan.customDimensions) ? scan.customDimensions : [];
+    const events = Array.isArray(scan.eventNames) ? scan.eventNames : [];
+
+    const byKey = new Map();
+    for (const cd of cds) {
+      if (!cd || !cd.keyName) continue;
+      const e = byKey.get(cd.keyName) ||
+        { keyName: cd.keyName, tables: new Set(), cardinality: null, occurrences: null, samples: [] };
+      if (cd.tableName) e.tables.add(cd.tableName);
+      if (typeof cd.cardinality === "number") e.cardinality = Math.max(e.cardinality ?? 0, cd.cardinality);
+      if (typeof cd.occurrences === "number") e.occurrences = Math.max(e.occurrences ?? 0, cd.occurrences);
+      for (const s of (cd.samples || [])) {
+        if (e.samples.length < 3 && !e.samples.includes(s)) e.samples.push(s);
+      }
+      byKey.set(cd.keyName, e);
+    }
+
+    const cdRows = [...byKey.values()].map((e) => {
+      const meta = [
+        [...e.tables].map(escapeHtml).join(", "),
+        e.cardinality != null ? `${e.cardinality} distinct` : "",
+        e.occurrences != null ? `${formatNum(e.occurrences)} events` : "",
+      ].filter(Boolean).join(" · ");
+      const samples = e.samples.length
+        ? `<span class="inv-samples">${e.samples.map((s) => escapeHtml(String(s))).join(" · ")}</span>` : "";
+      return `<li class="inv-item"><code>${escapeHtml(e.keyName)}</code><span class="inv-meta">${meta}</span>${samples}</li>`;
+    }).join("");
+
+    const evRows = events.map((ev) =>
+      `<li class="inv-item"><code>${escapeHtml(ev.name)}</code><span class="inv-meta">${formatNum(ev.count)} events</span></li>`
+    ).join("");
+
+    host.innerHTML = `
+      <div class="inv-group">
+        <h4>Custom dimensions (${byKey.size})</h4>
+        <ul class="inv-list">${cdRows || "<li class='inv-empty'>None detected.</li>"}</ul>
+      </div>
+      <div class="inv-group">
+        <h4>Event volumes</h4>
+        <ul class="inv-list">${evRows || "<li class='inv-empty'>None.</li>"}</ul>
+      </div>`;
   }
 
   function updateValidateButtons() {

@@ -3891,6 +3891,44 @@ html.booting .navbar { display: none; }
 .setup-input-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .setup-row-btn { font-size: 11px; padding: 4px 10px; }
 
+/* Palette-driven mapping editor (manual-mapping-config Phase 1) */
+.map-field-name { font-weight: 600; font-size: 13px; }
+.map-field-code { font-size: 11px; color: var(--text-secondary); }
+.map-select { cursor: pointer; }
+.map-custom-source { margin-top: 6px; }
+.map-expr {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+.map-status { white-space: nowrap; }
+.map-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  margin-right: 6px;
+}
+.map-badge--ai { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.map-badge--heuristic { background: var(--border-light); color: var(--text-secondary); }
+.map-badge--manual { background: color-mix(in srgb, var(--success) 18%, transparent); color: var(--success); }
+.map-badge--empty { background: color-mix(in srgb, var(--danger, #c0392b) 14%, transparent); color: var(--danger, #c0392b); }
+
+/* "Your telemetry" inventory panel */
+.setup-inventory { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+@media (max-width: 720px) { .setup-inventory { grid-template-columns: 1fr; } }
+.inv-group h4 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); }
+.inv-list { list-style: none; margin: 0; padding: 0; max-height: 280px; overflow-y: auto; }
+.inv-item { display: flex; flex-direction: column; gap: 2px; padding: 6px 0; border-bottom: 1px solid var(--border-light); }
+.inv-item code { font-size: 12px; }
+.inv-meta { font-size: 11px; color: var(--text-secondary); }
+.inv-samples { font-size: 11px; color: var(--text-tertiary, var(--text-secondary)); font-style: italic; }
+.inv-empty { font-size: 12px; color: var(--text-secondary); padding: 6px 0; }
+
 /* Step 4 — Complete */
 .setup-complete { text-align: center; padding: 40px 0; }
 .setup-complete-check {

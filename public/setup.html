@@ -110,21 +110,26 @@
           <header class="setup-panel-head">
             <h2 class="setup-h2">Save your mapping</h2>
             <p class="setup-subtitle">
-              The AI proposed a mapping for the four canonical fields. Save as-is, or open
-              the technical view to override individual fields.
+              Each dashboard field maps to a source in your telemetry. Pick from what
+              the scan discovered, or choose “Custom KQL…” to write your own expression.
             </p>
           </header>
 
           <div class="setup-validate-warning hidden" id="validateWarning"></div>
 
           <details class="setup-mapping-disclosure" id="mappingDisclosure">
-            <summary>Show / edit technical mapping</summary>
+            <summary>Show / edit field mapping</summary>
             <table class="setup-mapping-table" id="validateTable">
               <thead>
-                <tr><th>Canonical field</th><th>Active source</th><th>KQL expression</th><th></th></tr>
+                <tr><th>Dashboard field</th><th>Source</th><th>KQL expression</th><th>Status</th></tr>
               </thead>
               <tbody id="validateBody"></tbody>
             </table>
+          </details>
+
+          <details class="setup-mapping-disclosure" id="inventoryPanel">
+            <summary>Your telemetry — discovered fields &amp; events</summary>
+            <div id="inventoryBody" class="setup-inventory"></div>
           </details>
 
           <div class="setup-footer">
