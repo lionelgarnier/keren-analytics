@@ -3941,6 +3941,16 @@ async function init() {
     return;
   }
 
+  // Paint the landing hero immediately for the common anonymous "/" visit
+  // instead of waiting on the /auth/session round-trip — otherwise a cold
+  // Container App or slow mobile link shows a blank page until the fetch
+  // resolves. `booting` only hides the legacy navbar (which the landing hides
+  // anyway), so the hero renders now; if the session turns out authenticated,
+  // the block below calls hideLanding() and swaps in the dashboard.
+  if (route.page === "home") {
+    showLanding();
+  }
+
   try {
     const session = await apiFetch("/auth/session");
     csrfToken = session.csrfToken || null;
