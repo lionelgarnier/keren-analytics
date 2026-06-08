@@ -192,6 +192,12 @@ cd keren-analytics && npm install && npm run dev   # http://localhost:3000
 
 Code of conduct: [Contributor Covenant 2.1](CODE_OF_CONDUCT.md).
 
+### Contributors
+
+Thanks to everyone who has sent a PR — this project is better for it. 🙏
+
+[![Contributors](https://contrib.rocks/image?repo=lionelgarnier/keren-analytics)](https://github.com/lionelgarnier/keren-analytics/graphs/contributors)
+
 ## License
 
 [MIT](LICENSE) — see the LICENSE file. © Lionel Garnier and contributors.
