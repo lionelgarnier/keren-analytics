@@ -1,0 +1,17 @@
+# Normalize all text files to LF in the repo AND on checkout, on every platform.
+# This project deploys on Linux (Docker Alpine) and CI runs on Linux, so LF is
+# the canonical line ending. Forcing eol=lf (rather than relying on each dev's
+# core.autocrlf) keeps generated snapshots and the modules that produce them in
+# lockstep — tests/telemetryContract.test.js compares public/llms.txt to the
+# module's Markdown output byte-for-byte, which a CRLF checkout would break.
+* text=auto eol=lf
+
+# Binary assets must never be line-ending-normalized.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.pdf binary
