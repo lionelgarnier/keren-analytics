@@ -1512,7 +1512,29 @@ function renderDailyTrend(data) {
       maintainAspectRatio: false,
       interaction: { mode: "index", intersect: false },
       plugins: {
-        legend: { position: "top", align: "end" },
+        legend: {
+          position: "top",
+          align: "end",
+          labels: {
+            // boxHeight matches the global pointStyleWidth (8) so the marker is
+            // a round dot instead of a vertical oval (height would otherwise
+            // follow the ~12px font size).
+            boxHeight: 8,
+            // The area fill makes each dataset's backgroundColor ~6% opacity,
+            // which Chart.js would otherwise reuse as the legend marker fill —
+            // rendering a hollow ring that reads as the digit "0". Fill the
+            // marker with the solid line color instead.
+            generateLabels(chart) {
+              const items =
+                Chart.defaults.plugins.legend.labels.generateLabels(chart);
+              items.forEach((item) => {
+                item.fillStyle = item.strokeStyle;
+                item.lineWidth = 0;
+              });
+              return items;
+            },
+          },
+        },
         tooltip: {
           backgroundColor: getCSSVar("--tooltip-bg"),
           titleColor: getCSSVar("--tooltip-text"),
@@ -2718,7 +2740,7 @@ function renderSankeyFlow(flowData) {
 
   // Build node map
   const nodeMap = new Map();
-  flowData.nodes.forEach((n) => nodeMap.set(n.id, { ...n, y: 0, h: 0, sourceLinks: [], targetLinks: [] }));
+  flowData.nodes.forEach((n) => nodeMap.set(n.id, { ...n, label: n.label || n.id, y: 0, h: 0, sourceLinks: [], targetLinks: [] }));
   flowData.links.forEach((l) => {
     const sn = nodeMap.get(l.source);
     const tn = nodeMap.get(l.target);
