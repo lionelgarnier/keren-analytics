@@ -1222,6 +1222,73 @@ async function openConfigureMenu(anchorBtn, resource) {
   }, 0);
 }
 
+// Per-service Configuration control in the dashboard header. Primary action is
+// the non-destructive "edit mapping"; the caret groups the rarer reconfigure
+// (destructive) and the AI data/opt-out popover, so the header isn't cluttered
+// and the destructive path stays behind a confirm. Reuses the hub's caret-menu
+// chrome (closeConfigMenu / openConfigMenuEl / onConfigMenuKey).
+function openDashboardConfigMenu(anchorBtn) {
+  if (openConfigMenuEl) { closeConfigMenu(); return; }
+  const menu = document.createElement("div");
+  menu.className = "d2-cfg-menu";
+  menu.setAttribute("role", "menu");
+
+  const addItem = (icon, label, detail, onClick) => {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "d2-cfg-item";
+    item.setAttribute("role", "menuitem");
+    item.innerHTML = `
+      <span class="d2-cfg-icon" aria-hidden="true">${icon}</span>
+      <span class="d2-cfg-text">
+        <span class="d2-cfg-label">${escapeHtmlApp(label)}</span>
+        <span class="d2-cfg-detail">${escapeHtmlApp(detail)}</span>
+      </span>`;
+    item.addEventListener("click", () => { closeConfigMenu(); onClick(); });
+    menu.appendChild(item);
+  };
+
+  addItem("✎", "Modifier le mapping", "Ajuster comment les champs sont mappés — sans re-scan.", () => {
+    window.location.href = "/setup?mode=mapping";
+  });
+  addItem("⚠", "Reconfigurer (re-scan + IA)", "Re-scanne la télémétrie et relance l'IA. Remplace la configuration actuelle.", async () => {
+    const ok = await krConfirm({
+      title: "Reconfigurer ce service ?",
+      body: "Cela re-scanne votre télémétrie et relance le mapping IA. La configuration actuelle de ce service sera remplacée. Action irréversible.",
+      confirmText: "Reconfigurer",
+      cancelText: "Annuler",
+    });
+    if (ok) window.location.href = "/setup";
+  });
+  addItem("ⓘ", "Données envoyées à l'IA", "Voir ce qui est envoyé / jamais envoyé, et choisir sans IA.", async () => {
+    try { openAiDataPopover(await getAiDisclosure()); }
+    catch (err) { setStatus(err.message || "Could not load AI options.", "error"); }
+  });
+
+  document.body.appendChild(menu);
+  const r = anchorBtn.getBoundingClientRect();
+  menu.style.left = `${Math.min(r.left, window.innerWidth - menu.offsetWidth - 12)}px`;
+  const below = r.bottom + 6;
+  menu.style.top = below + menu.offsetHeight > window.innerHeight
+    ? `${Math.max(12, r.top - menu.offsetHeight - 6)}px`
+    : `${below}px`;
+
+  openConfigMenuEl = menu;
+  anchorBtn.setAttribute("aria-expanded", "true");
+  setTimeout(() => {
+    document.addEventListener("click", closeConfigMenu, { capture: true });
+    document.addEventListener("keydown", onConfigMenuKey);
+  }, 0);
+}
+
+document.getElementById("dashConfigPrimary")?.addEventListener("click", () => {
+  window.location.href = "/setup?mode=mapping";
+});
+document.getElementById("dashConfigCaret")?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  openDashboardConfigMenu(e.currentTarget);
+});
+
 function renderResources(resources) {
   lastDiscoveredResources = resources;
   statusPanel.textContent = "";
@@ -1252,7 +1319,6 @@ function renderResources(resources) {
         <span class="d2-mark">Keren<span class="d2-mark-dot">.</span></span>
         <div class="d2-tabs">
           <a class="d2-tab is-active" href="/services">Services</a>
-          <a class="d2-tab" href="/setup" data-action="confirm-setup">Setup</a>
           <a class="d2-tab" href="/docs">Docs</a>
           <a class="d2-tab" href="/auth/logout" data-action="logout">Logout</a>
         </div>

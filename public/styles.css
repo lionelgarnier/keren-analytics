@@ -3910,6 +3910,32 @@ html.booting .navbar { display: none; }
   color: var(--text-secondary);
   word-break: break-all;
 }
+/* Dashboard-header Configuration split-button: restyled to match the
+   neighbouring .d2-headeraction (Export / Change) so it sits flush. */
+.d2-pageheader-r #dashConfigSplit {
+  align-self: center;
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.d2-pageheader-r #dashConfigSplit .d2-cfg-primary,
+.d2-pageheader-r #dashConfigSplit .d2-cfg-caret {
+  background: transparent;
+  color: var(--text-primary);
+  border: none;
+  font-size: 13px;
+  font-weight: 500;
+  height: 35px;
+  line-height: 1;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.d2-pageheader-r #dashConfigSplit .d2-cfg-primary { padding-left: 14px; padding-right: 14px; }
+.d2-pageheader-r #dashConfigSplit .d2-cfg-caret { padding-left: 10px; padding-right: 10px; border-left: 1px solid var(--border); }
+.d2-pageheader-r #dashConfigSplit .d2-cfg-primary:hover,
+.d2-pageheader-r #dashConfigSplit .d2-cfg-caret:hover { background: var(--bg); color: var(--text-primary); filter: none; }
+
 .map-status { white-space: nowrap; }
 .map-preview { margin-top: 6px; font-size: 11px; line-height: 1.5; }
 .map-preview code { font-size: 11px; background: var(--border-light); padding: 1px 4px; border-radius: 3px; }

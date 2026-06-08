@@ -5,8 +5,8 @@
 > hand" override step into a **palette-driven manual mapping editor** that
 > surfaces the App Insights inventory the scan already discovered, with a live
 > per-field preview, and for grouping the AI / no-AI / manual configuration
-> paths. The dashboard-header entry to the editor stays deferred (separate
-> decision).
+> paths, reachable from a per-service **Configuration** control on the
+> dashboard.
 
 ## Why
 
@@ -129,8 +129,32 @@ So all three modes share the Phase 1/2 editor: AI / no-AI flow through the
 findings cards (then "Edit mapping" → editor); manual jumps straight in.
 
 No new backend route — reuses `/api/setup/ai-preference`, `/azure/select`,
-`/api/setup/scan/stream`, `/api/setup/findings`. The dashboard-header entry to
-the editor stays deferred (separate decision); this is hub-only.
+`/api/setup/scan/stream`, `/api/setup/findings`. This is hub-only; the
+dashboard entry point is covered separately below.
+
+## Dashboard "Configuration" entry (SHIPPED)
+
+The per-service dashboard had no visible way to reach the editor — only the
+global topbar **"Setup"** tab, which triggered the *destructive* reconfigure
+(re-scan + AI, "config will be replaced"). Replaced with a per-service
+**Configuration split-button** in the dashboard header (next to the service
+name, `d2-pageheader-r` in [`index.html`](../../public/index.html)):
+
+- **Primary = "Modifier le mapping"** → `/setup?mode=mapping` (non-destructive,
+  the frequent action).
+- **Caret menu** (`openDashboardConfigMenu` in [`app.js`](../../public/app.js),
+  reusing the hub's caret-menu chrome): *Modifier le mapping* · *Reconfigurer
+  (re-scan + IA)* — destructive, behind a `krConfirm` · *Données envoyées à
+  l'IA* — reuses `openAiDataPopover` / `getAiDisclosure`.
+- The global **"Setup" tab is removed** from both topbars (static dashboard +
+  the hub's `renderResources`). Topbar is now `Services · Docs · Logout`; the
+  destructive reconfigure lives behind the caret + confirm.
+
+Rationale: one control, non-destructive default, destructive path gated, no
+header clutter. There is no lightweight "re-scan only" — `/setup` always
+re-scans + re-runs AI, so it's surfaced once as "Reconfigurer". When the menu
+grows (danger zone, validation history, AI toggle inline) it can be promoted to
+a `/service/:name/config` page.
 
 ## Phase 4 — Live preview (SHIPPED)
 
