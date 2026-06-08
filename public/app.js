@@ -1050,6 +1050,23 @@ async function chooseConfigure(resource, optOut) {
   }
 }
 
+// Manual configuration: opt the resource out of AI (no outbound call, no wait),
+// select it, then route to the setup wizard in manual mode — it scans, then
+// lands straight in the mapping editor so the user maps fields by hand.
+async function chooseManualConfigure(resource) {
+  setStatus(`Connecting to ${resource.appInsightsName}…`);
+  try {
+    await apiFetch("/api/setup/ai-preference", {
+      method: "POST",
+      body: JSON.stringify({ resourceId: resource.resourceId, optOut: true }),
+    });
+    await selectResourceApi(resource);
+    window.location.href = "/setup?mode=manual";
+  } catch (err) {
+    setStatus(err.message || "Could not start manual setup.", "error");
+  }
+}
+
 // Configure with the default mode (the first available option — AI when a
 // provider is wired, else deterministic). Same outcome as a plain card click,
 // but explicit so the persisted preference matches the advertised label.
@@ -1164,6 +1181,21 @@ async function openConfigureMenu(anchorBtn, resource) {
     item.addEventListener("click", () => { closeConfigMenu(); chooseConfigure(resource, opt.optOut); });
     menu.appendChild(item);
   }
+
+  // Manual configuration — distinct from the AI on/off options above: the user
+  // maps the fields themselves in the editor (scan runs, no AI).
+  const manual = document.createElement("button");
+  manual.type = "button";
+  manual.className = "d2-cfg-item";
+  manual.setAttribute("role", "menuitem");
+  manual.innerHTML = `
+    <span class="d2-cfg-icon" aria-hidden="true">✎</span>
+    <span class="d2-cfg-text">
+      <span class="d2-cfg-label">Configurer manuellement</span>
+      <span class="d2-cfg-detail">Mapper les champs à la main, sans IA</span>
+    </span>`;
+  manual.addEventListener("click", () => { closeConfigMenu(); chooseManualConfigure(resource); });
+  menu.appendChild(manual);
 
   const info = document.createElement("button");
   info.type = "button";

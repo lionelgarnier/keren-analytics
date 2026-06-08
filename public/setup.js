@@ -59,6 +59,8 @@
     scanComplete: false,   // gates the "Continue" CTA on the scanning step
     advancedMapping: false, // deep-link (?mode=mapping): jump straight to the
                             // technical mapping editor, skipping scan + findings
+    manualMode: false,      // ?mode=manual: run the scan, then land directly in
+                            // the mapping editor (skip the AI findings cards)
   };
 
   // ── DOM helpers ───────────────────────────────────────────────
@@ -164,12 +166,23 @@
           ${headerActionDisabled("scanningContinue", "Continue →", true, !state.scanComplete)}
         </div>`;
       $("scanningRescan").addEventListener("click", () => startStep1());
-      $("scanningContinue").addEventListener("click", () => { if (state.scanComplete) show("findings"); });
+      $("scanningContinue").addEventListener("click", () => {
+        if (!state.scanComplete) return;
+        if (state.manualMode) gotoValidate(); else show("findings");
+      });
       bar.innerHTML = cmdbar(
         `setup · scanning · ${String(state.scanStepIdx + 1).padStart(2, "0")} / 05`,
-        { id: "cmdContinue", label: "Continue → findings", accent: true, disabled: !state.scanComplete }
+        {
+          id: "cmdContinue",
+          label: state.manualMode ? "Continue → mapping" : "Continue → findings",
+          accent: true,
+          disabled: !state.scanComplete,
+        }
       );
-      $("cmdContinue")?.addEventListener("click", () => { if (state.scanComplete) show("findings"); });
+      $("cmdContinue")?.addEventListener("click", () => {
+        if (!state.scanComplete) return;
+        if (state.manualMode) gotoValidate(); else show("findings");
+      });
       return;
     }
 
@@ -593,16 +606,20 @@
     // "Continue" (header or command bar) to advance.
     const finishScan = () => {
       headingEl.textContent = "Scan complete";
-      narrationEl.textContent = "Schema mapped — opening the AI findings…";
+      narrationEl.textContent = state.manualMode
+        ? "Schema mapped — opening the mapping editor…"
+        : "Schema mapped — opening the AI findings…";
       $("scanNowTag").textContent = "DONE · 05 OF 05";
       if ($("scanTreeStream")) $("scanTreeStream").style.display = "none";
       state.scanComplete = true;
       if (state.step === "scanning") renderChrome("scanning");
-      // Auto-advance to findings: once the scan is done the manual
-      // "Continue" click added nothing. A short beat lets the completed
-      // tree register, then we move on. The header / command-bar Continue
-      // buttons stay wired as a fallback if the timer is pre-empted.
-      if (!state.advancedMapping) {
+      // Auto-advance once the scan is done. A short beat lets the completed
+      // tree register, then we move on. Manual mode lands in the mapping
+      // editor; the default flow lands on the AI findings cards. The header /
+      // command-bar Continue buttons stay wired as a fallback.
+      if (state.manualMode) {
+        setTimeout(() => { if (state.scanComplete) gotoValidate(); }, 800);
+      } else if (!state.advancedMapping) {
         setTimeout(() => {
           if (state.step === "scanning" && state.scanComplete) show("findings");
         }, 1000);
@@ -1155,6 +1172,12 @@
     if (mode === "mapping") {
       state.advancedMapping = true;
       startMappingEditor();
+    } else if (mode === "manual") {
+      // Manual configuration: run the scan (no AI — the resource was opted out
+      // when the user chose this on the hub), then land in the mapping editor.
+      state.advancedMapping = true;
+      state.manualMode = true;
+      startStep1();
     } else {
       startStep1();
     }

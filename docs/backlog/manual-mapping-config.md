@@ -1,11 +1,11 @@
 # Advanced Manual Mapping & Configuration
 
-> **STATUS — Phase 1 + Phase 2 SHIPPED (2026-06-08).** This doc is the
-> design + change ledger for turning the setup wizard's blind "type the
-> source + KQL by hand" override step into a **palette-driven manual mapping
-> editor** that surfaces the App Insights inventory the scan already
-> discovered, and for grouping the AI / no-AI / manual configuration paths.
-> Phases 3-4 remain planned.
+> **STATUS — Phases 1-3 SHIPPED (2026-06-08).** This doc is the design +
+> change ledger for turning the setup wizard's blind "type the source + KQL by
+> hand" override step into a **palette-driven manual mapping editor** that
+> surfaces the App Insights inventory the scan already discovered, and for
+> grouping the AI / no-AI / manual configuration paths. Phase 4 (live preview)
+> remains planned; the dashboard-header entry to the editor stays deferred.
 
 ## Why
 
@@ -112,12 +112,24 @@ remaining gaps (`geo`, `browserTimings`, `dependencies`, `exceptions`) are
 *instrumentation* signals — not fixable by mapping; they stay on the findings
 step with a `code_prompt`.
 
-## Phase 3 — AI / no-AI / manual triptych + config hub
+## Phase 3 — AI / no-AI / manual triptych (SHIPPED)
 
-*(Depends on the deferred header decision — integration point only.)*
-A third "Configure manually" path opens the Phase 1 editor expanded,
-deterministic pre-fill, no AI wait. All three modes land in the same editor,
-pre-filled differently. The scan always runs (it feeds the palette).
+The Services-hub configure split-button (`openConfigureMenu` in
+[`app.js`](../../public/app.js)) gained a third entry **"Configurer
+manuellement"**, alongside the existing AI on/off options. Choosing it
+(`chooseManualConfigure`) opts the resource out of AI, selects it, and routes
+to `/setup?mode=manual`.
+
+New wizard mode `manual` in [`setup.js`](../../public/setup.js): runs the scan
+(no AI wait — the resource is opted out), then lands **directly in the mapping
+editor** (`gotoValidate`, `advancedMapping`) instead of the AI-findings cards.
+The scan-step Continue button + auto-advance route to the editor in this mode.
+So all three modes share the Phase 1/2 editor: AI / no-AI flow through the
+findings cards (then "Edit mapping" → editor); manual jumps straight in.
+
+No new backend route — reuses `/api/setup/ai-preference`, `/azure/select`,
+`/api/setup/scan/stream`, `/api/setup/findings`. The dashboard-header entry to
+the editor stays deferred (separate decision); this is hub-only.
 
 ## Phase 4 — Live preview (optional)
 
@@ -126,5 +138,5 @@ values + non-null %. Reuses the cache/KQL infra and existing safety guard.
 
 ## Order
 
-Phase 1 → Phase 2 (both shipped) → (3, 4). Neither shipped phase needed a DB
-migration or a new dependency.
+Phase 1 → Phase 2 → Phase 3 (all shipped) → Phase 4. No shipped phase needed a
+DB migration or a new dependency.
