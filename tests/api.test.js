@@ -60,6 +60,14 @@ test("static assets carry type-appropriate Cache-Control (HN-spike hardening)", 
   assert.equal(html.headers["cache-control"], "no-cache");
 });
 
+test("healthz returns liveness status and mode", async () => {
+  const request = supertest(app);
+  const res = await request.get("/healthz").expect(200);
+
+  assert.equal(res.body.ok, true);
+  assert.equal(typeof res.body.mode, "string");
+});
+
 test("mock auth and dashboard overview flow", async () => {
   const request = supertest.agent(app);
   await request.get("/auth/login").redirects(2).expect(200);
