@@ -153,7 +153,7 @@ function buildSankeyFromNav(navRows) {
     let step = 1;
     if (id === "/" || !targets.has(id)) step = 0;
     else if (!sources.has(id)) step = 2;
-    return { id, step, group: groupOf(id), value: Math.max(inValue[id], outValue[id]) };
+    return { id, label: id, step, group: groupOf(id), value: Math.max(inValue[id], outValue[id]) };
   });
   const links = navRows.map((r) => ({ source: r.from, target: r.to, value: r.transitions || r.count || 0 }));
   return { nodes, links };
