@@ -1,0 +1,10 @@
+// Manual mapping live preview — non-null ratio + a few sample values for one
+// mapped field, so the user can confirm an expression resolves to real data
+// before saving. `expr` is user-supplied (sanitized via the renderer's "any"
+// guard); tableName is whitelisted.
+let start={{timeStart}};
+let end={{timeEnd}};
+{{tableName}}
+| where timestamp between (start..end)
+| extend __v = tostring({{expr}})
+| summarize total = count(), nonNull = countif(isnotempty(__v)), samples = make_set_if(__v, isnotempty(__v), 5)

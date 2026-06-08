@@ -3891,6 +3891,87 @@ html.booting .navbar { display: none; }
 .setup-input-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .setup-row-btn { font-size: 11px; padding: 4px 10px; }
 
+/* Palette-driven mapping editor (manual-mapping-config Phase 1) */
+.map-group-row td { background: transparent; border: none; padding: 14px 0 4px; }
+.map-group-head {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+.map-field-name { font-weight: 600; font-size: 13px; }
+.map-field-code { font-size: 11px; color: var(--text-secondary); }
+.map-select { cursor: pointer; }
+.map-custom-source { margin-top: 6px; }
+.map-expr {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+/* Dashboard-header Configuration split-button: restyled to match the
+   neighbouring .d2-headeraction (Export / Change) so it sits flush. */
+.d2-pageheader-r #dashConfigSplit {
+  align-self: center;
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.d2-pageheader-r #dashConfigSplit .d2-cfg-primary,
+.d2-pageheader-r #dashConfigSplit .d2-cfg-caret {
+  background: transparent;
+  color: var(--text-primary);
+  border: none;
+  font-size: 13px;
+  font-weight: 500;
+  height: 35px;
+  line-height: 1;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.d2-pageheader-r #dashConfigSplit .d2-cfg-primary { padding-left: 14px; padding-right: 14px; }
+.d2-pageheader-r #dashConfigSplit .d2-cfg-caret { padding-left: 10px; padding-right: 10px; border-left: 1px solid var(--border); }
+.d2-pageheader-r #dashConfigSplit .d2-cfg-primary:hover,
+.d2-pageheader-r #dashConfigSplit .d2-cfg-caret:hover { background: var(--bg); color: var(--text-primary); filter: none; }
+
+.map-status { white-space: nowrap; }
+.map-preview { margin-top: 6px; font-size: 11px; line-height: 1.5; }
+.map-preview code { font-size: 11px; background: var(--border-light); padding: 1px 4px; border-radius: 3px; }
+.map-preview-loading { color: var(--text-secondary); }
+.map-preview-pct { font-weight: 600; }
+.map-preview-pct--ok { color: var(--success); }
+.map-preview-pct--warn { color: var(--warning, #b8860b); }
+.map-preview-pct--bad { color: var(--danger, #c0392b); }
+.map-preview-n, .map-preview-none { color: var(--text-secondary); }
+.map-preview-err { color: var(--danger, #c0392b); }
+.map-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  margin-right: 6px;
+}
+.map-badge--ai { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.map-badge--heuristic { background: var(--border-light); color: var(--text-secondary); }
+.map-badge--manual { background: color-mix(in srgb, var(--success) 18%, transparent); color: var(--success); }
+.map-badge--empty { background: color-mix(in srgb, var(--danger, #c0392b) 14%, transparent); color: var(--danger, #c0392b); }
+
+/* "Your telemetry" inventory panel */
+.setup-inventory { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+@media (max-width: 720px) { .setup-inventory { grid-template-columns: 1fr; } }
+.inv-group h4 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); }
+.inv-list { list-style: none; margin: 0; padding: 0; max-height: 280px; overflow-y: auto; }
+.inv-item { display: flex; flex-direction: column; gap: 2px; padding: 6px 0; border-bottom: 1px solid var(--border-light); }
+.inv-item code { font-size: 12px; }
+.inv-meta { font-size: 11px; color: var(--text-secondary); }
+.inv-samples { font-size: 11px; color: var(--text-tertiary, var(--text-secondary)); font-style: italic; }
+.inv-empty { font-size: 12px; color: var(--text-secondary); padding: 6px 0; }
+
 /* Step 4 — Complete */
 .setup-complete { text-align: center; padding: 40px 0; }
 .setup-complete-check {

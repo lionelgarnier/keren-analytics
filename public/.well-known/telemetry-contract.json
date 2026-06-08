@@ -1,7 +1,7 @@
 {
   "$schema": "https://keren.run/.well-known/telemetry-contract.json",
-  "contractVersion": "513b4b735ce5",
-  "generatedAt": "2026-06-07T08:07:50.965Z",
+  "contractVersion": "50d2888a2f2f",
+  "generatedAt": "2026-06-08T12:08:06.968Z",
   "product": {
     "name": "Keren Analytics",
     "url": "https://keren.run",
@@ -236,6 +236,65 @@
         "campaign_source"
       ],
       "recognizedNamePattern": "^(ref|referr?er|traffic|campaign)[_-]?(uri|url|source)$",
+      "note": "If you emit this as a custom dimension, name it one of recognizedNames (or match recognizedNamePattern) so Keren auto-maps it with no manual setup."
+    },
+    {
+      "canonicalField": "browser",
+      "builtinExpressions": [
+        "client_Browser"
+      ],
+      "customDimensionExpression": null,
+      "recommendedCustomDimensionName": "browser",
+      "recognizedNames": [
+        "browser",
+        "client_browser",
+        "userBrowser",
+        "user_browser",
+        "ua_browser",
+        "browserName",
+        "browser_name"
+      ],
+      "recognizedNamePattern": "^(client[_-]?)?(ua[_-]?)?browser([_-]?name)?$",
+      "note": "If you emit this as a custom dimension, name it one of recognizedNames (or match recognizedNamePattern) so Keren auto-maps it with no manual setup."
+    },
+    {
+      "canonicalField": "os",
+      "builtinExpressions": [
+        "client_OS"
+      ],
+      "customDimensionExpression": null,
+      "recommendedCustomDimensionName": "os",
+      "recognizedNames": [
+        "os",
+        "client_os",
+        "operatingSystem",
+        "operating_system",
+        "platform",
+        "ua_os",
+        "osName",
+        "os_name"
+      ],
+      "recognizedNamePattern": "^(client[_-]?)?(ua[_-]?)?(os|operating[_-]?system|platform)([_-]?name)?$",
+      "note": "If you emit this as a custom dimension, name it one of recognizedNames (or match recognizedNamePattern) so Keren auto-maps it with no manual setup."
+    },
+    {
+      "canonicalField": "device",
+      "builtinExpressions": [
+        "client_Type"
+      ],
+      "customDimensionExpression": null,
+      "recommendedCustomDimensionName": "device",
+      "recognizedNames": [
+        "device",
+        "deviceType",
+        "device_type",
+        "client_type",
+        "formFactor",
+        "form_factor",
+        "deviceClass",
+        "device_class"
+      ],
+      "recognizedNamePattern": "^(client[_-]?type|device([_-]?(type|class))?|form[_-]?factor)$",
       "note": "If you emit this as a custom dimension, name it one of recognizedNames (or match recognizedNamePattern) so Keren auto-maps it with no manual setup."
     }
   ],

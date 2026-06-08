@@ -21,6 +21,12 @@ export const mappingExpressions = {
     referrer: 'tostring(customDimensions["referrer"])',
     headerReferer: 'tostring(customDimensions["http.request.header.referer"])',
   },
+  // Device / browser / OS dimensions — substituted into tech-browser/os/device
+  // and session-timelines. Default to the App Insights standard columns; the
+  // user can remap to a custom dimension via the manual mapping editor.
+  browser: { builtin: "client_Browser" },
+  os: { builtin: "client_OS" },
+  device: { builtin: "client_Type" },
 };
 
 // Alias table for custom dimension key resolution. Each canonical field has
@@ -58,6 +64,27 @@ export const ALIASES = {
       "traffic_source", "utm_source", "campaign_source",
     ],
     pattern: /^(ref|referr?er|traffic|campaign)[_-]?(uri|url|source)$/i,
+  },
+  browser: {
+    exact: [
+      "browser", "client_browser", "userBrowser", "user_browser",
+      "ua_browser", "browserName", "browser_name",
+    ],
+    pattern: /^(client[_-]?)?(ua[_-]?)?browser([_-]?name)?$/i,
+  },
+  os: {
+    exact: [
+      "os", "client_os", "operatingSystem", "operating_system",
+      "platform", "ua_os", "osName", "os_name",
+    ],
+    pattern: /^(client[_-]?)?(ua[_-]?)?(os|operating[_-]?system|platform)([_-]?name)?$/i,
+  },
+  device: {
+    exact: [
+      "device", "deviceType", "device_type", "client_type",
+      "formFactor", "form_factor", "deviceClass", "device_class",
+    ],
+    pattern: /^(client[_-]?type|device([_-]?(type|class))?|form[_-]?factor)$/i,
   },
 };
 
@@ -244,11 +271,12 @@ export function buildMapping({ schemaProfile, readinessReport }) {
     canonicalSessionId,
     canonicalPagePath,
     canonicalReferrer,
-    canonicalUserAgent: {
-      source: "client_Browser/client_OS/client_Type",
-      expr: "client_Browser",
-      matchType: "builtin",
-    },
+    // Device / browser / OS each map to a standard App Insights column by
+    // default; the manual mapping editor can remap any of them to a custom
+    // dimension (e.g. server-side apps that log device info themselves).
+    canonicalBrowser: { source: "client_Browser", expr: "client_Browser", matchType: "builtin" },
+    canonicalOs: { source: "client_OS", expr: "client_OS", matchType: "builtin" },
+    canonicalDevice: { source: "client_Type", expr: "client_Type", matchType: "builtin" },
     pageTable,
   };
 
@@ -280,7 +308,10 @@ export function mergeWithValidation(mapping, validation) {
   if (!validation.overrides) return mapping;
 
   const merged = { ...mapping };
-  const fields = ["canonicalUserId", "canonicalSessionId", "canonicalPagePath", "canonicalReferrer"];
+  const fields = [
+    "canonicalUserId", "canonicalSessionId", "canonicalPagePath", "canonicalReferrer",
+    "canonicalBrowser", "canonicalOs", "canonicalDevice",
+  ];
   let changed = false;
   for (const field of fields) {
     const override = validation.overrides[field];
@@ -311,23 +342,25 @@ export function allowedKqlExpressions(mapping) {
   const sessionIdExpr = Object.values(mappingExpressions.sessionId);
   const pagePathExpr = Object.values(mappingExpressions.pagePath);
   const referrerExpr = Object.values(mappingExpressions.referrer);
+  const browserExpr = Object.values(mappingExpressions.browser);
+  const osExpr = Object.values(mappingExpressions.os);
+  const deviceExpr = Object.values(mappingExpressions.device);
 
   if (mapping) {
-    if (mapping.canonicalUserId?.expr && !userIdExpr.includes(mapping.canonicalUserId.expr)) {
-      userIdExpr.push(mapping.canonicalUserId.expr);
-    }
-    if (mapping.canonicalSessionId?.expr && !sessionIdExpr.includes(mapping.canonicalSessionId.expr)) {
-      sessionIdExpr.push(mapping.canonicalSessionId.expr);
-    }
-    if (mapping.canonicalPagePath?.expr && !pagePathExpr.includes(mapping.canonicalPagePath.expr)) {
-      pagePathExpr.push(mapping.canonicalPagePath.expr);
-    }
-    if (mapping.canonicalReferrer?.expr && !referrerExpr.includes(mapping.canonicalReferrer.expr)) {
-      referrerExpr.push(mapping.canonicalReferrer.expr);
-    }
+    const extend = (bucket, field) => {
+      const expr = mapping[field]?.expr;
+      if (expr && !bucket.includes(expr)) bucket.push(expr);
+    };
+    extend(userIdExpr, "canonicalUserId");
+    extend(sessionIdExpr, "canonicalSessionId");
+    extend(pagePathExpr, "canonicalPagePath");
+    extend(referrerExpr, "canonicalReferrer");
+    extend(browserExpr, "canonicalBrowser");
+    extend(osExpr, "canonicalOs");
+    extend(deviceExpr, "canonicalDevice");
   }
 
-  return { userIdExpr, sessionIdExpr, pagePathExpr, referrerExpr };
+  return { userIdExpr, sessionIdExpr, pagePathExpr, referrerExpr, browserExpr, osExpr, deviceExpr };
 }
 
 export function urlFieldAvailable(readinessReport) {

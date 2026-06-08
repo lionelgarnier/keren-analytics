@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { renderTemplate, loadKqlTemplate, clearTemplateCache } from "../src/core/kql.js";
+import { renderTemplate, loadKqlTemplate, clearTemplateCache, validateKqlExpr } from "../src/core/kql.js";
+import { mappingExpressions } from "../src/core/mapping.js";
 
 test("renderTemplate rejects disallowed params", () => {
   const template = "table {{tableName}}";
@@ -124,4 +125,90 @@ test("readiness-probes template probes backend signals", () => {
   assert.ok(rendered.includes("dependenciesCount"), "probes dependency volume");
   assert.ok(rendered.includes("exceptionsCount"), "probes exception volume");
   assert.ok(rendered.includes("roleCount"), "probes distinct cloud roles");
+});
+
+test("validateKqlExpr accepts every built-in mapping expression", () => {
+  // Includes the page-name extract() whose regex string literal contains a
+  // pipe — the string-stripping pass must not mistake it for an operator.
+  for (const bucket of Object.values(mappingExpressions)) {
+    for (const expr of Object.values(bucket)) {
+      const r = validateKqlExpr(expr);
+      assert.ok(r.ok, `should accept ${expr}: ${r.reason}`);
+    }
+  }
+  // A few more shapes an AI/user could legitimately produce.
+  for (const ok of [
+    "user_AuthenticatedId",
+    'tostring(customDimensions["uid"])',
+    "tostring(parse_url(url).Path)",
+    "coalesce(user_AuthenticatedId, user_Id)",
+    'extract("(?:GET|POST)\\s+([^?\\s]+)", 1, name)',
+  ]) {
+    assert.ok(validateKqlExpr(ok).ok, `should accept ${ok}`);
+  }
+});
+
+test("validateKqlExpr rejects injection vectors", () => {
+  for (const expr of [
+    "user_Id | take 1",                                    // pipe / operator chain
+    "user_Id; drop",                                        // statement separator
+    "client_Browser // comment",                            // line comment
+    "a /* b */ c",                                          // block comment
+    'toscalar(externaldata(x:string)[@"http://evil/"])',    // external data fetch
+    "cluster('x').database('y').T",                         // cross-cluster
+    "workspace('x').T",                                     // cross-workspace
+    "a & b",                                                 // smuggled operator
+    'broken "quote',                                         // unbalanced string
+    "x".repeat(501),                                         // too long
+  ]) {
+    assert.equal(validateKqlExpr(expr).ok, false, `should reject ${expr.slice(0, 40)}`);
+  }
+  assert.equal(validateKqlExpr("").ok, false);
+  assert.equal(validateKqlExpr(null).ok, false);
+});
+
+test("mapping-preview template substitutes a sanitized expr and summarizes non-null", () => {
+  clearTemplateCache();
+  const params = {
+    timeStart: 'datetime("2024-01-01T00:00:00Z")',
+    timeEnd: 'datetime("2024-01-08T00:00:00Z")',
+    tableName: "pageViews",
+    expr: 'tostring(customDimensions["uid"])',
+  };
+  const allowed = { tableName: ["pageViews", "requests"], expr: "any" };
+  const rendered = renderTemplate(loadKqlTemplate("mapping-preview"), params, allowed);
+  assert.ok(rendered.includes('tostring(customDimensions["uid"])'), "injects the expr");
+  assert.ok(rendered.includes("nonNull = countif(isnotempty(__v))"), "counts non-null");
+  assert.ok(rendered.includes("make_set_if"), "collects sample values");
+  // The "any" sanitizer rejects an expr that tries to chain a statement.
+  assert.throws(() => renderTemplate(loadKqlTemplate("mapping-preview"),
+    { ...params, expr: "x | take 1" }, allowed));
+});
+
+test("tech-browser/os/device templates substitute the remappable dimension exprs", () => {
+  clearTemplateCache();
+  const timeParams = {
+    timeStart: 'datetime("2024-01-01T00:00:00Z")',
+    timeEnd: 'datetime("2024-01-08T00:00:00Z")',
+    tableName: "pageViews",
+  };
+  // Default (standard column) renders unchanged.
+  const browser = renderTemplate(loadKqlTemplate("tech-browser"),
+    { ...timeParams, browserExpr: "client_Browser" },
+    { tableName: ["pageViews"], browserExpr: ["client_Browser"] });
+  assert.ok(browser.includes("by browser = client_Browser"));
+
+  // A whitelisted custom-dimension expr substitutes into both the guard and
+  // the summarize.
+  const customExpr = 'tostring(customDimensions["ua_device"])';
+  const device = renderTemplate(loadKqlTemplate("tech-device"),
+    { ...timeParams, deviceExpr: customExpr },
+    { tableName: ["pageViews"], deviceExpr: [customExpr] });
+  assert.ok(device.includes(`by device = ${customExpr}`));
+  assert.ok(device.includes(`isnotempty(${customExpr})`));
+
+  // An expr not on the whitelist is rejected.
+  assert.throws(() => renderTemplate(loadKqlTemplate("tech-os"),
+    { ...timeParams, osExpr: "client_OS" },
+    { tableName: ["pageViews"], osExpr: ["something_else"] }));
 });

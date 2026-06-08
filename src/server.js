@@ -19,6 +19,8 @@ import { getTenant, updateTenant, setResourceAiOptOut, getResourceAiOptOut } fro
 import { buildAiDisclosure } from "./ai/disclosure.js";
 import { getLatestScan, getScannedResourceIds } from "./core/scanStore.js";
 import { getLatestMapping } from "./core/mappingStore.js";
+import { buildFieldPalette } from "./core/fieldPalette.js";
+import { scrubSamples } from "./core/schemaScan.js";
 import {
   persistValidation,
   getActiveValidation,
@@ -29,7 +31,7 @@ import { createRateLimiter } from "./core/rateLimit.js";
 import { startBackupScheduler, restoreLatestSnapshot } from "./core/backupScheduler.js";
 import { createAzureFoundryProvider } from "./ai/azureFoundry.js";
 import { buildTelemetryContract, renderContractMarkdown } from "./core/telemetryContract.js";
-import { loadKqlTemplate, renderTemplate } from "./core/kql.js";
+import { loadKqlTemplate, renderTemplate, validateKqlExpr } from "./core/kql.js";
 import { resolveTimeRange, toKqlDatetime } from "./core/timeRange.js";
 import { cacheStore, buildCacheKey } from "./core/cache.js";
 
@@ -1034,6 +1036,9 @@ const CANONICAL_FIELDS = [
   "canonicalSessionId",
   "canonicalPagePath",
   "canonicalReferrer",
+  "canonicalBrowser",
+  "canonicalOs",
+  "canonicalDevice",
 ];
 
 function confidenceFromMatchType(matchType) {
@@ -1102,6 +1107,10 @@ app.get("/api/setup/findings", ensureAuth, (req, res) => {
     });
   }
   const effectiveMapping = buildEffectiveMapping(tenant.mapping, mapping);
+  // Per-field candidate sources for the manual mapping editor — derived from
+  // the discovered telemetry (custom dimensions + standard columns) so the
+  // user picks instead of typing a source/expr blind.
+  const palette = buildFieldPalette(scan.payload);
   res.set("Cache-Control", "no-store");
   res.json({
     selectedResource: tenant.selectedResource || null,
@@ -1116,12 +1125,14 @@ app.get("/api/setup/findings", ensureAuth, (req, res) => {
         }
       : null,
     effectiveMapping,
+    palette,
     validation: validation || null,
   });
 });
 
 const ALLOWED_OVERRIDE_FIELDS = new Set([
   "canonicalUserId", "canonicalSessionId", "canonicalPagePath", "canonicalReferrer",
+  "canonicalBrowser", "canonicalOs", "canonicalDevice",
 ]);
 const VALID_DECISIONS = new Set(["accept_all", "override", "reject"]);
 
@@ -1150,10 +1161,11 @@ app.post("/api/setup/validate", ensureAuth, verifyCsrf, (req, res) => {
     for (const [field, value] of Object.entries(overrides)) {
       if (!ALLOWED_OVERRIDE_FIELDS.has(field)) continue;
       if (!value || typeof value.expr !== "string" || typeof value.source !== "string") continue;
-      // Light KQL safety: forbid newlines/semicolons/pipe so user input can't
-      // smuggle a multi-statement KQL through the renderer's whitelist later.
-      if (/[;|\r\n]/.test(value.expr)) {
-        return res.status(400).json({ error: "INVALID_OVERRIDE_EXPR", field });
+      // KQL safety: strip-strings + allowlist + keyword denylist (kql.js). The
+      // free expression editor is the only path raw KQL reaches the renderer.
+      const check = validateKqlExpr(value.expr);
+      if (!check.ok) {
+        return res.status(400).json({ error: "INVALID_OVERRIDE_EXPR", field, message: check.reason });
       }
       cleanedOverrides[field] = { source: value.source.slice(0, 200), expr: value.expr.slice(0, 500) };
     }
@@ -1173,6 +1185,11 @@ app.post("/api/setup/validate", ensureAuth, verifyCsrf, (req, res) => {
     for (const row of effective) {
       if (!ALLOWED_OVERRIDE_FIELDS.has(row.canonical)) continue;
       if (!row.source || !row.expr) continue;
+      // AI-proposed (and deterministic) exprs also flow to the renderer via this
+      // snapshot — a prompt-injected proposal must not smuggle unsafe KQL. Drop
+      // any field whose expr fails validation; it falls back to the
+      // deterministic mapping at render time (mergeWithValidation).
+      if (!validateKqlExpr(row.expr).ok) continue;
       snapshot[row.canonical] = { source: row.source, expr: row.expr };
     }
     cleanedOverrides = Object.keys(snapshot).length > 0 ? snapshot : null;
@@ -1184,6 +1201,73 @@ app.post("/api/setup/validate", ensureAuth, verifyCsrf, (req, res) => {
   });
   trackEvent("validation_accepted", { tenant: hashForTelemetry(tenantId), decision });
   res.json({ ok: true, validation: persisted });
+});
+
+// Live preview for one mapped field (manual-mapping-config Phase 4): runs a
+// small KQL query over the last 7 days and returns the non-null ratio plus a
+// few PII-scrubbed sample values, so the user can confirm an expression
+// resolves to real data before saving. Read-only, but POST (carries the expr)
+// so it is CSRF-protected like the other mutating setup routes.
+app.post("/api/setup/mapping-preview", ensureAuth, verifyCsrf, async (req, res) => {
+  const tenantId = req.session.tenantId;
+  const tenant = getTenant(tenantId);
+  const resource = tenant.selectedResource || null;
+  if (!resource?.resourceId) {
+    return res.status(409).json({ error: "RESOURCE_NOT_SELECTED", message: "Select a resource first." });
+  }
+  const expr = typeof req.body?.expr === "string" ? req.body.expr.trim() : "";
+  if (!expr) {
+    return res.status(400).json({ error: "MISSING_EXPR", message: "expr is required" });
+  }
+  const exprCheck = validateKqlExpr(expr);
+  if (!exprCheck.ok) {
+    return res.status(400).json({ error: "INVALID_EXPR", message: exprCheck.reason });
+  }
+
+  // Pick the event table the dashboard would query for this resource.
+  const scan = getLatestScan(tenantId, resource.resourceId);
+  const tables = scan?.payload?.tables || {};
+  const tableName = tables.pageViews ? "pageViews" : tables.requests ? "requests" : "pageViews";
+
+  const timeRange = resolveTimeRange("7d");
+  try {
+    const kql = renderTemplate(
+      loadKqlTemplate("mapping-preview"),
+      { timeStart: toKqlDatetime(timeRange.start), timeEnd: toKqlDatetime(timeRange.end), tableName, expr },
+      // expr already passed validateKqlExpr above; self-whitelist it so the
+      // renderer's "any" sanitizer doesn't reject a legit `|` inside a regex
+      // string literal.
+      { tableName: ["pageViews", "requests"], expr: [expr] }
+    );
+    const result = await azureClient.queryWorkspace({
+      resourceId: resource.resourceId,
+      workspaceId: resource.workspaceId,
+      kql,
+      queryName: "mappingPreview",
+      timeRangeKey: "7d",
+    });
+    const table = result?.tables?.[0];
+    const cols = (table?.columns || []).map((c) => c.name);
+    const row = table?.rows?.[0] || [];
+    const cell = (name) => { const i = cols.indexOf(name); return i === -1 ? undefined : row[i]; };
+    const total = Number(cell("total")) || 0;
+    const nonNull = Number(cell("nonNull")) || 0;
+    let samples = cell("samples");
+    if (typeof samples === "string") { try { samples = JSON.parse(samples); } catch { samples = []; } }
+    if (!Array.isArray(samples)) samples = [];
+    samples = scrubSamples(samples.slice(0, 5).map((s) => String(s)));
+    res.set("Cache-Control", "no-store");
+    res.json({
+      table: tableName,
+      total,
+      nonNull,
+      nonNullPct: total > 0 ? Math.round((nonNull / total) * 100) : 0,
+      samples,
+    });
+  } catch (error) {
+    const status = error.status || error.cause?.status || 500;
+    res.status(status).json({ error: "PREVIEW_FAILED", message: error.message });
+  }
 });
 
 /* ========== Preview mode (no auth required) ========== */

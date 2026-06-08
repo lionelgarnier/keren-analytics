@@ -74,10 +74,11 @@ test("/api/setup/findings exposes effectiveMapping with deterministic origin whe
     await agent.post("/api/setup/scan").expect(200);
     const res = await agent.get("/api/setup/findings").expect(200);
     assert.ok(Array.isArray(res.body.effectiveMapping));
-    assert.equal(res.body.effectiveMapping.length, 4);
+    assert.equal(res.body.effectiveMapping.length, 7);
     const fields = res.body.effectiveMapping.map((r) => r.canonical);
     assert.deepEqual(fields, [
       "canonicalUserId", "canonicalSessionId", "canonicalPagePath", "canonicalReferrer",
+      "canonicalBrowser", "canonicalOs", "canonicalDevice",
     ]);
     // Tests run with AI_PROVIDER=none → degraded mapping → every populated
     // row must originate from the deterministic mapping (or be null).
@@ -88,6 +89,62 @@ test("/api/setup/findings exposes effectiveMapping with deterministic origin whe
     // built-in fields, so the wizard always has something to validate.
     const populated = res.body.effectiveMapping.filter((r) => r.source);
     assert.ok(populated.length >= 2, `expected ≥2 populated rows, got ${populated.length}`);
+  } finally { restore(); }
+});
+
+test("/api/setup/findings exposes a per-field source palette for the manual editor", async () => {
+  const restore = withFreshDb();
+  try {
+    const { agent } = await authedAgent("palette");
+    await agent.post("/api/setup/scan").expect(200);
+    const res = await agent.get("/api/setup/findings").expect(200);
+    const palette = res.body.palette;
+    assert.ok(palette && typeof palette === "object", "findings must include a palette");
+    assert.deepEqual(Object.keys(palette).sort(), [
+      "canonicalBrowser", "canonicalDevice", "canonicalOs",
+      "canonicalPagePath", "canonicalReferrer", "canonicalSessionId", "canonicalUserId",
+    ]);
+    // Each field offers at least one built-in column candidate to pick from.
+    for (const field of Object.keys(palette)) {
+      assert.ok(Array.isArray(palette[field]), `${field} palette must be an array`);
+      const kinds = new Set(palette[field].map((c) => c.kind));
+      assert.ok(kinds.has("builtin"), `${field} should offer a builtin candidate`);
+      for (const c of palette[field]) {
+        assert.equal(typeof c.source, "string");
+        assert.equal(typeof c.expr, "string");
+      }
+    }
+  } finally { restore(); }
+});
+
+test("/api/setup/mapping-preview returns a non-null ratio + scrubbed samples", async () => {
+  const restore = withFreshDb();
+  try {
+    const { agent } = await authedAgent("preview");
+    await agent.post("/api/setup/scan").expect(200);
+    const res = await agent
+      .post("/api/setup/mapping-preview")
+      .send({ source: "user_Id", expr: "user_Id" })
+      .expect(200);
+    assert.equal(typeof res.body.total, "number");
+    assert.equal(typeof res.body.nonNull, "number");
+    assert.ok(res.body.nonNullPct >= 0 && res.body.nonNullPct <= 100);
+    assert.ok(Array.isArray(res.body.samples));
+    assert.ok(["pageViews", "requests"].includes(res.body.table));
+  } finally { restore(); }
+});
+
+test("/api/setup/mapping-preview rejects an unsafe or empty expr", async () => {
+  const restore = withFreshDb();
+  try {
+    const { agent } = await authedAgent("preview-bad");
+    await agent.post("/api/setup/scan").expect(200);
+    const empty = await agent.post("/api/setup/mapping-preview").send({ expr: "" });
+    assert.equal(empty.status, 400);
+    assert.equal(empty.body.error, "MISSING_EXPR");
+    const unsafe = await agent.post("/api/setup/mapping-preview").send({ expr: "user_Id | take 1" });
+    assert.equal(unsafe.status, 400);
+    assert.equal(unsafe.body.error, "INVALID_EXPR");
   } finally { restore(); }
 });
 

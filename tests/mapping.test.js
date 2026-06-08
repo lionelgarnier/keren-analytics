@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { allowedKqlExpressions, buildMapping } from "../src/core/mapping.js";
+import { allowedKqlExpressions, buildMapping, mergeWithValidation } from "../src/core/mapping.js";
 
 test("buildMapping prefers authenticated user and pageViews", () => {
   const mapping = buildMapping({
@@ -219,4 +219,48 @@ test("allowedKqlExpressions without mapping returns the static defaults", () => 
   assert.ok(allowed.userIdExpr.includes("user_AuthenticatedId"));
   assert.ok(allowed.userIdExpr.includes("user_Id"));
   assert.ok(allowed.sessionIdExpr.includes("session_Id"));
+});
+
+// ── Device / browser / OS mapping (manual-mapping-config Phase 2) ──────────
+
+test("buildMapping defaults browser/os/device to the standard client_* columns", () => {
+  const mapping = buildMapping({
+    schemaProfile: { tables: { pageViews: true }, customDimensionsKeys: {} },
+    readinessReport: { availableSignals: { pageViews: true }, probeCounts: {} },
+  });
+  assert.equal(mapping.canonicalBrowser.expr, "client_Browser");
+  assert.equal(mapping.canonicalOs.expr, "client_OS");
+  assert.equal(mapping.canonicalDevice.expr, "client_Type");
+  assert.equal(mapping.canonicalBrowser.matchType, "builtin");
+});
+
+test("allowedKqlExpressions exposes browser/os/device buckets and extends them", () => {
+  const base = allowedKqlExpressions();
+  assert.ok(base.browserExpr.includes("client_Browser"));
+  assert.ok(base.osExpr.includes("client_OS"));
+  assert.ok(base.deviceExpr.includes("client_Type"));
+
+  const merged = mergeWithValidation(
+    buildMapping({
+      schemaProfile: { tables: { pageViews: true }, customDimensionsKeys: {} },
+      readinessReport: { availableSignals: { pageViews: true }, probeCounts: {} },
+    }),
+    { overrides: { canonicalDevice: { source: "customDimensions.deviceType", expr: 'tostring(customDimensions["deviceType"])' } }, validatedAt: "2026-06-08T00:00:00Z" }
+  );
+  const allowed = allowedKqlExpressions(merged);
+  assert.ok(allowed.deviceExpr.includes('tostring(customDimensions["deviceType"])'));
+});
+
+test("mergeWithValidation applies a device override and recomputes the version", () => {
+  const mapping = buildMapping({
+    schemaProfile: { tables: { pageViews: true }, customDimensionsKeys: {} },
+    readinessReport: { availableSignals: { pageViews: true }, probeCounts: {} },
+  });
+  const merged = mergeWithValidation(mapping, {
+    overrides: { canonicalBrowser: { source: "customDimensions.ua", expr: 'tostring(customDimensions["ua"])' } },
+    validatedAt: "2026-06-08T00:00:00Z",
+  });
+  assert.equal(merged.canonicalBrowser.expr, 'tostring(customDimensions["ua"])');
+  assert.equal(merged.canonicalBrowser.matchType, "user-override");
+  assert.notEqual(merged.version, mapping.version);
 });

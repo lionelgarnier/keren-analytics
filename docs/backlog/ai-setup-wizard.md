@@ -1,5 +1,12 @@
 # AI-Powered Setup Wizard
 
+> **Follow-up (2026-06-08):** the wizard's validate/override step was reworked
+> into a palette-driven manual mapping editor (+ device/browser/OS mappable
+> fields, live preview, `?mode=manual`, dashboard Configuration entry, free-KQL
+> guard). That work has its own ledger — see
+> [`manual-mapping-config.md`](manual-mapping-config.md). Read it alongside this
+> doc before touching the editor or `mergeWithValidation`.
+
 > **STATUS — SHIPPED 2026-05-11.** Tracks F1-F4 of the launch-readiness plan
 > are live; F5 (this doc, the architecture-ai doc, and the
 > ai-environment-analysis doc) refreshes them to match what was actually

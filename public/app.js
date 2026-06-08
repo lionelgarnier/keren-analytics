@@ -529,23 +529,6 @@ function krConfirm({ title, body, confirmText = "Continue", cancelText = "Cancel
   });
 }
 
-// Setup re-scans the telemetry and re-runs the AI mapping from scratch, which
-// replaces the saved configuration. Guard the tab so a mis-click can't trigger
-// that — navigate only after explicit confirmation.
-document.addEventListener("click", async (event) => {
-  const trigger = event.target.closest('[data-action="confirm-setup"]');
-  if (!trigger) return;
-  event.preventDefault();
-  const href = trigger.getAttribute("href") || "/setup";
-  const ok = await krConfirm({
-    title: "Re-run setup for this service?",
-    body: "Setup re-scans your telemetry and re-runs the AI mapping. The current configuration for this service will be replaced. You can't undo this.",
-    confirmText: "Re-run setup",
-    cancelText: "Stay here",
-  });
-  if (ok) window.location.href = href;
-});
-
 rangeSelect.addEventListener("change", () => {
   if (isPreviewMode) {
     enterPreviewMode();
@@ -1050,6 +1033,23 @@ async function chooseConfigure(resource, optOut) {
   }
 }
 
+// Manual configuration: opt the resource out of AI (no outbound call, no wait),
+// select it, then route to the setup wizard in manual mode — it scans, then
+// lands straight in the mapping editor so the user maps fields by hand.
+async function chooseManualConfigure(resource) {
+  setStatus(`Connecting to ${resource.appInsightsName}…`);
+  try {
+    await apiFetch("/api/setup/ai-preference", {
+      method: "POST",
+      body: JSON.stringify({ resourceId: resource.resourceId, optOut: true }),
+    });
+    await selectResourceApi(resource);
+    window.location.href = "/setup?mode=manual";
+  } catch (err) {
+    setStatus(err.message || "Could not start manual setup.", "error");
+  }
+}
+
 // Configure with the default mode (the first available option — AI when a
 // provider is wired, else deterministic). Same outcome as a plain card click,
 // but explicit so the persisted preference matches the advertised label.
@@ -1165,6 +1165,21 @@ async function openConfigureMenu(anchorBtn, resource) {
     menu.appendChild(item);
   }
 
+  // Manual configuration — distinct from the AI on/off options above: the user
+  // maps the fields themselves in the editor (scan runs, no AI).
+  const manual = document.createElement("button");
+  manual.type = "button";
+  manual.className = "d2-cfg-item";
+  manual.setAttribute("role", "menuitem");
+  manual.innerHTML = `
+    <span class="d2-cfg-icon" aria-hidden="true">✎</span>
+    <span class="d2-cfg-text">
+      <span class="d2-cfg-label">Configurer manuellement</span>
+      <span class="d2-cfg-detail">Mapper les champs à la main, sans IA</span>
+    </span>`;
+  manual.addEventListener("click", () => { closeConfigMenu(); chooseManualConfigure(resource); });
+  menu.appendChild(manual);
+
   const info = document.createElement("button");
   info.type = "button";
   info.className = "d2-cfg-item d2-cfg-info";
@@ -1189,6 +1204,73 @@ async function openConfigureMenu(anchorBtn, resource) {
     document.addEventListener("keydown", onConfigMenuKey);
   }, 0);
 }
+
+// Per-service Configuration control in the dashboard header. Primary action is
+// the non-destructive "edit mapping"; the caret groups the rarer reconfigure
+// (destructive) and the AI data/opt-out popover, so the header isn't cluttered
+// and the destructive path stays behind a confirm. Reuses the hub's caret-menu
+// chrome (closeConfigMenu / openConfigMenuEl / onConfigMenuKey).
+function openDashboardConfigMenu(anchorBtn) {
+  if (openConfigMenuEl) { closeConfigMenu(); return; }
+  const menu = document.createElement("div");
+  menu.className = "d2-cfg-menu";
+  menu.setAttribute("role", "menu");
+
+  const addItem = (icon, label, detail, onClick) => {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "d2-cfg-item";
+    item.setAttribute("role", "menuitem");
+    item.innerHTML = `
+      <span class="d2-cfg-icon" aria-hidden="true">${icon}</span>
+      <span class="d2-cfg-text">
+        <span class="d2-cfg-label">${escapeHtmlApp(label)}</span>
+        <span class="d2-cfg-detail">${escapeHtmlApp(detail)}</span>
+      </span>`;
+    item.addEventListener("click", () => { closeConfigMenu(); onClick(); });
+    menu.appendChild(item);
+  };
+
+  addItem("✎", "Modifier le mapping", "Ajuster comment les champs sont mappés — sans re-scan.", () => {
+    window.location.href = "/setup?mode=mapping";
+  });
+  addItem("⚠", "Reconfigurer (re-scan + IA)", "Re-scanne la télémétrie et relance l'IA. Remplace la configuration actuelle.", async () => {
+    const ok = await krConfirm({
+      title: "Reconfigurer ce service ?",
+      body: "Cela re-scanne votre télémétrie et relance le mapping IA. La configuration actuelle de ce service sera remplacée. Action irréversible.",
+      confirmText: "Reconfigurer",
+      cancelText: "Annuler",
+    });
+    if (ok) window.location.href = "/setup";
+  });
+  addItem("ⓘ", "Données envoyées à l'IA", "Voir ce qui est envoyé / jamais envoyé, et choisir sans IA.", async () => {
+    try { openAiDataPopover(await getAiDisclosure()); }
+    catch (err) { setStatus(err.message || "Could not load AI options.", "error"); }
+  });
+
+  document.body.appendChild(menu);
+  const r = anchorBtn.getBoundingClientRect();
+  menu.style.left = `${Math.min(r.left, window.innerWidth - menu.offsetWidth - 12)}px`;
+  const below = r.bottom + 6;
+  menu.style.top = below + menu.offsetHeight > window.innerHeight
+    ? `${Math.max(12, r.top - menu.offsetHeight - 6)}px`
+    : `${below}px`;
+
+  openConfigMenuEl = menu;
+  anchorBtn.setAttribute("aria-expanded", "true");
+  setTimeout(() => {
+    document.addEventListener("click", closeConfigMenu, { capture: true });
+    document.addEventListener("keydown", onConfigMenuKey);
+  }, 0);
+}
+
+document.getElementById("dashConfigPrimary")?.addEventListener("click", () => {
+  window.location.href = "/setup?mode=mapping";
+});
+document.getElementById("dashConfigCaret")?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  openDashboardConfigMenu(e.currentTarget);
+});
 
 function renderResources(resources) {
   lastDiscoveredResources = resources;
@@ -1220,7 +1302,6 @@ function renderResources(resources) {
         <span class="d2-mark">Keren<span class="d2-mark-dot">.</span></span>
         <div class="d2-tabs">
           <a class="d2-tab is-active" href="/services">Services</a>
-          <a class="d2-tab" href="/setup" data-action="confirm-setup">Setup</a>
           <a class="d2-tab" href="/docs">Docs</a>
           <a class="d2-tab" href="/auth/logout" data-action="logout">Logout</a>
         </div>

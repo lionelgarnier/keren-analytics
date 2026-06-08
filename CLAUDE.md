@@ -52,6 +52,19 @@ Status: **Phase 1 + Phase 2 + Phase A + Track F DONE**.
   channel + interactive validation are the post-launch roadmap (Phases 1-3,
   ADR 0006 / `docs/backlog/ai-instrumentation-assistant.md`).
 
+- **Advanced manual mapping & configuration** shipped 2026-06-08: the
+  wizard's blind override step became a **palette-driven editor** (pick a
+  source from the discovered custom dimensions / standard columns instead of
+  typing KQL — [`src/core/fieldPalette.js`](src/core/fieldPalette.js)),
+  device/browser/OS became genuinely mappable (3 new canonical fields +
+  `{{browserExpr}}/{{osExpr}}/{{deviceExpr}}` placeholders), a per-field
+  **live preview** ("Test" → non-null % + scrubbed samples,
+  `/api/setup/mapping-preview`), a third **"Configurer manuellement"** hub
+  path (`/setup?mode=manual`), and a per-service **Configuration**
+  split-button on the dashboard (the global "Setup" tab was removed). Free
+  KQL is guarded by `validateKqlExpr` (strip-strings + allowlist). See
+  [`docs/backlog/manual-mapping-config.md`](docs/backlog/manual-mapping-config.md).
+
 **Post-launch / deferred**: Phase 3 multi-tenant Postgres (single-instance
 SQLite suffices for V1), Phase 4 multi-cloud, the other AI surfaces
 (natural-language queries, instrumentation assistant — its Phase 0
@@ -104,7 +117,7 @@ together replace the original SaaS-track gate logic.
 ```bash
 npm install            # install deps (supertest is required for api/rbac tests)
 npm run dev            # start server on :3000 (mock mode by default)
-npm test               # node --env-file=.env.test --test (211 tests)
+npm test               # node --env-file=.env.test --test (232 tests)
 npm run build:contract # regenerate public/ telemetry-contract snapshots (ADR 0006)
 docker compose up --build
 ```
@@ -150,8 +163,12 @@ src/
     promptBuilder.js     # F3: F2 scan -> system prompt + JSON schema response
     quotaGuard.js        # F3: in-memory daily EUR cap, degrades on overflow
     schemaProfile.js     # auto-detect userId/sessionId/pagePath columns
-    mapping.js           # canonical model <-> tenant schema mapping
-    kql.js               # render templates with mapping substitution
+    mapping.js           # canonical model <-> tenant schema mapping (incl.
+                         # device/browser/OS fields, mergeWithValidation)
+    fieldPalette.js      # manual editor: scan -> per-field candidate sources
+                         # (builtin columns + matched custom dimensions)
+    kql.js               # render templates with mapping substitution +
+                         # validateKqlExpr (allowlist guard for free KQL)
     cache.js             # TTL cache, keyed by tenant+workspace+mapping+range
     readiness.js         # readiness probe results
     readinessScore.js    # 0-100 score from 7 weighted signals
@@ -163,11 +180,12 @@ src/
     dashboard.js         # builds dashboard payload from KQL results
     timeRange.js
     audit.js
-kql/                     # 32 versioned .kql templates (Azure-specific; relocation
+kql/                     # 34 versioned .kql templates (Azure-specific; relocation
                          # to queries/azure/ deferred to V2 with second adapter)
 public/                  # static SPA (index.html, app.js, styles.css)
-                         # + setup.html / setup.js (F4 wizard, /setup route)
-tests/                   # 24 test files, native node:test runner
+                         # + setup.html / setup.js (palette mapping editor +
+                         # /setup wizard, incl. ?mode=mapping / ?mode=manual)
+tests/                   # 29 test files, native node:test runner
 infra/                   # canonical Bicep + parameters
   main.bicep                 # Container Apps + ACR + Log Analytics + MI
   main.parameters.json
@@ -249,6 +267,12 @@ If a task explicitly asks to harden one of these, do it. Otherwise leave alone.
   shipped (F1-F5) plus the dogfooding pass that pivoted the wizard surface.
   Read this before touching the wizard, the AI prompt schema, or
   `mergeWithValidation` so you don't undo a deliberate design choice.
+- **`docs/backlog/manual-mapping-config.md`** — design + change ledger for
+  the palette-driven manual mapping editor, the device/browser/OS mappable
+  fields, the live preview, the manual/AI/no-AI config paths, the dashboard
+  Configuration entry, and the free-KQL `validateKqlExpr` guard. Read before
+  touching `fieldPalette.js`, the editor in `setup.js`, the mapping field set
+  (the 7 sync points), or `/api/setup/mapping-preview`.
 - **`docs/next-session.md`** — original Track F kickoff brief. Now
   historical — kept because it documents *why* the F1-F5 sequence was
   chosen and what decisions were locked in up front. Useful when extending

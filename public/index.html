@@ -557,7 +557,6 @@
             <span class="d2-mark">Keren<span class="d2-mark-dot">.</span></span>
             <div class="d2-tabs">
               <a class="d2-tab is-active" href="/services">Services</a>
-              <a class="d2-tab" href="/setup" data-action="confirm-setup">Setup</a>
               <a class="d2-tab" href="/docs">Docs</a>
               <a class="d2-tab" href="/auth/logout" data-action="logout">Logout</a>
             </div>
@@ -612,6 +611,10 @@
                 <button type="button" class="dash-range-btn" data-range="today">Today</button>
                 <button type="button" class="dash-range-btn is-active" data-range="7d">7d</button>
                 <button type="button" class="dash-range-btn" data-range="30d">30d</button>
+              </div>
+              <div class="d2-cfg-split d2-cfg-split--ghost" id="dashConfigSplit">
+                <button type="button" class="d2-cfg-primary" id="dashConfigPrimary" title="Modifier le mapping des champs de ce service"><span class="d2-cfg-primary-label">Modifier le mapping</span></button>
+                <button type="button" class="d2-cfg-caret" id="dashConfigCaret" aria-haspopup="menu" aria-expanded="false" aria-label="Options de configuration">▾</button>
               </div>
               <button type="button" class="d2-headeraction" id="dashExportBtn">⌘E Export</button>
               <button type="button" class="d2-headeraction" id="dashChangeBtn">Change</button>
