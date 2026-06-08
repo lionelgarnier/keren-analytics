@@ -991,9 +991,11 @@
             ? `<input type="text" class="setup-input setup-input-mono" data-bind="expr"
                  value="${escapeHtml(active.expr || "")}" placeholder='tostring(customDimensions["uid"])' />`
             : `<code class="map-expr">${escapeHtml(active.expr || "—")}</code>`}
+          <div class="map-preview" data-preview></div>
         </td>
         <td class="map-status">
           ${status}
+          <button class="btn btn-ghost setup-row-btn" data-action="test"${active.expr ? "" : " disabled"}>Test</button>
           ${isOverridden ? `<button class="btn btn-ghost setup-row-btn" data-action="reset">Reset</button>` : ""}
         </td>
       `;
@@ -1038,11 +1040,48 @@
         const field = input.closest("tr").dataset.field;
         if (!state.overrides[field]) state.overrides[field] = { source: "", expr: "" };
         state.overrides[field][input.dataset.bind] = input.value;
+        // Stale preview no longer matches the edited expression — clear it.
+        const out = input.closest("tr").querySelector("[data-preview]");
+        if (out) out.innerHTML = "";
+        const testBtn = input.closest("tr").querySelector('button[data-action="test"]');
+        if (testBtn) testBtn.disabled = !input.closest("tr").querySelector('input[data-bind="expr"]')?.value;
       });
+    });
+    tbody.querySelectorAll('button[data-action="test"]').forEach((btn) => {
+      btn.addEventListener("click", () => runPreview(btn));
     });
 
     renderInventoryPanel();
     updateValidateButtons();
+  }
+
+  // Phase 4 live preview: run the active expression for one field and show the
+  // non-null ratio + a few sample values inline.
+  async function runPreview(btn) {
+    const tr = btn.closest("tr");
+    const field = tr.dataset.field;
+    const byCanonical = Object.fromEntries(
+      (state.findings?.effectiveMapping || []).map((r) => [r.canonical, r])
+    );
+    const active = state.overrides[field] || byCanonical[field] || {};
+    if (!active.expr) return;
+    const out = tr.querySelector("[data-preview]");
+    out.innerHTML = `<span class="map-preview-loading">Testing…</span>`;
+    btn.disabled = true;
+    try {
+      const r = await api("POST", "/api/setup/mapping-preview", { source: active.source || "", expr: active.expr });
+      const pct = r.nonNullPct;
+      const cls = pct >= 80 ? "ok" : pct >= 30 ? "warn" : "bad";
+      const samples = (r.samples || []).map((s) => `<code>${escapeHtml(String(s))}</code>`).join(" ");
+      out.innerHTML =
+        `<span class="map-preview-pct map-preview-pct--${cls}">${pct}% non-null</span>` +
+        ` <span class="map-preview-n">(${r.nonNull}/${r.total} on ${escapeHtml(r.table)})</span>` +
+        (samples ? ` · ${samples}` : ` · <span class="map-preview-none">no sample values</span>`);
+    } catch (err) {
+      out.innerHTML = `<span class="map-preview-err">${escapeHtml(err.message || "Test failed")}</span>`;
+    } finally {
+      btn.disabled = false;
+    }
   }
 
   // Read-only "what's in my telemetry" browser, populated from the scan the

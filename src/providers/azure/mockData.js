@@ -815,6 +815,14 @@ export function getMockRows(queryName, timeRangeKey) {
     }));
   }
 
+  // Manual mapping live preview — the mock can't see the actual expression
+  // (queryWorkspace ignores the kql), so return a believable, well-populated
+  // result shape so the editor's "Test" button demonstrates the UI.
+  if (queryName === "mappingPreview") {
+    const total = scale(1240, rk);
+    return [{ total, nonNull: Math.round(total * 0.95), samples: ["s_8f2a1c", "s_3b71de", "s_c19d04"] }];
+  }
+
   // KPIs — scale by range
   if (queryName === "uniqueVisitors") {
     return [{ uniqueVisitors: scale(baseline.uniqueVisitors[0].uniqueVisitors, rk) }];

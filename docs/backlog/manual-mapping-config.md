@@ -1,11 +1,12 @@
 # Advanced Manual Mapping & Configuration
 
-> **STATUS — Phases 1-3 SHIPPED (2026-06-08).** This doc is the design +
+> **STATUS — Phases 1-4 SHIPPED (2026-06-08).** This doc is the design +
 > change ledger for turning the setup wizard's blind "type the source + KQL by
 > hand" override step into a **palette-driven manual mapping editor** that
-> surfaces the App Insights inventory the scan already discovered, and for
-> grouping the AI / no-AI / manual configuration paths. Phase 4 (live preview)
-> remains planned; the dashboard-header entry to the editor stays deferred.
+> surfaces the App Insights inventory the scan already discovered, with a live
+> per-field preview, and for grouping the AI / no-AI / manual configuration
+> paths. The dashboard-header entry to the editor stays deferred (separate
+> decision).
 
 ## Why
 
@@ -131,12 +132,26 @@ No new backend route — reuses `/api/setup/ai-preference`, `/azure/select`,
 `/api/setup/scan/stream`, `/api/setup/findings`. The dashboard-header entry to
 the editor stays deferred (separate decision); this is hub-only.
 
-## Phase 4 — Live preview (optional)
+## Phase 4 — Live preview (SHIPPED)
 
-Per-field "Test" button: run the KQL expr over a short window, show 3 sample
-values + non-null %. Reuses the cache/KQL infra and existing safety guard.
+Per-field **"Test"** button in the editor runs the active expression over the
+last 7 days and shows the non-null ratio + a few PII-scrubbed sample values
+inline, so the user confirms an expression resolves to real data before saving.
+
+- New `POST /api/setup/mapping-preview` (`ensureAuth` + `verifyCsrf`): picks the
+  resource's event table (pageViews/requests) from the latest scan, renders the
+  new `kql/mapping-preview.kql` template with the user expr sanitized via the
+  renderer's `"any"` guard, runs `queryWorkspace`, and returns
+  `{ total, nonNull, nonNullPct, samples, table }`. Samples are scrubbed with
+  `scrubSamples` from [`schemaScan.js`](../../src/core/schemaScan.js).
+- Mock mode: a `mappingPreview` handler in
+  [`mockData.js`](../../src/providers/azure/mockData.js) returns a believable
+  populated result (the mock can't see the expr).
+- Editor: a Test button per row (`runPreview` in
+  [`setup.js`](../../public/setup.js)) renders a green/amber/red non-null badge +
+  sample chips; editing the expression clears the stale preview.
 
 ## Order
 
-Phase 1 → Phase 2 → Phase 3 (all shipped) → Phase 4. No shipped phase needed a
-DB migration or a new dependency.
+Phase 1 → Phase 2 → Phase 3 → Phase 4 — all shipped. No phase needed a DB
+migration or a new dependency.

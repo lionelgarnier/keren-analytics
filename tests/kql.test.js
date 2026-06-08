@@ -126,6 +126,24 @@ test("readiness-probes template probes backend signals", () => {
   assert.ok(rendered.includes("roleCount"), "probes distinct cloud roles");
 });
 
+test("mapping-preview template substitutes a sanitized expr and summarizes non-null", () => {
+  clearTemplateCache();
+  const params = {
+    timeStart: 'datetime("2024-01-01T00:00:00Z")',
+    timeEnd: 'datetime("2024-01-08T00:00:00Z")',
+    tableName: "pageViews",
+    expr: 'tostring(customDimensions["uid"])',
+  };
+  const allowed = { tableName: ["pageViews", "requests"], expr: "any" };
+  const rendered = renderTemplate(loadKqlTemplate("mapping-preview"), params, allowed);
+  assert.ok(rendered.includes('tostring(customDimensions["uid"])'), "injects the expr");
+  assert.ok(rendered.includes("nonNull = countif(isnotempty(__v))"), "counts non-null");
+  assert.ok(rendered.includes("make_set_if"), "collects sample values");
+  // The "any" sanitizer rejects an expr that tries to chain a statement.
+  assert.throws(() => renderTemplate(loadKqlTemplate("mapping-preview"),
+    { ...params, expr: "x | take 1" }, allowed));
+});
+
 test("tech-browser/os/device templates substitute the remappable dimension exprs", () => {
   clearTemplateCache();
   const timeParams = {

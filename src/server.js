@@ -20,6 +20,7 @@ import { buildAiDisclosure } from "./ai/disclosure.js";
 import { getLatestScan, getScannedResourceIds } from "./core/scanStore.js";
 import { getLatestMapping } from "./core/mappingStore.js";
 import { buildFieldPalette } from "./core/fieldPalette.js";
+import { scrubSamples } from "./core/schemaScan.js";
 import {
   persistValidation,
   getActiveValidation,
@@ -1194,6 +1195,69 @@ app.post("/api/setup/validate", ensureAuth, verifyCsrf, (req, res) => {
   });
   trackEvent("validation_accepted", { tenant: hashForTelemetry(tenantId), decision });
   res.json({ ok: true, validation: persisted });
+});
+
+// Live preview for one mapped field (manual-mapping-config Phase 4): runs a
+// small KQL query over the last 7 days and returns the non-null ratio plus a
+// few PII-scrubbed sample values, so the user can confirm an expression
+// resolves to real data before saving. Read-only, but POST (carries the expr)
+// so it is CSRF-protected like the other mutating setup routes.
+app.post("/api/setup/mapping-preview", ensureAuth, verifyCsrf, async (req, res) => {
+  const tenantId = req.session.tenantId;
+  const tenant = getTenant(tenantId);
+  const resource = tenant.selectedResource || null;
+  if (!resource?.resourceId) {
+    return res.status(409).json({ error: "RESOURCE_NOT_SELECTED", message: "Select a resource first." });
+  }
+  const expr = typeof req.body?.expr === "string" ? req.body.expr.trim() : "";
+  if (!expr) {
+    return res.status(400).json({ error: "MISSING_EXPR", message: "expr is required" });
+  }
+  if (expr.length > 500 || /[;|&\r\n]/.test(expr)) {
+    return res.status(400).json({ error: "INVALID_EXPR", message: "expr is too long or contains disallowed characters" });
+  }
+
+  // Pick the event table the dashboard would query for this resource.
+  const scan = getLatestScan(tenantId, resource.resourceId);
+  const tables = scan?.payload?.tables || {};
+  const tableName = tables.pageViews ? "pageViews" : tables.requests ? "requests" : "pageViews";
+
+  const timeRange = resolveTimeRange("7d");
+  try {
+    const kql = renderTemplate(
+      loadKqlTemplate("mapping-preview"),
+      { timeStart: toKqlDatetime(timeRange.start), timeEnd: toKqlDatetime(timeRange.end), tableName, expr },
+      { tableName: ["pageViews", "requests"], expr: "any" }
+    );
+    const result = await azureClient.queryWorkspace({
+      resourceId: resource.resourceId,
+      workspaceId: resource.workspaceId,
+      kql,
+      queryName: "mappingPreview",
+      timeRangeKey: "7d",
+    });
+    const table = result?.tables?.[0];
+    const cols = (table?.columns || []).map((c) => c.name);
+    const row = table?.rows?.[0] || [];
+    const cell = (name) => { const i = cols.indexOf(name); return i === -1 ? undefined : row[i]; };
+    const total = Number(cell("total")) || 0;
+    const nonNull = Number(cell("nonNull")) || 0;
+    let samples = cell("samples");
+    if (typeof samples === "string") { try { samples = JSON.parse(samples); } catch { samples = []; } }
+    if (!Array.isArray(samples)) samples = [];
+    samples = scrubSamples(samples.slice(0, 5).map((s) => String(s)));
+    res.set("Cache-Control", "no-store");
+    res.json({
+      table: tableName,
+      total,
+      nonNull,
+      nonNullPct: total > 0 ? Math.round((nonNull / total) * 100) : 0,
+      samples,
+    });
+  } catch (error) {
+    const status = error.status || error.cause?.status || 500;
+    res.status(status).json({ error: "PREVIEW_FAILED", message: error.message });
+  }
 });
 
 /* ========== Preview mode (no auth required) ========== */

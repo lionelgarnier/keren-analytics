@@ -117,6 +117,37 @@ test("/api/setup/findings exposes a per-field source palette for the manual edit
   } finally { restore(); }
 });
 
+test("/api/setup/mapping-preview returns a non-null ratio + scrubbed samples", async () => {
+  const restore = withFreshDb();
+  try {
+    const { agent } = await authedAgent("preview");
+    await agent.post("/api/setup/scan").expect(200);
+    const res = await agent
+      .post("/api/setup/mapping-preview")
+      .send({ source: "user_Id", expr: "user_Id" })
+      .expect(200);
+    assert.equal(typeof res.body.total, "number");
+    assert.equal(typeof res.body.nonNull, "number");
+    assert.ok(res.body.nonNullPct >= 0 && res.body.nonNullPct <= 100);
+    assert.ok(Array.isArray(res.body.samples));
+    assert.ok(["pageViews", "requests"].includes(res.body.table));
+  } finally { restore(); }
+});
+
+test("/api/setup/mapping-preview rejects an unsafe or empty expr", async () => {
+  const restore = withFreshDb();
+  try {
+    const { agent } = await authedAgent("preview-bad");
+    await agent.post("/api/setup/scan").expect(200);
+    const empty = await agent.post("/api/setup/mapping-preview").send({ expr: "" });
+    assert.equal(empty.status, 400);
+    assert.equal(empty.body.error, "MISSING_EXPR");
+    const unsafe = await agent.post("/api/setup/mapping-preview").send({ expr: "user_Id | take 1" });
+    assert.equal(unsafe.status, 400);
+    assert.equal(unsafe.body.error, "INVALID_EXPR");
+  } finally { restore(); }
+});
+
 test("/api/setup/scan can be re-run to refresh the scan (covers re-scan flow)", async () => {
   const restore = withFreshDb();
   try {

@@ -3911,6 +3911,15 @@ html.booting .navbar { display: none; }
   word-break: break-all;
 }
 .map-status { white-space: nowrap; }
+.map-preview { margin-top: 6px; font-size: 11px; line-height: 1.5; }
+.map-preview code { font-size: 11px; background: var(--border-light); padding: 1px 4px; border-radius: 3px; }
+.map-preview-loading { color: var(--text-secondary); }
+.map-preview-pct { font-weight: 600; }
+.map-preview-pct--ok { color: var(--success); }
+.map-preview-pct--warn { color: var(--warning, #b8860b); }
+.map-preview-pct--bad { color: var(--danger, #c0392b); }
+.map-preview-n, .map-preview-none { color: var(--text-secondary); }
+.map-preview-err { color: var(--danger, #c0392b); }
 .map-badge {
   display: inline-block;
   font-size: 10px;
