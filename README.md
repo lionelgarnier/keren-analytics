@@ -196,7 +196,7 @@ Code of conduct: [Contributor Covenant 2.1](CODE_OF_CONDUCT.md).
 
 Thanks to everyone who has sent a PR — this project is better for it. 🙏
 
-[![Contributors](https://contrib.rocks/image?repo=lionelgarnier/keren-analytics)](https://github.com/lionelgarnier/keren-analytics/graphs/contributors)
+[![Contributors](https://contrib.rocks/image?repo=lionelgarnier/keren-analytics&excludeBots=true&excludeUser=claude,cursoragent)](https://github.com/lionelgarnier/keren-analytics/graphs/contributors)
 
 ## License
 
