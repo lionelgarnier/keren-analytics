@@ -231,6 +231,17 @@
 
   const CANONICAL_FIELDS = [
     "canonicalUserId", "canonicalSessionId", "canonicalPagePath", "canonicalReferrer",
+    "canonicalBrowser", "canonicalOs", "canonicalDevice",
+  ];
+
+  // Editor grouping. "Identity & navigation" fields drive identity/traffic
+  // queries; "Device & browser" fields drive the tech breakdown panels. Both
+  // are genuine column mappings — distinct from instrumentation signals
+  // (geo, browserTimings, dependencies, exceptions) which a mapping can't fix
+  // and which surface on the findings step with a code prompt instead.
+  const FIELD_GROUPS = [
+    { title: "Identity & navigation", fields: ["canonicalUserId", "canonicalSessionId", "canonicalPagePath", "canonicalReferrer"] },
+    { title: "Device & browser", fields: ["canonicalBrowser", "canonicalOs", "canonicalDevice"] },
   ];
 
   // Canonical fields the AI flagged as low-confidence in the current findings.
@@ -249,6 +260,9 @@
     canonicalSessionId: "sessions",
     canonicalPagePath: "page paths",
     canonicalReferrer: "referrers",
+    canonicalBrowser: "browser",
+    canonicalOs: "operating system",
+    canonicalDevice: "device type",
   };
   function humanizeField(field) {
     return FIELD_LABELS[field] || field;
@@ -883,7 +897,6 @@
   function renderValidate() {
     const f = state.findings;
     const effective = Array.isArray(f?.effectiveMapping) ? f.effectiveMapping : [];
-    const fields = CANONICAL_FIELDS;
     const byCanonical = Object.fromEntries(effective.map((r) => [r.canonical, r]));
     const palette = (f && f.palette) || {};
 
@@ -908,7 +921,12 @@
     const tbody = $("validateBody");
     tbody.innerHTML = "";
 
-    for (const field of fields) {
+    for (const group of FIELD_GROUPS) {
+      const headerTr = document.createElement("tr");
+      headerTr.className = "map-group-row";
+      headerTr.innerHTML = `<td colspan="4" class="map-group-head">${escapeHtml(group.title)}</td>`;
+      tbody.appendChild(headerTr);
+      for (const field of group.fields) {
       const proposal = byCanonical[field];
       const ovr = state.overrides[field];
       const active = ovr || proposal || { source: "", expr: "", origin: null, confidence: "low" };
@@ -963,6 +981,7 @@
         </td>
       `;
       tbody.appendChild(tr);
+      }
     }
 
     // Select change → pick a candidate, keep the current value, or go custom.

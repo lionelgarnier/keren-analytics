@@ -1,10 +1,11 @@
 # Advanced Manual Mapping & Configuration
 
-> **STATUS — PLANNED (2026-06-08).** Phase 1 in progress. This doc is the
+> **STATUS — Phase 1 + Phase 2 SHIPPED (2026-06-08).** This doc is the
 > design + change ledger for turning the setup wizard's blind "type the
 > source + KQL by hand" override step into a **palette-driven manual mapping
 > editor** that surfaces the App Insights inventory the scan already
 > discovered, and for grouping the AI / no-AI / manual configuration paths.
+> Phases 3-4 remain planned.
 
 ## Why
 
@@ -77,15 +78,39 @@ Turn the blind two-input row into **pick-from-discovered-inventory**.
 **Tests** — `fieldPalette.test.js` (candidates from a mocked scan);
 `setupApi.test.js` (findings returns `palette`).
 
-## Phase 2 — Full field coverage
+## Phase 2 — Device / browser / OS made genuinely mappable (SHIPPED)
 
-Add `canonicalUserAgent` (useful) and optionally `canonicalTimestamp` to the
-**4 sync points**, each with a `mappingExpressions` entry so
-`allowedKqlExpressions` can whitelist its exprs. **UI distinction:** separate
-*mapping* signals (userId, session, pagePath, referrer, userAgent, timestamp —
-fixable here) from *instrumentation* signals (`browserTimings`,
-`dependencies`, `exceptions`, `geo` — not mappable; they route to the existing
-`code_prompt` flow).
+**Finding that reshaped this phase:** only four mapping exprs are actually
+substituted into KQL — `{{userIdExpr}}`, `{{sessionIdExpr}}`,
+`{{pagePathExpr}}`, `{{referrerExpr}}`. There was no `userAgent`/`timestamp`
+placeholder: the device/browser/OS panels read `client_Browser` /
+`client_OS` / `client_Type` **hardcoded**, and `timestamp` is hardcoded
+everywhere. Making `userAgent`/`timestamp` "overridable" as originally
+written would have been cosmetic — the override would change no query.
+
+So Phase 2 instead made the device dimensions **genuinely substitutable**.
+"userAgent" is really three independent columns, so it became three mappable
+canonical fields — `canonicalBrowser` / `canonicalOs` / `canonicalDevice`:
+
+- New `{{browserExpr}}` / `{{osExpr}}` / `{{deviceExpr}}` placeholders in
+  `tech-browser.kql` / `tech-os.kql` / `tech-device.kql` (+ device in
+  `session-timelines.kql`), threaded through `dashboard.js` and whitelisted
+  via new `allowedKqlExpressions` buckets.
+- `mapping.js`: `mappingExpressions` + `ALIASES` (browser/os/device) +
+  `buildMapping` defaults each to its `client_*` column (zero behaviour change
+  for standard apps) + `mergeWithValidation` applies overrides for the three.
+- All **4 sync points** extended (`ALLOWED_OVERRIDE_FIELDS`,
+  `mergeWithValidation`, `allowedKqlExpressions`, `CANONICAL_FIELDS`), plus the
+  palette (`fieldPalette.js`) and the editor (`setup.js`).
+- The telemetry contract picks up the three new naming conventions for free
+  (derived from `ALIASES`); snapshots regenerated via `npm run build:contract`.
+
+**UI grouping:** the editor now groups rows into *Identity & navigation* (the
+4 original) and *Device & browser* (the 3 new). `timestamp` is intentionally
+**not** user-mappable (too central to every query, negligible value). The
+remaining gaps (`geo`, `browserTimings`, `dependencies`, `exceptions`) are
+*instrumentation* signals — not fixable by mapping; they stay on the findings
+step with a `code_prompt`.
 
 ## Phase 3 — AI / no-AI / manual triptych + config hub
 
@@ -101,4 +126,5 @@ values + non-null %. Reuses the cache/KQL infra and existing safety guard.
 
 ## Order
 
-Phase 1 → Phase 2 → (3, 4). Phase 1 has no DB migration and no new dependency.
+Phase 1 → Phase 2 (both shipped) → (3, 4). Neither shipped phase needed a DB
+migration or a new dependency.

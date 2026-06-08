@@ -3892,6 +3892,14 @@ html.booting .navbar { display: none; }
 .setup-row-btn { font-size: 11px; padding: 4px 10px; }
 
 /* Palette-driven mapping editor (manual-mapping-config Phase 1) */
+.map-group-row td { background: transparent; border: none; padding: 14px 0 4px; }
+.map-group-head {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
 .map-field-name { font-weight: 600; font-size: 13px; }
 .map-field-code { font-size: 11px; color: var(--text-secondary); }
 .map-select { cursor: pointer; }

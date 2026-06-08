@@ -74,10 +74,11 @@ test("/api/setup/findings exposes effectiveMapping with deterministic origin whe
     await agent.post("/api/setup/scan").expect(200);
     const res = await agent.get("/api/setup/findings").expect(200);
     assert.ok(Array.isArray(res.body.effectiveMapping));
-    assert.equal(res.body.effectiveMapping.length, 4);
+    assert.equal(res.body.effectiveMapping.length, 7);
     const fields = res.body.effectiveMapping.map((r) => r.canonical);
     assert.deepEqual(fields, [
       "canonicalUserId", "canonicalSessionId", "canonicalPagePath", "canonicalReferrer",
+      "canonicalBrowser", "canonicalOs", "canonicalDevice",
     ]);
     // Tests run with AI_PROVIDER=none → degraded mapping → every populated
     // row must originate from the deterministic mapping (or be null).
@@ -100,6 +101,7 @@ test("/api/setup/findings exposes a per-field source palette for the manual edit
     const palette = res.body.palette;
     assert.ok(palette && typeof palette === "object", "findings must include a palette");
     assert.deepEqual(Object.keys(palette).sort(), [
+      "canonicalBrowser", "canonicalDevice", "canonicalOs",
       "canonicalPagePath", "canonicalReferrer", "canonicalSessionId", "canonicalUserId",
     ]);
     // Each field offers at least one built-in column candidate to pick from.

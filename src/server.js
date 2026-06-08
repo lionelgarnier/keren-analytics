@@ -1035,6 +1035,9 @@ const CANONICAL_FIELDS = [
   "canonicalSessionId",
   "canonicalPagePath",
   "canonicalReferrer",
+  "canonicalBrowser",
+  "canonicalOs",
+  "canonicalDevice",
 ];
 
 function confidenceFromMatchType(matchType) {
@@ -1128,6 +1131,7 @@ app.get("/api/setup/findings", ensureAuth, (req, res) => {
 
 const ALLOWED_OVERRIDE_FIELDS = new Set([
   "canonicalUserId", "canonicalSessionId", "canonicalPagePath", "canonicalReferrer",
+  "canonicalBrowser", "canonicalOs", "canonicalDevice",
 ]);
 const VALID_DECISIONS = new Set(["accept_all", "override", "reject"]);
 

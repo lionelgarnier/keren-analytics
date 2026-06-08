@@ -125,3 +125,31 @@ test("readiness-probes template probes backend signals", () => {
   assert.ok(rendered.includes("exceptionsCount"), "probes exception volume");
   assert.ok(rendered.includes("roleCount"), "probes distinct cloud roles");
 });
+
+test("tech-browser/os/device templates substitute the remappable dimension exprs", () => {
+  clearTemplateCache();
+  const timeParams = {
+    timeStart: 'datetime("2024-01-01T00:00:00Z")',
+    timeEnd: 'datetime("2024-01-08T00:00:00Z")',
+    tableName: "pageViews",
+  };
+  // Default (standard column) renders unchanged.
+  const browser = renderTemplate(loadKqlTemplate("tech-browser"),
+    { ...timeParams, browserExpr: "client_Browser" },
+    { tableName: ["pageViews"], browserExpr: ["client_Browser"] });
+  assert.ok(browser.includes("by browser = client_Browser"));
+
+  // A whitelisted custom-dimension expr substitutes into both the guard and
+  // the summarize.
+  const customExpr = 'tostring(customDimensions["ua_device"])';
+  const device = renderTemplate(loadKqlTemplate("tech-device"),
+    { ...timeParams, deviceExpr: customExpr },
+    { tableName: ["pageViews"], deviceExpr: [customExpr] });
+  assert.ok(device.includes(`by device = ${customExpr}`));
+  assert.ok(device.includes(`isnotempty(${customExpr})`));
+
+  // An expr not on the whitelist is rejected.
+  assert.throws(() => renderTemplate(loadKqlTemplate("tech-os"),
+    { ...timeParams, osExpr: "client_OS" },
+    { tableName: ["pageViews"], osExpr: ["something_else"] }));
+});

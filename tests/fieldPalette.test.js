@@ -15,12 +15,22 @@ const scan = {
   eventNames: [{ name: "request", count: 8900 }],
 };
 
-test("builds a palette keyed by the four canonical fields", () => {
+test("builds a palette keyed by every canonical mappable field", () => {
   const palette = buildFieldPalette(scan);
   assert.deepEqual(
     Object.keys(palette).sort(),
-    ["canonicalPagePath", "canonicalReferrer", "canonicalSessionId", "canonicalUserId"]
+    [
+      "canonicalBrowser", "canonicalDevice", "canonicalOs",
+      "canonicalPagePath", "canonicalReferrer", "canonicalSessionId", "canonicalUserId",
+    ]
   );
+});
+
+test("device/browser/os fields offer their standard client_* column", () => {
+  const palette = buildFieldPalette(scan);
+  assert.equal(palette.canonicalBrowser[0].source, "client_Browser");
+  assert.equal(palette.canonicalOs[0].source, "client_OS");
+  assert.equal(palette.canonicalDevice[0].source, "client_Type");
 });
 
 test("offers built-in columns per field", () => {

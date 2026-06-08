@@ -345,6 +345,11 @@ export async function buildOverviewDashboard({
   const pagePathExpr = mapping.canonicalPagePath?.expr || mappingExpressions.pagePath.urlPath;
   const userIdExpr = mapping.canonicalUserId?.expr || "";
   const referrerExpr = mapping.canonicalReferrer?.expr || mappingExpressions.referrer.referrer;
+  // Device / browser / OS dimensions — user-remappable (manual-mapping-config
+  // Phase 2); default to the standard App Insights columns.
+  const browserExpr = mapping.canonicalBrowser?.expr || mappingExpressions.browser.builtin;
+  const osExpr = mapping.canonicalOs?.expr || mappingExpressions.os.builtin;
+  const deviceExpr = mapping.canonicalDevice?.expr || mappingExpressions.device.builtin;
 
   const timeParams = {
     timeStart: toKqlDatetime(timeRange.start),
@@ -441,8 +446,8 @@ export async function buildOverviewDashboard({
           tenantId, resourceId, workspaceId,
           queryName: "techBrowser",
           templateName: "tech-browser",
-          params: { ...timeParams, tableName },
-          allowedValues: { tableName: tableNameAllowed },
+          params: { ...timeParams, tableName, browserExpr },
+          allowedValues: { tableName: tableNameAllowed, browserExpr: allowedExpr.browserExpr },
           timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
         }),
     },
@@ -455,8 +460,8 @@ export async function buildOverviewDashboard({
           tenantId, resourceId, workspaceId,
           queryName: "techOs",
           templateName: "tech-os",
-          params: { ...timeParams, tableName },
-          allowedValues: { tableName: tableNameAllowed },
+          params: { ...timeParams, tableName, osExpr },
+          allowedValues: { tableName: tableNameAllowed, osExpr: allowedExpr.osExpr },
           timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
         }),
     },
@@ -469,8 +474,8 @@ export async function buildOverviewDashboard({
           tenantId, resourceId, workspaceId,
           queryName: "techDevice",
           templateName: "tech-device",
-          params: { ...timeParams, tableName },
-          allowedValues: { tableName: tableNameAllowed },
+          params: { ...timeParams, tableName, deviceExpr },
+          allowedValues: { tableName: tableNameAllowed, deviceExpr: allowedExpr.deviceExpr },
           timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
         }),
     },
@@ -595,11 +600,12 @@ export async function buildOverviewDashboard({
           tenantId, resourceId, workspaceId,
           queryName: "sessionTimelines",
           templateName: "session-timelines",
-          params: { ...timeParams, tableName, sessionIdExpr: sessionExpr, pagePathExpr },
+          params: { ...timeParams, tableName, sessionIdExpr: sessionExpr, pagePathExpr, deviceExpr },
           allowedValues: {
             tableName: tableNameAllowed,
             sessionIdExpr: allowedExpr.sessionIdExpr,
             pagePathExpr: allowedExpr.pagePathExpr,
+            deviceExpr: allowedExpr.deviceExpr,
           },
           timeRangeKey: timeRange.key, mappingVersion: mapping.version, ttlMs: cacheTtlMs, azureClient,
         }),

@@ -2,7 +2,7 @@
 
 > Plug-and-play analytics over Azure Application Insights telemetry. This contract tells coding agents which signals to emit, how to name custom dimensions, and which config values make telemetry render well.
 
-Contract version: `513b4b735ce5` · Machine-readable: https://keren.run/.well-known/telemetry-contract.json
+Contract version: `50d2888a2f2f` · Machine-readable: https://keren.run/.well-known/telemetry-contract.json
 
 Instrument your app's Azure Application Insights so these signals are present, name custom dimensions as below, and Keren renders the full dashboard with no manual mapping.
 
@@ -76,6 +76,9 @@ Built-in fields are detected automatically. If you must use a custom dimension, 
 - **sessionId** → recommended `sessionId` (also: sessionId, session_id, sid, sessionKey, session_key, visitId…)
 - **pagePath** → recommended `page` (also: page, pagePath, page_path, pageName, page_name, pageRoute…)
 - **referrer** → recommended `refUri` (also: refUri, referrer, ref_uri, referrerUrl, referrer_url, referer…)
+- **browser** → recommended `browser` (also: browser, client_browser, userBrowser, user_browser, ua_browser, browserName…)
+- **os** → recommended `os` (also: os, client_os, operatingSystem, operating_system, platform, ua_os…)
+- **device** → recommended `device` (also: device, deviceType, device_type, client_type, formFactor, form_factor…)
 
 ## Config best practices
 

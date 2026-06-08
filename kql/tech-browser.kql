@@ -4,12 +4,12 @@ let end={{timeEnd}};
 let total = toscalar(
   {{tableName}}
   | where timestamp between (start..end)
-  | where isnotempty(client_Browser)
+  | where isnotempty({{browserExpr}})
   | summarize count()
 );
 {{tableName}}
 | where timestamp between (start..end)
-| where isnotempty(client_Browser)
-| summarize count = count() by browser = client_Browser
+| where isnotempty({{browserExpr}})
+| summarize count = count() by browser = {{browserExpr}}
 | top 5 by count desc
 | extend total = total

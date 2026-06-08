@@ -18,12 +18,15 @@ import { ALIASES, mappingExpressions } from "./mapping.js";
 // string literals, so only an injection-safe set may become a candidate expr.
 const SAFE_CUSTOM_KEY = /^[A-Za-z0-9_.-]{1,128}$/;
 
-// The canonical fields covered by Phase 1, mapped to their `ALIASES` key.
+// The canonical mappable fields, mapped to their `ALIASES` key.
 const CANONICAL_TO_ALIAS = {
   canonicalUserId: "userId",
   canonicalSessionId: "sessionId",
   canonicalPagePath: "pagePath",
   canonicalReferrer: "referrer",
+  canonicalBrowser: "browser",
+  canonicalOs: "os",
+  canonicalDevice: "device",
 };
 
 function customExpr(key) {
@@ -69,6 +72,12 @@ function builtinCandidates(field, tables) {
         { source: "customDimensions.referrer", expr: mappingExpressions.referrer.referrer, label: "referrer" },
         { source: "customDimensions.http.request.header.referer", expr: mappingExpressions.referrer.headerReferer, label: "Referer header" },
       ];
+    case "canonicalBrowser":
+      return [{ source: "client_Browser", expr: mappingExpressions.browser.builtin, label: "client_Browser" }];
+    case "canonicalOs":
+      return [{ source: "client_OS", expr: mappingExpressions.os.builtin, label: "client_OS" }];
+    case "canonicalDevice":
+      return [{ source: "client_Type", expr: mappingExpressions.device.builtin, label: "client_Type" }];
     default:
       return [];
   }
