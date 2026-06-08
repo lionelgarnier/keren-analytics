@@ -30,7 +30,7 @@ export function clearTemplateCache() {
 // mapping-expression editor must never allow these; the allowlist below would
 // already block most via characters, this catches the keyword-only ones.
 const BLOCKED_KQL_KEYWORDS =
-  /\b(externaldata|toscalar|materialize|datatable|cluster|workspace|database|http_request|evaluate|range|print|union|join|search|find|invoke|consume)\b/i;
+  /\b(externaldata|toscalar|materialize|datatable|cluster|workspace|database|app|resource|http_request|evaluate|range|print|union|join|search|find|invoke|consume)\b/i;
 
 // Characters allowed OUTSIDE string literals in a mapping expression. Covers
 // every built-in/AI expression we generate (identifiers, function calls,

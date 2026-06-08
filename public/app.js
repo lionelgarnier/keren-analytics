@@ -2311,7 +2311,7 @@ function renderInsights(dashboard) {
     if (top && total > 0) {
       insights.push({
         kind: "up",
-        text: `Top traffic source: <strong>${top.source}</strong> drives <strong>${((top.count / total) * 100).toFixed(0)}%</strong> of all traffic`,
+        text: `Top traffic source: <strong>${escapeHtmlApp(top.source)}</strong> drives <strong>${((top.count / total) * 100).toFixed(0)}%</strong> of all traffic`,
       });
     }
   }
@@ -2349,7 +2349,7 @@ function renderInsights(dashboard) {
       const tail = topPath === "/" ? "high homepage concentration" : "traffic is concentrated on one route";
       insights.push({
         kind: "up",
-      text: `<strong>${topPath}</strong> captures <strong>${fmtPct(topShare)}</strong> of all page views — ${tail}`,
+      text: `<strong>${escapeHtmlApp(topPath)}</strong> captures <strong>${fmtPct(topShare)}</strong> of all page views — ${tail}`,
       });
     }
   }

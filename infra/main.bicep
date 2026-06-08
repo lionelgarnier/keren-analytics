@@ -65,6 +65,10 @@ param additionalCustomDomains array = []
 @secure()
 param sessionSecret string
 
+@description('Daily ingestion cap (GB) on the Log Analytics workspace — a hard backstop against a runaway self-telemetry bill during a traffic spike. Ingestion stops for the rest of the UTC day once hit (probe/console logs included). -1 disables the cap. Raise for legitimately high traffic.')
+@minValue(-1)
+param logAnalyticsDailyQuotaGb int = 5
+
 @description('Number of CPU cores per replica.')
 param cpuCores string = '0.5'
 
@@ -165,6 +169,9 @@ resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   properties: {
     sku: { name: 'PerGB2018' }
     retentionInDays: 30
+    workspaceCapping: {
+      dailyQuotaGb: logAnalyticsDailyQuotaGb
+    }
   }
 }
 

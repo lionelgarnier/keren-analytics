@@ -24,6 +24,9 @@ if (config.telemetry.enabled && config.telemetry.connectionString) {
       .start();
     client = appInsights.defaultClient;
     client.context.tags[client.context.keys.cloudRole] = config.telemetry.serviceName;
+    // Fixed-rate sampling (default 100 = no-op). Lower TELEMETRY_SAMPLING_PERCENT
+    // to cut ingestion cost during a traffic spike.
+    client.config.samplingPercentage = config.telemetry.samplingPercentage;
   } catch (err) {
     // Telemetry must never take the app down. Degrade to no-op.
     console.error("[telemetry] init failed — continuing without it:", err?.message || err);

@@ -157,6 +157,8 @@ test("validateKqlExpr rejects injection vectors", () => {
     'toscalar(externaldata(x:string)[@"http://evil/"])',    // external data fetch
     "cluster('x').database('y').T",                         // cross-cluster
     "workspace('x').T",                                     // cross-workspace
+    'app("OtherApp").requests',                             // cross-application (App Insights)
+    'resource("/subscriptions/x").T',                       // cross-resource reference
     "a & b",                                                 // smuggled operator
     'broken "quote',                                         // unbalanced string
     "x".repeat(501),                                         // too long

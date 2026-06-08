@@ -437,11 +437,6 @@ export function createRealClient() {
             }
             // For query-level errors, log and return empty result
             console.error(`Query '${queryName}' failed (attempt ${attempt + 1}):`, error.message);
-            if (queryName === "referrerSources") {
-              console.error("[DEBUG referrerSources] KQL:\n", kql);
-              console.error("[DEBUG referrerSources] URL:", url);
-              console.error("[DEBUG referrerSources] Error body:", error.body);
-            }
             if (error.code === "NO_DATA" || error.code === "QUERY_ERROR") {
               return { tables: [{ name: "PrimaryResult", columns: [], rows: [] }] };
             }

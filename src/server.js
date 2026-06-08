@@ -1451,6 +1451,7 @@ app.get("/telemetry.js", (req, res) => {
   const cs = JSON.stringify(config.telemetry.browserConnectionString);
   const tenantId = req.session?.tenantId;
   const authUser = tenantId ? JSON.stringify(hashForTelemetry(tenantId)) : "null";
+  const sampling = config.telemetry.samplingPercentage;
   res.send(
     `(function () {
   var cs = ${cs};
@@ -1463,6 +1464,7 @@ app.get("/telemetry.js", (req, res) => {
       var ai = new Microsoft.ApplicationInsights.ApplicationInsights({
         config: {
           connectionString: cs,
+          samplingPercentage: ${sampling},
           enableAutoRouteTracking: true,
           autoTrackPageVisitTime: true,
           disableFetchTracking: false
