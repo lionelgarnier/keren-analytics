@@ -529,23 +529,6 @@ function krConfirm({ title, body, confirmText = "Continue", cancelText = "Cancel
   });
 }
 
-// Setup re-scans the telemetry and re-runs the AI mapping from scratch, which
-// replaces the saved configuration. Guard the tab so a mis-click can't trigger
-// that — navigate only after explicit confirmation.
-document.addEventListener("click", async (event) => {
-  const trigger = event.target.closest('[data-action="confirm-setup"]');
-  if (!trigger) return;
-  event.preventDefault();
-  const href = trigger.getAttribute("href") || "/setup";
-  const ok = await krConfirm({
-    title: "Re-run setup for this service?",
-    body: "Setup re-scans your telemetry and re-runs the AI mapping. The current configuration for this service will be replaced. You can't undo this.",
-    confirmText: "Re-run setup",
-    cancelText: "Stay here",
-  });
-  if (ok) window.location.href = href;
-});
-
 rangeSelect.addEventListener("change", () => {
   if (isPreviewMode) {
     enterPreviewMode();
