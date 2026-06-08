@@ -928,10 +928,12 @@ function setD2Route(active) {
   document.body.classList.toggle("d2-route", active);
 }
 
-// Pure-CSS sparkline bar heights (0-100). Mirrors SparkBarsD2 in the D v2
-// reference (handoff-d2/reference-jsx/screens-dir-d2.jsx) so each status reads
-// the same: ready rises, incomplete spikes, unconfigured is a flat placeholder.
-function barHeights(kind, n = 22) {
+// Pure-CSS sparkline bar heights (0-100). Each status reads differently:
+// ready rises, incomplete spikes, unconfigured is a flat placeholder. Defaults
+// to 7 bars to match the real 7-day traffic sparkline (one bar per day) that
+// loadServiceTraffic swaps in for configured cards — keeps placeholder and real
+// bars visually consistent (same count, same width).
+function barHeights(kind, n = 7) {
   const seed = kind.length;
   return Array.from({ length: n }, (_, i) => {
     const t = i / (n - 1);
@@ -947,6 +949,48 @@ function barHeights(kind, n = 22) {
 
 const D2_SPARK_KIND = { ready: "rising", incomplete: "spiky", unconfigured: "placeholder" };
 const D2_CTA_CLASS = { ready: "", incomplete: " is-warn", unconfigured: " is-mute" };
+
+// Map real per-day traffic counts to sparkline bar heights (6-96%), normalized
+// to the series max so the busiest day reads as full-height.
+function trafficBarHeights(points) {
+  const max = Math.max(1, ...points);
+  return points.map((v) => Math.max(6, Math.min(96, Math.round((v / max) * 96))));
+}
+
+function formatTrafficTotal(n) {
+  if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, "") + "M";
+  if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, "") + "k";
+  return String(n);
+}
+
+// Off the critical render path: the hub is already painted with placeholder
+// bars (barHeights), so this fetches real per-resource traffic and swaps the
+// bars + total in for the configured cards once it resolves. Any resource
+// missing from the response (query failed, or not configured) silently keeps
+// its placeholder — never blocks or breaks the hub.
+async function loadServiceTraffic(panel) {
+  const readyCards = panel.querySelectorAll(".d2-rescard--ready");
+  if (readyCards.length === 0) return;
+  let resp;
+  try {
+    resp = await apiFetch("/api/setup/services/traffic");
+  } catch {
+    return;
+  }
+  const traffic = resp?.traffic || {};
+  readyCards.forEach((card) => {
+    const data = traffic[card.dataset.resourceId];
+    if (!data || !Array.isArray(data.points) || data.points.length === 0) return;
+    const sparkEl = card.querySelector(".d2-spark");
+    const valEl = card.querySelector(".d2-spark-val");
+    if (sparkEl) {
+      sparkEl.innerHTML = trafficBarHeights(data.points)
+        .map((h) => `<span class="d2-spark-bar" style="height:${h}%"></span>`)
+        .join("");
+    }
+    if (valEl) valEl.textContent = formatTrafficTotal(data.total || 0);
+  });
+}
 
 const D2_THEME_TOGGLE_SVG =
   '<svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>' +
@@ -1247,6 +1291,7 @@ function renderResources(resources) {
     const card = document.createElement("div");
     card.className = `d2-rescard d2-rescard--${status}`;
     card.dataset.env = envKey;
+    card.dataset.resourceId = resource.resourceId;
     card.dataset.search = [resource.appInsightsName, resource.subscriptionId, resource.resourceGroup, wsName, env.label].join(" ").toLowerCase();
 
     const envBadge = env.short
@@ -1284,7 +1329,7 @@ function renderResources(resources) {
         <span class="d2-statpill d2-statpill--${status}"><span class="d2-statpill-dot"></span>${escapeHtmlApp(statusMeta.label)}</span>
       </div>
       <div class="d2-spark-wrap">
-        <div class="d2-spark-head"><span>Events · 7d</span><span class="${sparkValClass}">—</span></div>
+        <div class="d2-spark-head"><span>Traffic · 7d</span><span class="${sparkValClass}">—</span></div>
         <div class="d2-spark">${bars}</div>
       </div>
       <div class="d2-tree">
@@ -1328,6 +1373,11 @@ function renderResources(resources) {
   // (deployment-global) disclosure resolves — keeps render synchronous and
   // works for every renderResources call site.
   applyConfigureLabels(resourcePanel);
+
+  // Real traffic sparklines for configured cards — fired after the synchronous
+  // render so the hub paints instantly and bars fill in when the (cached,
+  // parallelized) per-resource queries resolve.
+  loadServiceTraffic(resourcePanel);
 
   // Filter state: active env chip + free-text search, combined.
   let activeEnv = "all";
