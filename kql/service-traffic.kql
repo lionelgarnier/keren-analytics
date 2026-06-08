@@ -1,0 +1,11 @@
+// Total telemetry volume per day across the main App Insights tables — drives
+// the service-hub traffic sparkline. Schema-agnostic on purpose: no mapping
+// substitution, so it runs on any workspace-based resource without a profile.
+// isfuzzy=true tolerates tables a given app never emits (e.g. no pageViews on a
+// pure backend service) instead of failing the whole union.
+let start={{timeStart}};
+let end={{timeEnd}};
+union isfuzzy=true requests, pageViews, customEvents, dependencies, exceptions
+| where timestamp between (start..end)
+| summarize count = count() by period = bin(timestamp, 1d)
+| order by period asc

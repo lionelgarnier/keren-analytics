@@ -29,6 +29,9 @@ import { createRateLimiter } from "./core/rateLimit.js";
 import { startBackupScheduler, restoreLatestSnapshot } from "./core/backupScheduler.js";
 import { createAzureFoundryProvider } from "./ai/azureFoundry.js";
 import { buildTelemetryContract, renderContractMarkdown } from "./core/telemetryContract.js";
+import { loadKqlTemplate, renderTemplate } from "./core/kql.js";
+import { resolveTimeRange, toKqlDatetime } from "./core/timeRange.js";
+import { cacheStore, buildCacheKey } from "./core/cache.js";
 
 const app = express();
 const azureClient = getAzureClient();
@@ -804,6 +807,85 @@ app.get("/api/setup/services", ensureAuth, async (req, res) => {
         ? "Azure access token expired. Please sign in again."
         : error.message,
     });
+  }
+});
+
+// Service-hub traffic sparklines. Batched on purpose: one request, the N
+// per-resource Log Analytics queries run in parallel server-side so wall-clock
+// is the slowest single query, not their sum. Scoped to configured (`ready`)
+// resources only — an unconfigured one has no schema profile and keeps its
+// placeholder bars on the client. Off the critical render path: the hub paints
+// immediately and the client fills bars in when this resolves. Each resource's
+// result is cached (resource + range) so repeat visits are instant.
+const SERVICE_TRAFFIC_TTL_MS = 15 * 60 * 1000;
+
+function extractTrafficRows(result) {
+  if (!result || !result.tables || result.tables.length === 0) return [];
+  const table = result.tables[0];
+  const cols = table.columns.map((c) => c.name);
+  const periodIdx = cols.indexOf("period");
+  const countIdx = cols.indexOf("count");
+  if (countIdx === -1) return [];
+  return table.rows.map((row) => ({
+    period: periodIdx === -1 ? null : row[periodIdx],
+    count: Number(row[countIdx]) || 0,
+  }));
+}
+
+app.get("/api/setup/services/traffic", ensureAuth, async (req, res) => {
+  const tenantId = req.session.tenantId;
+  const rangeKey = "7d";
+  try {
+    const resources = await loadResourcesCached(tenantId);
+    const configured = new Set(getConfiguredResourceIds(tenantId));
+    const ready = resources.filter((r) => configured.has(r.resourceId));
+    const timeRange = resolveTimeRange(rangeKey);
+    const template = loadKqlTemplate("service-traffic");
+    const kql = renderTemplate(template, {
+      timeStart: toKqlDatetime(timeRange.start),
+      timeEnd: toKqlDatetime(timeRange.end),
+    });
+
+    const entries = await Promise.all(
+      ready.map(async (r) => {
+        const cacheKey = buildCacheKey({
+          tenantId,
+          resourceId: r.resourceId,
+          workspaceId: r.workspaceId,
+          queryName: "serviceTraffic",
+          timeRangeKey: rangeKey,
+        });
+        const cached = cacheStore.get(cacheKey);
+        if (cached) return [r.resourceId, cached];
+        try {
+          const result = await azureClient.queryWorkspace({
+            resourceId: r.resourceId,
+            workspaceId: r.workspaceId,
+            kql,
+            queryName: "serviceTraffic",
+            timeRangeKey: rangeKey,
+          });
+          const rows = extractTrafficRows(result);
+          const points = rows.map((row) => row.count);
+          const payload = { points, total: points.reduce((a, b) => a + b, 0) };
+          cacheStore.set(cacheKey, payload, SERVICE_TRAFFIC_TTL_MS);
+          return [r.resourceId, payload];
+        } catch (error) {
+          // A single resource failing must not sink the others — the client
+          // falls back to placeholder bars for any resourceId missing here.
+          console.error(`Service traffic query failed for ${r.resourceId}:`, error.message);
+          return null;
+        }
+      })
+    );
+
+    const traffic = Object.fromEntries(entries.filter(Boolean));
+    res.set("Cache-Control", "no-store");
+    res.json({ range: rangeKey, traffic });
+  } catch (error) {
+    console.error("Service traffic error:", error.message);
+    const status = error.status || error.cause?.status || 500;
+    res.status(status).json({ error: "TRAFFIC_FAILED", message: error.message });
   }
 });
 

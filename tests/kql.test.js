@@ -99,6 +99,22 @@ test("top-exceptions template never projects raw exception messages (PII guard)"
   assert.ok(!/details/i.test(rendered), "no exception details blob");
 });
 
+test("service-traffic template unions the main tables and bins by day", () => {
+  clearTemplateCache();
+  const rendered = renderTemplate(loadKqlTemplate("service-traffic"), {
+    timeStart: 'datetime("2024-01-01T00:00:00Z")',
+    timeEnd: 'datetime("2024-01-08T00:00:00Z")',
+  });
+  // isfuzzy lets a resource missing a table (e.g. no pageViews on a backend
+  // service) still return a result instead of failing the whole union.
+  assert.ok(rendered.includes("union isfuzzy=true"), "tolerates missing tables");
+  for (const table of ["requests", "pageViews", "customEvents", "dependencies", "exceptions"]) {
+    assert.ok(rendered.includes(table), `unions ${table}`);
+  }
+  assert.ok(rendered.includes("bin(timestamp, 1d)"), "buckets per day");
+  assert.ok(rendered.includes("count = count()"), "exposes a count column");
+});
+
 test("readiness-probes template probes backend signals", () => {
   clearTemplateCache();
   const rendered = renderTemplate(loadKqlTemplate("readiness-probes"), {

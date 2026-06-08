@@ -168,6 +168,32 @@ test("/api/setup/services tags resources with their per-resource status", async 
   } finally { restore(); }
 });
 
+test("/api/setup/services/traffic returns sparkline points for configured resources only", async () => {
+  const restore = withFreshDb();
+  try {
+    const { agent } = await authedAgent("traffic");
+
+    // Unconfigured → no traffic entry yet.
+    const before = await agent.get("/api/setup/services/traffic").expect(200);
+    assert.equal(before.body.range, "7d");
+    assert.deepEqual(before.body.traffic, {});
+
+    // Configure the resource (scan + validate), then traffic appears.
+    await agent.post("/api/setup/scan").expect(200);
+    await agent.post("/api/setup/validate").send({ decision: "accept_all" }).expect(200);
+
+    const services = await agent.get("/api/setup/services").expect(200);
+    const resourceId = services.body.services[0].resourceId;
+
+    const after = await agent.get("/api/setup/services/traffic").expect(200);
+    const entry = after.body.traffic[resourceId];
+    assert.ok(entry, "configured resource should have a traffic entry");
+    assert.ok(Array.isArray(entry.points) && entry.points.length > 0, "points populated");
+    assert.ok(entry.points.every((p) => Number.isFinite(p)), "points are numeric");
+    assert.ok(Number.isFinite(entry.total) && entry.total > 0, "total is a positive number");
+  } finally { restore(); }
+});
+
 test("dashboard render reuses the config snapshot — no re-scan per load", async () => {
   // The core config/render split: setup scan is the CONFIG phase (runs
   // once); every /dashboard/overview is the RENDER phase and must never

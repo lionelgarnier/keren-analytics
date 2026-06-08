@@ -804,6 +804,17 @@ export function getMockRows(queryName, timeRangeKey) {
     return generateDailyTrend(30);
   }
 
+  // Service-hub traffic sparkline — total telemetry volume per day. Reuses the
+  // daily-trend shape but exposes a single `count` column (pageViews + a slice
+  // of the other tables) so the hub mock looks like real union traffic.
+  if (queryName === "serviceTraffic") {
+    const days = rk === "30d" ? 30 : 7;
+    return generateDailyTrend(days).map((d) => ({
+      period: d.period,
+      count: d.pageViews + d.visitors,
+    }));
+  }
+
   // KPIs — scale by range
   if (queryName === "uniqueVisitors") {
     return [{ uniqueVisitors: scale(baseline.uniqueVisitors[0].uniqueVisitors, rk) }];
