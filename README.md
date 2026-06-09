@@ -7,7 +7,7 @@
 
 > Turn Azure Application Insights into shareable **Marketing & Technical
 > dashboards in under 2 minutes** — AI-mapped schema, deterministic KQL,
-> no raw telemetry persistence outside your tenant. MIT.
+> raw telemetry rows never persisted. MIT.
 
 <p align="center">
   <img src="public/demo.gif" alt="Keren Analytics — scan telemetry, AI-map the schema, render Marketing &amp; Technical dashboards in under 2 minutes" width="100%">
@@ -83,7 +83,7 @@ One image per group below would let the bullet list breathe.
   ~80% of real-world custom dimension naming (`uid`, `visitor_id`,
   `accountId`, etc.) with zero config; optional Azure Foundry mapping
   can refine proposals in setup.
-- **26 versioned KQL templates** rendered server-side with strict
+- **Versioned KQL templates** rendered server-side with strict
   parameter substitution. Tenant identifiers never reach a query
   string.
 - **MIT-licensed, single binary** — Node 22, Express 5, Helmet,
@@ -97,7 +97,7 @@ One image per group below would let the bullet list breathe.
 | Marketing vs Technical separation| Built-in            | Manual workbook     | Add-on                | Manual report      |
 | Readiness scoring + AI prompts   | **0–100, LLM-ready prompts** | No        | Limited                | No                 |
 | Custom-dimension auto-mapping    | Alias + regex (LLM optional) | Manual    | Manual                | Manual             |
-| Data residency                   | **No raw telemetry rows are persisted outside your tenant** | Native | New endpoint   | New endpoint       |
+| Data residency                   | **Raw telemetry rows never persisted; self-host to keep all processing in-network** | Native | New endpoint   | New endpoint       |
 | License / cost                   | **MIT, free**       | Included w/ Azure   | Per-host $$$          | Per-user $$        |
 | Self-hostable                    | Yes (`docker compose up`) | N/A           | No (SaaS)             | Limited            |
 
@@ -107,12 +107,22 @@ mature and have features we don't.
 
 ## Privacy & security
 
-The product promise is that **raw telemetry rows are not persisted
-outside your Azure tenant**. The service stores setup metadata and
-aggregated dashboard outputs in SQLite. Most browser payloads are
-aggregated metrics (counts, percentiles, geo/browser distributions,
-top-N pages); a few setup/technical surfaces can include scrubbed,
-bounded event-level snippets (for example recent session timelines).
+The product promise is that **raw telemetry rows are never persisted** —
+no log table, no event store. The service keeps only setup metadata and
+aggregated dashboard outputs in SQLite. What that means in practice
+depends on where you run it:
+
+- **Self-hosted** — the whole thing runs inside your own infrastructure,
+  so no telemetry ever leaves your network.
+- **Hosted (`keren.run`)** — the server holds your *delegated* OAuth
+  token and runs the KQL against your Application Insights on your
+  behalf. Query results therefore transit and are aggregated **on the
+  Keren server** before being returned; they are never stored. Most
+  payloads are aggregated metrics (counts, percentiles, geo/browser
+  distributions, top-N pages); a few setup/technical surfaces can
+  include scrubbed, bounded event-level snippets (for example recent
+  session timelines). If you'd rather no data touched a third-party
+  server at all, self-host.
 
 That promise is encoded as automated checks in
 [`scripts/security-audit.mjs`](scripts/security-audit.mjs). Seven
