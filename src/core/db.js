@@ -171,6 +171,11 @@ function applySchema(db) {
   // single-replica deployment and a no-op for `:memory:`.
   if (dbPathInUse !== ":memory:") {
     db.exec("PRAGMA journal_mode = WAL");
+    // Wait (up to 5s) instead of throwing SQLITE_BUSY when the backup
+    // scheduler's second connection holds a lock (VACUUM INTO / SIGTERM
+    // snapshot). Without this a redeploy mid-traffic could fail the final
+    // snapshot and lose config.
+    db.exec("PRAGMA busy_timeout = 5000");
   }
   for (const stmt of SCHEMA_STATEMENTS) {
     db.exec(stmt);

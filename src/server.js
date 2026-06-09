@@ -65,10 +65,16 @@ app.use(
         // js.monitor.azure.com: App Insights browser SDK (self-telemetry,
         // stage B). The /telemetry.js bootstrap injects this CDN script.
         scriptSrc: ["'self'", "https://cdn.jsdelivr.net", "https://unpkg.com", "https://js.monitor.azure.com"],
-        styleSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com"],
+        // fonts.googleapis.com hosts the @font-face stylesheet (Inter,
+        // JetBrains Mono, Instrument Serif) linked from every page; without it
+        // the CSP silently blocks the stylesheet and the whole app falls back
+        // to system fonts. The font files themselves come from gstatic (fontSrc).
+        styleSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com", "https://fonts.googleapis.com"],
+        fontSrc: ["'self'", "https://fonts.gstatic.com"],
         imgSrc: ["'self'", "data:", "https://*.tile.openstreetmap.org"],
         // *.in.applicationinsights / *.livediagnostics: App Insights ingestion
         // + Live Metrics endpoints the browser SDK posts telemetry to.
+        // api.github.com: live stargazer count on the landing nav.
         connectSrc: [
           "'self'",
           "https://cdn.jsdelivr.net",
@@ -76,6 +82,7 @@ app.use(
           "https://js.monitor.azure.com",
           "https://*.in.applicationinsights.azure.com",
           "https://*.livediagnostics.monitor.azure.com",
+          "https://api.github.com",
         ],
       },
     },
@@ -453,6 +460,14 @@ app.get("/auth/callback", async (req, res) => {
 
   try {
     const tokens = await exchangeCodeForTokens(code, codeVerifier);
+    const payload = decodeJwtPayload(tokens.access_token);
+
+    // Prevent session fixation: now that the principal is authenticated, issue
+    // a fresh session id (the pre-auth id, which held oauthState, is discarded)
+    // and only then populate the authenticated session.
+    await new Promise((resolve, reject) =>
+      req.session.regenerate((err) => (err ? reject(err) : resolve()))
+    );
 
     req.session.azureAccessToken = tokens.access_token;
     if (tokens.refresh_token) {
@@ -460,13 +475,18 @@ app.get("/auth/callback", async (req, res) => {
     }
 
     // Extract tenant and user info from token
-    const payload = decodeJwtPayload(tokens.access_token);
     if (payload?.tid && isValidTenantId(payload.tid)) {
       req.session.tenantId = payload.tid;
     }
     req.session.userName = payload?.name || null;
     req.session.userUpn = payload?.upn || payload?.preferred_username || null;
     ensureCsrfToken(req);
+
+    // Persist the regenerated session before redirecting so the new cookie and
+    // the store are consistent for the very next request.
+    await new Promise((resolve, reject) =>
+      req.session.save((err) => (err ? reject(err) : resolve()))
+    );
 
     trackEvent("tenant_connected", { tenant: hashForTelemetry(req.session.tenantId) });
     res.redirect("/");
@@ -1295,6 +1315,57 @@ async function runPreviewPipeline(rangeKey, onProgress, onCard) {
   return result;
 }
 
+/* The public demo is anonymous and identical for every visitor (mock data
+ * varies only by range). Under a Show HN spike, recomputing it — and the
+ * synchronous SQLite writes the pipeline does against the shared
+ * preview-tenant row — on every hit would hammer the single replica. Memoize
+ * the finished payload per range and single-flight cold misses so a burst of
+ * concurrent first-hits runs the pipeline once, not N times. */
+const PREVIEW_CACHE_TTL_MS = 60_000;
+const previewCache = new Map(); // rangeKey -> { payload, expires }
+const previewInflight = new Map(); // rangeKey -> Promise<payload>
+
+function getCachedPreview(rangeKey) {
+  const hit = previewCache.get(rangeKey);
+  if (hit && hit.expires > Date.now()) return hit.payload;
+  return null;
+}
+
+function buildPreviewPayload(result) {
+  return {
+    dashboard: result.dashboard,
+    readiness: result.readinessReport,
+    readinessScore: computeReadinessScore(result.readinessReport),
+    preview: true,
+  };
+}
+
+function cachePreview(rangeKey, payload) {
+  previewCache.set(rangeKey, { payload, expires: Date.now() + PREVIEW_CACHE_TTL_MS });
+}
+
+/** Compute (or join an in-flight computation of) the preview payload for a
+ * range, with single-flight so a burst of cold misses runs the pipeline once.
+ * Throws on pipeline error (err.result carries the structured error). */
+function getPreviewPayload(rangeKey) {
+  const cached = getCachedPreview(rangeKey);
+  if (cached) return Promise.resolve(cached);
+  if (previewInflight.has(rangeKey)) return previewInflight.get(rangeKey);
+  const p = (async () => {
+    const result = await runPreviewPipeline(rangeKey);
+    if (result.error) {
+      const err = new Error(result.message || result.error);
+      err.result = result;
+      throw err;
+    }
+    const payload = buildPreviewPayload(result);
+    cachePreview(rangeKey, payload);
+    return payload;
+  })().finally(() => previewInflight.delete(rangeKey));
+  previewInflight.set(rangeKey, p);
+  return p;
+}
+
 app.get("/preview/dashboard", async (req, res) => {
   const requestedRange = req.query.range || "7d";
   const rangeKey = ["today", "7d", "30d"].includes(requestedRange) ? requestedRange : "7d";
@@ -1306,30 +1377,36 @@ app.get("/preview/dashboard", async (req, res) => {
     streamParam === true ||
     streamParam === "true" ||
     acceptHeader.includes("application/x-ndjson");
-  res.set("Cache-Control", "no-store");
   res.vary("Accept");
-  console.log(
-    `[preview] range=${rangeKey} stream=${wantStream} streamParam=${String(streamParam)} accept=${acceptHeader} query=${JSON.stringify(req.query)}`
-  );
 
   if (wantStream) {
-    res.set({ "Content-Type": "application/x-ndjson", "Cache-Control": "no-cache", "X-Accel-Buffering": "no" });
+    res.set({ "Content-Type": "application/x-ndjson", "Cache-Control": "no-store", "X-Accel-Buffering": "no" });
     res.flushHeaders();
     let closed = false;
     req.on("close", () => { closed = true; });
     function send(obj) { if (!closed) res.write(JSON.stringify(obj) + "\n"); }
 
     try {
-      const result = await runPreviewPipeline(
-        rangeKey,
-        (label, pct) => { send({ type: "progress", label, pct: Math.round(pct * 100) }); },
-        (name, data) => { send({ type: "card", name, data }); }
-      );
-      if (result.error) {
-        send({ type: "error", ...result });
+      const cached = getCachedPreview(rangeKey);
+      if (cached) {
+        // Warm cache (the common case under load): skip the pipeline and its
+        // SQLite writes entirely. The client renders the full dashboard from
+        // `done`, so the progressive `card` frames are a cold-path nicety.
+        send({ type: "progress", label: "Loading sample data", pct: 100 });
+        send({ type: "done", ...cached });
       } else {
-        const readinessScore = computeReadinessScore(result.readinessReport);
-        send({ type: "done", dashboard: result.dashboard, readiness: result.readinessReport, readinessScore, preview: true });
+        const result = await runPreviewPipeline(
+          rangeKey,
+          (label, pct) => { send({ type: "progress", label, pct: Math.round(pct * 100) }); },
+          (name, data) => { send({ type: "card", name, data }); }
+        );
+        if (result.error) {
+          send({ type: "error", ...result });
+        } else {
+          const payload = buildPreviewPayload(result);
+          cachePreview(rangeKey, payload);
+          send({ type: "done", ...payload });
+        }
       }
     } catch (error) {
       send({ type: "error", error: "PREVIEW_ERROR", message: error.message });
@@ -1339,19 +1416,12 @@ app.get("/preview/dashboard", async (req, res) => {
   }
 
   try {
-    const result = await runPreviewPipeline(rangeKey);
-    if (result.error) {
-      return res.status(500).json(result);
-    }
-    const readinessScore = computeReadinessScore(result.readinessReport);
-    res.json({
-      dashboard: result.dashboard,
-      readiness: result.readinessReport,
-      readinessScore,
-      preview: true,
-    });
+    const payload = await getPreviewPayload(rangeKey);
+    // Identical for every anonymous visitor — let the browser/CDN absorb the spike.
+    res.set("Cache-Control", "public, max-age=60");
+    res.json(payload);
   } catch (error) {
-    res.status(500).json({ error: "PREVIEW_ERROR", message: error.message });
+    res.status(500).json(error.result || { error: "PREVIEW_ERROR", message: error.message });
   }
 });
 
@@ -1451,6 +1521,7 @@ app.get("/telemetry.js", (req, res) => {
   const cs = JSON.stringify(config.telemetry.browserConnectionString);
   const tenantId = req.session?.tenantId;
   const authUser = tenantId ? JSON.stringify(hashForTelemetry(tenantId)) : "null";
+  const sampling = config.telemetry.samplingPercentage;
   res.send(
     `(function () {
   var cs = ${cs};
@@ -1463,6 +1534,7 @@ app.get("/telemetry.js", (req, res) => {
       var ai = new Microsoft.ApplicationInsights.ApplicationInsights({
         config: {
           connectionString: cs,
+          samplingPercentage: ${sampling},
           enableAutoRouteTracking: true,
           autoTrackPageVisitTime: true,
           disableFetchTracking: false

@@ -5170,6 +5170,25 @@ body.d2-route #resourcePanel.d2-page { margin: 0; }
 }
 .d2-cmdbar-range-here { color: var(--text-primary); }
 
+/* ───── Responsive: collapse the multi-column dashboard grids on phones ─────
+   The .dash-*--desktop modifiers above set 2-4 column grids unconditionally;
+   on a narrow viewport they overflow (KPIs 4-up, browser/OS/device donuts
+   3-up, geo + score panels side-by-side). Reset them all to one column so the
+   public demo — the whole pitch — renders cleanly on mobile. */
+@media (max-width: 720px) {
+  .dash-kpis--desktop,
+  .dash-insights--desktop,
+  .dash-grid-2--desktop,
+  .dash-grid-3--desktop,
+  .dash-geo--desktop,
+  .dash-score-hero--desktop,
+  .dash-signals--desktop,
+  .dash-narr-a--desktop {
+    grid-template-columns: 1fr;
+  }
+  .map-container { height: 240px; }
+}
+
 /* ═════════════════════════════════════════════════════════════════════
    INTERACTIONS — hover tooltips, filter bar, command palette, drill drawer,
    row selection / hover states. Same D v2 tokens, layered overlays.

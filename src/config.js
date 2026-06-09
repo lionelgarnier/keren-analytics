@@ -98,5 +98,14 @@ export const config = {
       "",
     /** Cloud role name shown in App Insights. */
     serviceName: process.env.TELEMETRY_SERVICE_NAME || "keren-analytics",
+    /** Sampling percentage (0-100) applied to BOTH the server and browser
+     *  SDKs. Defaults to 100 (collect everything). Dial it down (e.g. 25)
+     *  for a traffic spike — fixed-rate sampling keeps related items
+     *  together while cutting ingestion volume/cost proportionally. */
+    samplingPercentage: (() => {
+      const raw = Number(process.env.TELEMETRY_SAMPLING_PERCENT);
+      if (!Number.isFinite(raw) || raw <= 0 || raw > 100) return 100;
+      return raw;
+    })(),
   },
 };

@@ -2311,7 +2311,7 @@ function renderInsights(dashboard) {
     if (top && total > 0) {
       insights.push({
         kind: "up",
-        text: `Top traffic source: <strong>${top.source}</strong> drives <strong>${((top.count / total) * 100).toFixed(0)}%</strong> of all traffic`,
+        text: `Top traffic source: <strong>${escapeHtmlApp(top.source)}</strong> drives <strong>${((top.count / total) * 100).toFixed(0)}%</strong> of all traffic`,
       });
     }
   }
@@ -2349,7 +2349,7 @@ function renderInsights(dashboard) {
       const tail = topPath === "/" ? "high homepage concentration" : "traffic is concentrated on one route";
       insights.push({
         kind: "up",
-      text: `<strong>${topPath}</strong> captures <strong>${fmtPct(topShare)}</strong> of all page views — ${tail}`,
+      text: `<strong>${escapeHtmlApp(topPath)}</strong> captures <strong>${fmtPct(topShare)}</strong> of all page views — ${tail}`,
       });
     }
   }
@@ -3939,6 +3939,16 @@ async function init() {
   if (route.page === "preview") {
     await enterPreviewMode();
     return;
+  }
+
+  // Paint the landing hero immediately for the common anonymous "/" visit
+  // instead of waiting on the /auth/session round-trip — otherwise a cold
+  // Container App or slow mobile link shows a blank page until the fetch
+  // resolves. `booting` only hides the legacy navbar (which the landing hides
+  // anyway), so the hero renders now; if the session turns out authenticated,
+  // the block below calls hideLanding() and swaps in the dashboard.
+  if (route.page === "home") {
+    showLanding();
   }
 
   try {
