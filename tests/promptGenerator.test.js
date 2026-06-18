@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { generatePrompts } from "../src/core/promptGenerator.js";
+import { detectStack, generatePrompts } from "../src/core/promptGenerator.js";
 
 describe("generatePrompts", () => {
   it("returns empty array when readinessReport is null", () => {
@@ -82,5 +82,47 @@ describe("generatePrompts", () => {
     };
     const result = generatePrompts({ readinessReport: report });
     assert.equal(result[0].detectedStack, "Web Application");
+  });
+
+  it("detects modern frontend framework stacks from custom dimension keys", () => {
+    const cases = [
+      ["nextjs", ["next.route", "appRouter.segment"]],
+      ["sveltekit", ["sveltekit.route.id", "load.function"]],
+      ["remix", ["remix.route.id", "loader.name"]],
+      ["astro", ["astro.page", "island.component"]],
+    ];
+
+    for (const [expectedStack, keys] of cases) {
+      assert.equal(
+        detectStack({ customDimensionsKeys: { pageViews: keys } }),
+        expectedStack,
+      );
+    }
+  });
+
+  it("renders prompts for detected modern frontend stacks", () => {
+    const report = {
+      availableSignals: {
+        pageViews: false,
+        requests: true,
+        sessionId: true,
+        userId: true,
+        userAgent: true,
+        geo: true,
+        browserTimings: true,
+      },
+    };
+
+    const result = generatePrompts({
+      readinessReport: report,
+      schemaProfile: {
+        customDimensionsKeys: {
+          pageViews: ["next.app.router.segment"],
+        },
+      },
+    });
+
+    assert.equal(result[0].detectedStack, "Next.js / App Router");
+    assert.ok(result[0].prompt.includes("@microsoft/applicationinsights-web"));
   });
 });

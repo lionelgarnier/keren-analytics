@@ -1,7 +1,7 @@
 {
   "$schema": "https://keren.run/.well-known/telemetry-contract.json",
-  "contractVersion": "50d2888a2f2f",
-  "generatedAt": "2026-06-08T12:08:06.968Z",
+  "contractVersion": "d9ed329e6ba2",
+  "generatedAt": "2026-06-18T22:57:51.225Z",
   "product": {
     "name": "Keren Analytics",
     "url": "https://keren.run",
@@ -336,6 +336,26 @@
     }
   ],
   "stacks": [
+    {
+      "key": "nextjs",
+      "name": "Next.js / App Router",
+      "recommendedSdk": "@microsoft/applicationinsights-web"
+    },
+    {
+      "key": "sveltekit",
+      "name": "SvelteKit",
+      "recommendedSdk": "@microsoft/applicationinsights-web"
+    },
+    {
+      "key": "remix",
+      "name": "Remix",
+      "recommendedSdk": "@microsoft/applicationinsights-web"
+    },
+    {
+      "key": "astro",
+      "name": "Astro",
+      "recommendedSdk": "@microsoft/applicationinsights-web"
+    },
     {
       "key": "react",
       "name": "React (SPA)",

@@ -11,6 +11,10 @@
  */
 
 export const STACK_HINTS = {
+  nextjs: { name: "Next.js / App Router", sdk: "@microsoft/applicationinsights-web" },
+  sveltekit: { name: "SvelteKit", sdk: "@microsoft/applicationinsights-web" },
+  remix: { name: "Remix", sdk: "@microsoft/applicationinsights-web" },
+  astro: { name: "Astro", sdk: "@microsoft/applicationinsights-web" },
   react: { name: "React (SPA)", sdk: "@microsoft/applicationinsights-react-js" },
   angular: { name: "Angular (SPA)", sdk: "@microsoft/applicationinsights-web" },
   vue: { name: "Vue.js (SPA)", sdk: "@microsoft/applicationinsights-web" },
@@ -24,7 +28,7 @@ export const STACK_HINTS = {
 /**
  * Try to detect the stack from schema profile custom dimensions.
  */
-function detectStack(schemaProfile) {
+export function detectStack(schemaProfile) {
   if (!schemaProfile) return "generic";
   const keys = [];
   const customKeys = schemaProfile.customDimensionsKeys || {};
@@ -32,7 +36,11 @@ function detectStack(schemaProfile) {
     if (Array.isArray(tableKeys)) keys.push(...tableKeys);
   }
   const joined = keys.join(" ").toLowerCase();
-  if (joined.includes("react") || joined.includes("next")) return "react";
+  if (joined.includes("next")) return "nextjs";
+  if (joined.includes("sveltekit") || joined.includes("svelte")) return "sveltekit";
+  if (joined.includes("remix")) return "remix";
+  if (joined.includes("astro")) return "astro";
+  if (joined.includes("react")) return "react";
   if (joined.includes("angular")) return "angular";
   if (joined.includes("vue") || joined.includes("nuxt")) return "vue";
   if (joined.includes("express") || joined.includes("node")) return "node";

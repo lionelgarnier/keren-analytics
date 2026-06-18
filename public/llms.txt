@@ -2,7 +2,7 @@
 
 > Plug-and-play analytics over Azure Application Insights telemetry. This contract tells coding agents which signals to emit, how to name custom dimensions, and which config values make telemetry render well.
 
-Contract version: `50d2888a2f2f` · Machine-readable: https://keren.run/.well-known/telemetry-contract.json
+Contract version: `d9ed329e6ba2` · Machine-readable: https://keren.run/.well-known/telemetry-contract.json
 
 Instrument your app's Azure Application Insights so these signals are present, name custom dimensions as below, and Keren renders the full dashboard with no manual mapping.
 
@@ -92,6 +92,10 @@ Built-in fields are detected automatically. If you must use a custom dimension, 
 
 ## SDK per stack
 
+- Next.js / App Router: `@microsoft/applicationinsights-web`
+- SvelteKit: `@microsoft/applicationinsights-web`
+- Remix: `@microsoft/applicationinsights-web`
+- Astro: `@microsoft/applicationinsights-web`
 - React (SPA): `@microsoft/applicationinsights-react-js`
 - Angular (SPA): `@microsoft/applicationinsights-web`
 - Vue.js (SPA): `@microsoft/applicationinsights-web`
