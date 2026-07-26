@@ -7,7 +7,10 @@
  * from a scan source that is already scrubbed.
  */
 
-export const CANONICAL_FIELDS = ["canonicalUserId", "canonicalSessionId", "canonicalPagePath", "canonicalReferrer"];
+// The AI proposes only the identity fields; re-export the shared subset under
+// this module's historical name so the JSON-schema enum stays in one place.
+import { CANONICAL_IDENTITY_FIELDS } from "../core/canonicalFields.js";
+export const CANONICAL_FIELDS = CANONICAL_IDENTITY_FIELDS;
 
 export const MAPPING_RESPONSE_SCHEMA = {
   type: "object",

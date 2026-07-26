@@ -176,6 +176,32 @@ The Application Insights \`browserTimings\` table must receive page load perform
    - \`enableAutoRouteTracking: true\` for SPA navigation timing
    - \`enableAjaxPerfTracking: true\` for XHR/fetch performance
    - Reasonable sampling to control costs without losing performance visibility`,
+
+  dependencies: (stack, resource) => `My ${stack.name} application is connected to Azure Application Insights (resource: ${resource || "[your-resource-name]"}), but **no dependency telemetry reaches the \`dependencies\` table**.
+
+## What I need
+Outbound calls — SQL queries, HTTP/REST calls to other services, cache and queue operations — must appear in the Application Insights \`dependencies\` table with target, type, duration, and success flag.
+
+## Your approach
+1. **Audit** — Search this codebase for the Application Insights server-side SDK (\`${stack.sdk}\`), its initialization, and whether dependency/auto-collection is enabled. Check which outbound clients (DB drivers, HTTP clients, queue SDKs) are in use.
+2. **Gap analysis** — Dependency data is normally auto-collected server-side. Common reasons it's missing:
+   - SDK initialized after the outbound clients are created, so their instrumentation hooks never attach
+   - Dependency/auto-collection explicitly disabled in configuration
+   - Only a frontend JS SDK is present (no server SDK to collect dependencies)
+3. **Fix** — Initialize the server SDK before any outbound client is constructed and enable dependency auto-collection. Do not hand-instrument what the SDK already tracks; only fill genuine gaps.`,
+
+  exceptions: (stack, resource) => `My ${stack.name} application is connected to Azure Application Insights (resource: ${resource || "[your-resource-name]"}), but **no exception telemetry reaches the \`exceptions\` table**.
+
+## What I need
+Unhandled and handled server-side exceptions must appear in the Application Insights \`exceptions\` table with type, message, and stack trace (no PII in messages).
+
+## Your approach
+1. **Audit** — Search this codebase for the Application Insights server-side SDK (\`${stack.sdk}\`), global error handlers/middleware, and any existing \`trackException\` calls.
+2. **Gap analysis** — Common reasons exceptions are missing:
+   - Auto-collection of exceptions is disabled, or the SDK's error handler is registered too late
+   - A custom global error handler swallows errors before the SDK sees them
+   - Errors are caught and logged but never forwarded to Application Insights
+3. **Fix** — Enable exception auto-collection and, where errors are caught deliberately, forward them via \`trackException\`. Scrub any PII from exception messages before sending.`,
 };
 
 /**
@@ -217,6 +243,8 @@ export function signalLabel(signal) {
     userAgent: "Device & Browser Info",
     geo: "Geo Enrichment",
     browserTimings: "Frontend Performance",
+    dependencies: "Dependency Tracking",
+    exceptions: "Exception Tracking",
   };
   return labels[signal] || signal;
 }

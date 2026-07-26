@@ -19,6 +19,7 @@ import { generatePrompts } from "./core/promptGenerator.js";
 import { getTenant, updateTenant, setResourceAiOptOut, getResourceAiOptOut } from "./core/metadataStore.js";
 import { buildAiDisclosure } from "./ai/disclosure.js";
 import { getLatestScan, getScannedResourceIds } from "./core/scanStore.js";
+import { CANONICAL_FIELDS } from "./core/canonicalFields.js";
 import { getLatestMapping } from "./core/mappingStore.js";
 import { buildFieldPalette } from "./core/fieldPalette.js";
 import { scrubSamples } from "./core/schemaScan.js";
@@ -131,14 +132,21 @@ app.use(
  * express.static so the dynamic handler is authoritative, and before the rate
  * limiters since these are public, cacheable discovery endpoints with no
  * tenant data. */
+// Memoize the built contract + rendered markdown once per process: they're
+// deterministic (content hash), so rebuilding them on every anonymous hit was
+// pure CPU amplification. Serve pre-serialized strings behind a 1h cache.
+let _contractJson = null;
+let _contractMarkdown = null;
 app.get("/.well-known/telemetry-contract.json", (_req, res) => {
+  if (_contractJson === null) _contractJson = JSON.stringify(buildTelemetryContract());
   res.set("Cache-Control", "public, max-age=3600");
-  res.json(buildTelemetryContract());
+  res.type("application/json").send(_contractJson);
 });
 app.get("/llms.txt", (_req, res) => {
+  if (_contractMarkdown === null) _contractMarkdown = renderContractMarkdown();
   res.set("Content-Type", "text/plain; charset=utf-8");
   res.set("Cache-Control", "public, max-age=3600");
-  res.send(renderContractMarkdown());
+  res.send(_contractMarkdown);
 });
 
 const MEDIA_EXTENSIONS = new Set([
@@ -1119,16 +1127,6 @@ app.get("/api/setup/scan/stream", ensureAuth, async (req, res) => {
   }
 });
 
-const CANONICAL_FIELDS = [
-  "canonicalUserId",
-  "canonicalSessionId",
-  "canonicalPagePath",
-  "canonicalReferrer",
-  "canonicalBrowser",
-  "canonicalOs",
-  "canonicalDevice",
-];
-
 function confidenceFromMatchType(matchType) {
   if (matchType === "builtin") return "high";
   if (matchType === "user-override") return "high";
@@ -1218,10 +1216,10 @@ app.get("/api/setup/findings", ensureAuth, (req, res) => {
   });
 });
 
-const ALLOWED_OVERRIDE_FIELDS = new Set([
-  "canonicalUserId", "canonicalSessionId", "canonicalPagePath", "canonicalReferrer",
-  "canonicalBrowser", "canonicalOs", "canonicalDevice",
-]);
+// Both the render (mergeWithValidation) and this accept-list derive from the
+// same CANONICAL_FIELDS, so an accepted override can never be silently dropped
+// at render time.
+const ALLOWED_OVERRIDE_FIELDS = new Set(CANONICAL_FIELDS);
 const VALID_DECISIONS = new Set(["accept_all", "override", "reject"]);
 
 // Persist the user's accept/override/reject decision. Subsequent dashboard

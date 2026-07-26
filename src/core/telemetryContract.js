@@ -198,11 +198,20 @@ function buildSignals() {
 
 function buildRecipes() {
   const stack = STACK_HINTS.generic;
-  return Object.keys(PROMPT_TEMPLATES).map((signal) => ({
-    signal,
-    label: signalLabel(signal),
-    prompt: PROMPT_TEMPLATES[signal](stack, null),
-  }));
+  // Iterate the SCORED signals (minus the userIdDegraded variant), not
+  // PROMPT_TEMPLATES' own keys — otherwise the recipe set silently drifts from
+  // the signal set: dependencies/exceptions (10 pts each) had no recipe while
+  // userIdDegraded (not a signal) had one. Every scored signal must have a
+  // template; the anti-drift test enforces it.
+  return Object.keys(SIGNAL_WEIGHTS)
+    .filter((signal) => signal !== "userIdDegraded")
+    .map((signal) => {
+      const template = PROMPT_TEMPLATES[signal];
+      if (!template) {
+        throw new Error(`No PROMPT_TEMPLATES entry for scored signal "${signal}"`);
+      }
+      return { signal, label: signalLabel(signal), prompt: template(stack, null) };
+    });
 }
 
 /**

@@ -11,6 +11,7 @@ import { resolveTimeRange, toKqlDatetime } from "./timeRange.js";
 import { loadKqlTemplate, renderTemplate } from "./kql.js";
 import { logStateTransition, getTenant, updateTenant, getResourceAiOptOut } from "./metadataStore.js";
 import { PipelineStates } from "./stateMachine.js";
+import { CANONICAL_IDENTITY_FIELDS } from "./canonicalFields.js";
 
 /*
  * Two distinct phases — keep them separate, never run config twice.
@@ -434,13 +435,6 @@ function extractRows(result) {
  * coverage uses the deterministic mapping (the AI merge happens later,
  * but the per-field "resolved?" verdict is stable enough for a preview).
  */
-const CANONICAL_IDENTITY_FIELDS = [
-  "canonicalUserId",
-  "canonicalSessionId",
-  "canonicalPagePath",
-  "canonicalReferrer",
-];
-
 function emitScanSteps(emitStep, scan, deterministicMapping) {
   const cds = scan.customDimensions || [];
   const cdTables = new Set(cds.map((c) => c.tableName).filter(Boolean));

@@ -2,7 +2,7 @@
 
 > Plug-and-play analytics over Azure Application Insights telemetry. This contract tells coding agents which signals to emit, how to name custom dimensions, and which config values make telemetry render well.
 
-Contract version: `50d2888a2f2f` · Machine-readable: https://keren.run/.well-known/telemetry-contract.json
+Contract version: `515a8d5b1a8a` · Machine-readable: https://keren.run/.well-known/telemetry-contract.json
 
 Instrument your app's Azure Application Insights so these signals are present, name custom dimensions as below, and Keren renders the full dashboard with no manual mapping.
 
@@ -107,10 +107,11 @@ One prompt per signal — paste into Cursor / Copilot / Claude Code to close a g
 
 - Page View Tracking (`pageViews`)
 - Backend Request Tracking (`requests`)
-- User Identity (`userId`)
-- User Identity (degraded) (`userIdDegraded`)
 - Session Tracking (`sessionId`)
+- User Identity (`userId`)
 - Device & Browser Info (`userAgent`)
 - Geo Enrichment (`geo`)
 - Frontend Performance (`browserTimings`)
+- Dependency Tracking (`dependencies`)
+- Exception Tracking (`exceptions`)
 

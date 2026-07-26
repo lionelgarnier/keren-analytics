@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { validateKqlExpr } from "./kql.js";
+import { CANONICAL_FIELDS } from "./canonicalFields.js";
 
 export const mappingExpressions = {
   userId: {
@@ -309,12 +310,8 @@ export function mergeWithValidation(mapping, validation) {
   if (!validation.overrides) return mapping;
 
   const merged = { ...mapping };
-  const fields = [
-    "canonicalUserId", "canonicalSessionId", "canonicalPagePath", "canonicalReferrer",
-    "canonicalBrowser", "canonicalOs", "canonicalDevice",
-  ];
   let changed = false;
-  for (const field of fields) {
+  for (const field of CANONICAL_FIELDS) {
     const override = validation.overrides[field];
     if (!override || !override.expr || !override.source) continue;
     merged[field] = {

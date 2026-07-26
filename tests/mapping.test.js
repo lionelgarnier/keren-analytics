@@ -1,6 +1,26 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { allowedKqlExpressions, buildMapping, mergeWithValidation } from "../src/core/mapping.js";
+import { CANONICAL_FIELDS } from "../src/core/canonicalFields.js";
+
+test("mergeWithValidation applies an override for every CANONICAL_FIELDS entry", () => {
+  // Guards the accept-list ↔ render contract: the API accepts overrides for
+  // CANONICAL_FIELDS (ALLOWED_OVERRIDE_FIELDS = new Set(CANONICAL_FIELDS)), so
+  // mergeWithValidation MUST apply every one of them — otherwise an accepted
+  // override would be silently dropped at render.
+  const base = buildMapping({
+    schemaProfile: { tables: { pageViews: true }, customDimensionsKeys: {} },
+    readinessReport: { availableSignals: { pageViews: true }, probeCounts: {} },
+  });
+  for (const field of CANONICAL_FIELDS) {
+    const merged = mergeWithValidation(base, {
+      overrides: { [field]: { source: "customDimensions.x", expr: 'tostring(customDimensions["x"])' } },
+      validatedAt: "2026-06-08T00:00:00Z",
+    });
+    assert.equal(merged[field].matchType, "user-override", `override not applied for ${field}`);
+    assert.equal(merged[field].expr, 'tostring(customDimensions["x"])');
+  }
+});
 
 test("buildMapping prefers authenticated user and pageViews", () => {
   const mapping = buildMapping({
