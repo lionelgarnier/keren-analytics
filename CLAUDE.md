@@ -1,7 +1,7 @@
 # CLAUDE.md
 
-Guide rapide pour les agents Claude Code travaillant sur **Keren Analytics**.
-Ce fichier est lu automatiquement à chaque session — gardez-le concis et à jour.
+Quick guide for Claude Code agents working on **Keren Analytics**.
+This file is read automatically every session — keep it concise and up to date.
 
 ## What this project is
 
