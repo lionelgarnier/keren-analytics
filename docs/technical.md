@@ -192,7 +192,7 @@ No raw logs are stored.
 - Unit tests for Azure error categorization and response normalization
 - Integration test for API flow with mock client
 
-Total: 180 tests across 24 files (native `node:test` runner, all mock mode)
+Total: 260 tests across 34 files (native `node:test` runner, all mock mode)
 
 Run with:
 ```

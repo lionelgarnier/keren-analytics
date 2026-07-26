@@ -59,7 +59,7 @@ Status: **Phase 1 + Phase 2 + Phase A + Track F DONE**.
   device/browser/OS became genuinely mappable (3 new canonical fields +
   `{{browserExpr}}/{{osExpr}}/{{deviceExpr}}` placeholders), a per-field
   **live preview** ("Test" → non-null % + scrubbed samples,
-  `/api/setup/mapping-preview`), a third **"Configurer manuellement"** hub
+  `/api/setup/mapping-preview`), a third **"Configure manually"** hub
   path (`/setup?mode=manual`), and a per-service **Configuration**
   split-button on the dashboard (the global "Setup" tab was removed). Free
   KQL is guarded by `validateKqlExpr` (strip-strings + allowlist). See
@@ -76,7 +76,7 @@ together replace the original SaaS-track gate logic.
 
 - Node.js 22 (ESM, `"type": "module"`), Express 5, Helmet, express-session
 - Vanilla JS frontend (`public/app.js`, `public/index.html`) — no bundler
-- Leaflet (maps) + Chart.js (charts) loaded from CDN
+- Leaflet (maps) + Chart.js (charts) self-hosted under `public/vendor/`
 - KQL templates in `kql/` rendered server-side with mapping substitution
 - Persistence (V1) : **SQLite via Node 22 native `node:sqlite`** — no
   extra dep, no native build. Single-file `data/keren.db`. Schema:
@@ -89,7 +89,7 @@ together replace the original SaaS-track gate logic.
   `npm run backup:sqlite` script is the manual/local equivalent. See ADR
   0005. Multi-tenant Postgres deferred to Phase 3.
 - AI inference : **Azure AI Foundry** (Hub + Project + `gpt-5.4-mini`
-  deployment). Provider abstraction (`AI_PROVIDER=none|ollama|azure-foundry`)
+  deployment). Provider abstraction (`AI_PROVIDER=none|azure-foundry`)
   per `docs/architecture-ai.md`. Auth via Managed Identity (no API keys in
   env vars). Quota guard: 10 €/day cap with deterministic fallback.
 - Self-telemetry (dogfooding) : the app emits its **own** telemetry to a
@@ -117,7 +117,7 @@ together replace the original SaaS-track gate logic.
 ```bash
 npm install            # install deps (supertest is required for api/rbac tests)
 npm run dev            # start server on :3000 (mock mode by default)
-npm test               # node --env-file=.env.test --test (232 tests)
+npm test               # node --env-file=.env.test --test (260 tests)
 npm run build:contract # regenerate public/ telemetry-contract snapshots (ADR 0006)
 docker compose up --build
 ```
@@ -155,13 +155,8 @@ src/
     mappingStore.js      # F3: mappings table (cache key = scan_id; resource
                          #     scope inherited via the scan it references)
     validationStore.js   # F4: validations, scoped per (tenant, resourceId)
-  ai/
-    interface.js         # F3: AI provider contract + runtime assert
-    factory.js           # F3: AI_PROVIDER env -> provider instance (cached)
-    noneProvider.js      # F3: returns null -> deterministic fallback
-    azureFoundry.js      # F3: Foundry Responses API; MI auth (audience ai.azure.com)
-    promptBuilder.js     # F3: F2 scan -> system prompt + JSON schema response
-    quotaGuard.js        # F3: in-memory daily EUR cap, degrades on overflow
+    sessionStore.js      # encrypted SQLite-backed express-session store
+    canonicalFields.js   # single source for the 7 canonical mapping fields
     schemaProfile.js     # auto-detect userId/sessionId/pagePath columns
     mapping.js           # canonical model <-> tenant schema mapping (incl.
                          # device/browser/OS fields, mergeWithValidation)
@@ -169,23 +164,35 @@ src/
                          # (builtin columns + matched custom dimensions)
     kql.js               # render templates with mapping substitution +
                          # validateKqlExpr (allowlist guard for free KQL)
-    cache.js             # TTL cache, keyed by tenant+workspace+mapping+range
+    cache.js             # TTL + LRU-bounded cache, keyed by tenant+resource+
+                         # workspace+queryName+range+mappingVersion
     readiness.js         # readiness probe results
-    readinessScore.js    # 0-100 score from 7 weighted signals
+    readinessScore.js    # 0-100 score from weighted signals
     promptGenerator.js   # LLM-ready prompts for missing signals
     telemetryContract.js # ADR 0006: public telemetry contract, DERIVED from
                          #   readinessScore/mapping/promptGenerator (no copy);
                          #   served at /.well-known/… + /llms.txt
     recommendations.js
     dashboard.js         # builds dashboard payload from KQL results
+    narration.js         # dashboard narration copy
+    rateLimit.js         # per-IP token buckets (E1)
+    backupScheduler.js   # hourly VACUUM INTO -> Blob + restore-on-boot
     timeRange.js
     audit.js
+  ai/
+    interface.js         # F3: AI provider contract + runtime assert
+    factory.js           # F3: AI_PROVIDER env -> provider instance (cached)
+    noneProvider.js      # F3: returns null -> deterministic fallback
+    azureFoundry.js      # F3: Foundry Responses API; MI auth (audience ai.azure.com)
+    promptBuilder.js     # F3: F2 scan -> system prompt + JSON schema response
+    quotaGuard.js        # F3: SQLite-persisted daily EUR cap, degrades on overflow
+    disclosure.js        # "what data is sent" hub disclosure payload
 kql/                     # 34 versioned .kql templates (Azure-specific; relocation
                          # to queries/azure/ deferred to V2 with second adapter)
 public/                  # static SPA (index.html, app.js, styles.css)
                          # + setup.html / setup.js (palette mapping editor +
                          # /setup wizard, incl. ?mode=mapping / ?mode=manual)
-tests/                   # 29 test files, native node:test runner
+tests/                   # 34 test files, native node:test runner
 infra/                   # canonical Bicep + parameters
   main.bicep                 # Container Apps + ACR + Log Analytics + MI
   main.parameters.json
@@ -248,15 +255,19 @@ These are **intentionally** deferred and tracked in `docs/backlog/phase-3.md`:
   a **single replica**: keep `minReplicas=maxReplicas=1` until a shared
   store ships (cf. `docs/maintainer-todo.md` § scaling). Multi-tenant
   Postgres is the Phase 3 target.
-- Frontend `public/app.js` shipped raw (~92 KB), no bundling/minification.
-- CSP allows `cdn.jsdelivr.net`, `unpkg.com` and `js.monitor.azure.com`
-  (the last for the App Insights browser SDK, self-telemetry stage B) —
-  supply-chain risk. Self-host under `public/vendor/` to close it.
+- Frontend `public/app.js` shipped raw (~150 KB), no bundling/minification.
+- CSP `script-src` is now CDN-free: Leaflet + Chart.js are self-hosted under
+  `public/vendor/`; only `js.monitor.azure.com` (App Insights browser SDK)
+  remains, plus Google Fonts in `style-src`/`font-src`.
 
 Note: rate limiting (`src/core/rateLimit.js`) shipped with the launch-readiness
-E1 track. `SESSION_SECRET` now fails loud in production (see `src/config.js`).
+E1 track. `SESSION_SECRET` now fails loud in production (see `src/config.js`),
+and so does a production boot in mock mode (unless `ALLOW_MOCK_IN_PROD=true`).
 CSRF tokens are enforced on every mutating route (`verifyCsrf` in
-`src/server.js`, token issued via `/auth/session`) — no longer a gap.
+`src/server.js`, token issued via `/auth/session`; disable in tests via
+`KEREN_DISABLE_CSRF=1`) — no longer a gap. Sessions are stored in an encrypted
+SQLite-backed store (`src/core/sessionStore.js`), not the in-memory default, so
+Azure refresh tokens survive redeploys and are encrypted at rest.
 
 If a task explicitly asks to harden one of these, do it. Otherwise leave alone.
 

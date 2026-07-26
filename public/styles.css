@@ -1,3 +1,20 @@
+/* ========== Accessibility ========== */
+/* Skip link: off-screen until keyboard-focused, then pinned top-left. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 1000;
+  padding: 0.6rem 1rem;
+  background: #111;
+  color: #fff;
+  border-radius: 0 0 6px 0;
+  text-decoration: none;
+}
+.skip-link:focus {
+  left: 0;
+}
+
 /* ========== Reset & Base ========== */
 *,
 *::before,

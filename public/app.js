@@ -657,11 +657,14 @@ async function apiFetch(url, options = {}) {
   if (method !== "GET" && method !== "HEAD" && csrfToken) {
     headers["X-CSRF-Token"] = csrfToken;
   }
+  // Spread options FIRST, then apply the computed headers/credentials/cache —
+  // otherwise `...options` re-spreads options.headers over our merged headers
+  // and drops the X-CSRF-Token (and could override credentials/cache).
   const response = await fetch(url, {
+    ...options,
     credentials: "same-origin",
     cache: "no-store",
     headers,
-    ...options,
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -746,9 +749,9 @@ function maybeShowOnboarding() {
 
 // Per-status presentation for the service hub cards.
 const SERVICE_STATUS_META = {
-  ready:        { label: "Prêt",                     action: "Ouvrir" },
-  incomplete:   { label: "Configuration incomplète", action: "Reprendre la config" },
-  unconfigured: { label: "À configurer",             action: "Configurer" },
+  ready:        { label: "Ready",                    action: "Open" },
+  incomplete:   { label: "Setup incomplete",         action: "Resume setup" },
+  unconfigured: { label: "Not configured",           action: "Configure" },
 };
 
 /**
@@ -1063,9 +1066,9 @@ async function applyConfigureLabels(root) {
   try { disclosure = await getAiDisclosure(); } catch { return; }
   const def = disclosure.available?.[0];
   if (!def) return;
-  const suffix = def.optOut ? "sans IA" : `avec l'IA — ${def.provider}`;
+  const suffix = def.optOut ? "without AI" : `with AI — ${def.provider}`;
   root.querySelectorAll("[data-ai-primary]").forEach((btn) => {
-    const verb = btn.dataset.verb || "Configurer";
+    const verb = btn.dataset.verb || "Configure";
     const labelEl = btn.querySelector(".d2-cfg-primary-label");
     if (labelEl) labelEl.textContent = `${verb} ${suffix}`;
   });
@@ -1078,28 +1081,28 @@ function openAiDataPopover(disclosure) {
   const aiOption = (disclosure.available || []).find((o) => !o.optOut);
   const dest = aiOption
     ? `${escapeHtmlApp(aiOption.provider)}${aiOption.location ? ` · ${escapeHtmlApp(aiOption.location)}` : ""}`
-    : "aucune IA configurée";
+    : "no AI configured";
   const list = (items) =>
     items.map((i) => `<li>${escapeHtmlApp(i)}</li>`).join("");
   const overlay = document.createElement("div");
   overlay.className = "kr-confirm-scrim";
   overlay.innerHTML = `
     <div class="ai-data-pop" role="dialog" aria-modal="true" aria-labelledby="aiDataPopTitle">
-      <h3 id="aiDataPopTitle" class="ai-data-pop-title">Quelles données sont envoyées ?</h3>
-      <p class="ai-data-pop-dest">Analyse IA : <strong>${dest}</strong>${aiOption && aiOption.outbound === false ? " (local, rien ne sort)" : ""}</p>
+      <h3 id="aiDataPopTitle" class="ai-data-pop-title">What data is sent?</h3>
+      <p class="ai-data-pop-dest">AI analysis: <strong>${dest}</strong>${aiOption && aiOption.outbound === false ? " (local, nothing leaves)" : ""}</p>
       <div class="ai-data-pop-cols">
         <div class="ai-data-pop-col ai-data-pop-col--sent">
-          <h4>Envoyé (sanitizé)</h4>
+          <h4>Sent (sanitized)</h4>
           <ul>${list(disclosure.dataContract?.sent || [])}</ul>
         </div>
         <div class="ai-data-pop-col ai-data-pop-col--never">
-          <h4>Jamais envoyé</h4>
+          <h4>Never sent</h4>
           <ul>${list(disclosure.dataContract?.never || [])}</ul>
         </div>
       </div>
-      <p class="ai-data-pop-foot">Choisir « sans IA » désactive tout appel sortant pour cette ressource.</p>
+      <p class="ai-data-pop-foot">Choosing "without AI" disables every outbound call for this resource.</p>
       <div class="ai-data-pop-actions">
-        <button type="button" class="kr-confirm-ok ai-data-pop-close">Compris</button>
+        <button type="button" class="kr-confirm-ok ai-data-pop-close">Got it</button>
       </div>
     </div>`;
   function close() {
@@ -1167,8 +1170,8 @@ async function openConfigureMenu(anchorBtn, resource) {
   manual.innerHTML = `
     <span class="d2-cfg-icon" aria-hidden="true">✎</span>
     <span class="d2-cfg-text">
-      <span class="d2-cfg-label">Configurer manuellement</span>
-      <span class="d2-cfg-detail">Mapper les champs à la main, sans IA</span>
+      <span class="d2-cfg-label">Configure manually</span>
+      <span class="d2-cfg-detail">Map fields by hand, without AI</span>
     </span>`;
   manual.addEventListener("click", () => { closeConfigMenu(); chooseManualConfigure(resource); });
   menu.appendChild(manual);
@@ -1177,7 +1180,7 @@ async function openConfigureMenu(anchorBtn, resource) {
   info.type = "button";
   info.className = "d2-cfg-item d2-cfg-info";
   info.setAttribute("role", "menuitem");
-  info.innerHTML = `<span class="d2-cfg-icon" aria-hidden="true">ⓘ</span><span class="d2-cfg-text"><span class="d2-cfg-label">Quelles données sont envoyées ?</span></span>`;
+  info.innerHTML = `<span class="d2-cfg-icon" aria-hidden="true">ⓘ</span><span class="d2-cfg-text"><span class="d2-cfg-label">What data is sent?</span></span>`;
   info.addEventListener("click", () => { closeConfigMenu(); openAiDataPopover(disclosure); });
   menu.appendChild(info);
 
@@ -1224,19 +1227,19 @@ function openDashboardConfigMenu(anchorBtn) {
     menu.appendChild(item);
   };
 
-  addItem("✎", "Modifier le mapping", "Ajuster comment les champs sont mappés — sans re-scan.", () => {
+  addItem("✎", "Edit mapping", "Adjust how fields are mapped — without a re-scan.", () => {
     window.location.href = "/setup?mode=mapping";
   });
-  addItem("⚠", "Reconfigurer (re-scan + IA)", "Re-scanne la télémétrie et relance l'IA. Remplace la configuration actuelle.", async () => {
+  addItem("⚠", "Reconfigure (re-scan + AI)", "Re-scans telemetry and re-runs the AI. Replaces the current configuration.", async () => {
     const ok = await krConfirm({
-      title: "Reconfigurer ce service ?",
-      body: "Cela re-scanne votre télémétrie et relance le mapping IA. La configuration actuelle de ce service sera remplacée. Action irréversible.",
-      confirmText: "Reconfigurer",
-      cancelText: "Annuler",
+      title: "Reconfigure this service?",
+      body: "This re-scans your telemetry and re-runs the AI mapping. This service's current configuration will be replaced. This cannot be undone.",
+      confirmText: "Reconfigure",
+      cancelText: "Cancel",
     });
     if (ok) window.location.href = "/setup";
   });
-  addItem("ⓘ", "Données envoyées à l'IA", "Voir ce qui est envoyé / jamais envoyé, et choisir sans IA.", async () => {
+  addItem("ⓘ", "Data sent to the AI", "See what is sent / never sent, and choose without AI.", async () => {
     try { openAiDataPopover(await getAiDisclosure()); }
     catch (err) { setStatus(err.message || "Could not load AI options.", "error"); }
   });
@@ -1309,7 +1312,7 @@ function renderResources(resources) {
       <div class="d2-pageheader">
         <div class="d2-pageheader-l">
           <div class="d2-breadcrumb">
-            <span>vikl.fr</span>
+            <span>keren</span>
             <span class="d2-breadcrumb-sep">/</span>
             <span class="d2-breadcrumb-here">services</span>
             <span class="d2-breadcrumb-tag">${counts.all} connected</span>
@@ -1383,12 +1386,12 @@ function renderResources(resources) {
     const cta = status === "ready"
       ? `<span class="d2-cta-link${D2_CTA_CLASS[status]}">${escapeHtmlApp(statusMeta.action)} →</span>
          <div class="d2-cfg-split d2-cfg-split--ghost">
-           <button type="button" class="d2-cfg-primary" data-reconfigure><span class="d2-cfg-primary-label">Reconfigurer</span></button>
+           <button type="button" class="d2-cfg-primary" data-reconfigure><span class="d2-cfg-primary-label">Reconfigure</span></button>
            ${aiCaret}
          </div>`
       : `<div class="d2-cfg-split">
-           <button type="button" class="d2-cfg-primary" data-ai-primary data-verb="Configurer">
-             <span class="d2-cfg-primary-label">Configurer…</span>
+           <button type="button" class="d2-cfg-primary" data-ai-primary data-verb="Configure">
+             <span class="d2-cfg-primary-label">Configure…</span>
              <span class="d2-cfg-primary-kbd" aria-hidden="true">↵</span>
            </button>
            ${aiCaret}
@@ -3801,41 +3804,47 @@ async function loadDashboardStream(url) {
     // `progress` messages are intentionally ignored.
   }
 
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
+  // Cancel the reader on ANY exit path (including a throw from handle() or the
+  // trailing-parse `throw e`) so the underlying connection isn't leaked.
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
 
-    let newlineIdx;
-    while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
-      const line = buffer.slice(0, newlineIdx).trim();
-      buffer = buffer.slice(newlineIdx + 1);
-      if (!line) continue;
-      let msg;
-      try {
-        msg = JSON.parse(line);
-      } catch {
-        console.warn("[stream] parse error on line:", line.slice(0, 200));
-        continue;
+      let newlineIdx;
+      while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
+        const line = buffer.slice(0, newlineIdx).trim();
+        buffer = buffer.slice(newlineIdx + 1);
+        if (!line) continue;
+        let msg;
+        try {
+          msg = JSON.parse(line);
+        } catch {
+          console.warn("[stream] parse error on line:", line.slice(0, 200));
+          continue;
+        }
+        handle(msg);
       }
-      handle(msg);
     }
-  }
 
-  // Parse any trailing buffered payload (e.g. classic JSON without newline).
-  if (!result && buffer.trim()) {
-    try {
-      handle(JSON.parse(buffer.trim()));
-    } catch (e) {
-      if (e.data) throw e;
-      console.warn("[stream] trailing payload parse error:", buffer.slice(0, 200));
+    // Parse any trailing buffered payload (e.g. classic JSON without newline).
+    if (!result && buffer.trim()) {
+      try {
+        handle(JSON.parse(buffer.trim()));
+      } catch (e) {
+        if (e.data) throw e;
+        console.warn("[stream] trailing payload parse error:", buffer.slice(0, 200));
+      }
     }
-  }
 
-  if (!result) {
-    throw new Error("No data received from server");
+    if (!result) {
+      throw new Error("No data received from server");
+    }
+    return result;
+  } finally {
+    try { await reader.cancel(); } catch { /* already closed */ }
   }
-  return result;
 }
 
 async function loadDashboard(range) {
@@ -4072,25 +4081,20 @@ window.addEventListener("popstate", async () => {
     hideLanding();
     isPreviewMode = false;
     activateTab(route.tab, { updateUrl: false });
+    // Always reveal the dashboard panel for a dashboard route — otherwise
+    // navigating Back to an already-selected service left BOTH panels hidden
+    // (blank screen), since the reveal used to live inside the "service
+    // changed" branch below.
+    showSelectedResource(route.service);
+    dashboardPanel.classList.remove("hidden");
     const currentName = selectedResourceName.textContent;
     if (currentName !== route.service) {
       const target = lastDiscoveredResources.find((r) => r.appInsightsName === route.service);
       if (target) {
-        await apiFetch("/azure/select", {
-          method: "POST",
-          body: JSON.stringify({
-            resourceId: target.resourceId,
-            workspaceId: target.workspaceId,
-            subscriptionId: target.subscriptionId,
-            resourceGroup: target.resourceGroup,
-            appInsightsName: target.appInsightsName,
-          }),
-        });
-        showSelectedResource(route.service);
-        dashboardPanel.classList.remove("hidden");
-        await loadDashboard(rangeSelect.value);
+        await selectResourceApi(target);
       }
     }
+    await loadDashboard(rangeSelect.value);
   }
 });
 
