@@ -17,13 +17,22 @@ let client = null;
 if (config.telemetry.enabled && config.telemetry.connectionString) {
   try {
     const appInsights = (await import("applicationinsights")).default;
-    appInsights
-      .setup(config.telemetry.connectionString)
-      // /healthz is hit twice a minute by the Container Apps probes; keep it
-      // out of the request stream so it can't drown the real traffic.
-      .start();
+    appInsights.setup(config.telemetry.connectionString).start();
     client = appInsights.defaultClient;
     client.context.tags[client.context.keys.cloudRole] = config.telemetry.serviceName;
+    // /healthz is hit by the Container Apps liveness + readiness probes (~8
+    // req/min); filter those request items out so they don't drown real
+    // traffic in the Technical view or burn the Log Analytics daily quota.
+    // (The comment here used to claim this happened, but no processor existed.)
+    client.addTelemetryProcessor((envelope) => {
+      const baseType = envelope?.data?.baseType;
+      const url = envelope?.data?.baseData?.url || "";
+      const name = envelope?.data?.baseData?.name || "";
+      if (baseType === "RequestData" && (url.includes("/healthz") || name.includes("/healthz"))) {
+        return false; // drop
+      }
+      return true;
+    });
     // Fixed-rate sampling (default 100 = no-op). Lower TELEMETRY_SAMPLING_PERCENT
     // to cut ingestion cost during a traffic spike.
     client.config.samplingPercentage = config.telemetry.samplingPercentage;
@@ -50,6 +59,27 @@ export function trackEvent(name, properties = {}) {
       clean[k] = String(v);
     }
     client.trackEvent({ name, properties: clean });
+  } catch {
+    /* swallow — telemetry is best-effort */
+  }
+}
+
+/**
+ * Report an exception to App Insights. Best-effort and safe when telemetry is
+ * off (no-op). Use for 500s and process-level crash handlers so failures are
+ * correlated in the Technical view instead of vanishing into stdout.
+ * @param {Error} error
+ * @param {Record<string, string|number>} [properties]
+ */
+export function trackException(error, properties = {}) {
+  if (!client) return;
+  try {
+    const clean = {};
+    for (const [k, v] of Object.entries(properties)) {
+      if (v === undefined || v === null) continue;
+      clean[k] = String(v);
+    }
+    client.trackException({ exception: error instanceof Error ? error : new Error(String(error)), properties: clean });
   } catch {
     /* swallow — telemetry is best-effort */
   }

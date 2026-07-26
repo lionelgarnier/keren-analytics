@@ -929,18 +929,22 @@ export function getMockRows(queryName, timeRangeKey) {
     return baseline.peakHours.map((r) => ({ ...r, count: scale(r.count, rk) }));
   }
 
-  // URL parameters — scale frequencies
+  // URL parameters — return FLAT raw rows (one per discovered param), the same
+  // shape the real url-parameters.kql produces, so buildTable -> toRows ->
+  // buildUrlParamsData works exactly as it does against Azure. Each row carries
+  // the scan totals (buildUrlParamsData reads them off rows[0]).
   if (queryName === "urlParams") {
     const params = baseline.urlParams;
-    return {
-      discovered: params.discovered.map((p) => ({
-        ...p,
-        frequency: scale(p.frequency, rk),
-        topValues: p.topValues.map((v) => ({ ...v, count: scale(v.count, rk) })),
-      })),
-      totalUrlsScanned: scale(params.totalUrlsScanned, rk),
-      urlsWithParams: scale(params.urlsWithParams, rk),
-    };
+    const totalScanned = scale(params.totalUrlsScanned, rk);
+    const urlsWithParams = scale(params.urlsWithParams, rk);
+    return params.discovered.map((p) => ({
+      paramName: p.param,
+      frequency: scale(p.frequency, rk),
+      isUtm: Boolean(p.isUtm),
+      topValue: p.topValues?.[0]?.value ?? null,
+      totalScanned,
+      urlsWithParams,
+    }));
   }
   if (queryName === "campaignBreakdown") {
     return baseline.campaignBreakdown.map((r) => ({

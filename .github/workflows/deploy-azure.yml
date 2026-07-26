@@ -109,6 +109,21 @@ jobs:
           az containerapp logs show -n "$CONTAINER_APP" -g "$AZURE_RG" --tail 50 --format text || true
           exit 1
 
+      # If the new revision never became ready, reactivate the previous
+      # revision so production keeps serving the last-good image instead of a
+      # half-broken deploy. Best-effort — logs and fails the job regardless.
+      - name: Roll back to previous revision on failure
+        if: failure()
+        run: |
+          prev=$(az containerapp revision list -n "$CONTAINER_APP" -g "$AZURE_RG" \
+            --query "sort_by([?properties.active], &properties.createdTime)[-2].name" -o tsv || true)
+          if [[ -n "$prev" ]]; then
+            echo "Reactivating previous revision: $prev"
+            az containerapp revision activate -n "$CONTAINER_APP" -g "$AZURE_RG" --revision "$prev" || true
+          else
+            echo "No previous revision found to roll back to." >&2
+          fi
+
       - name: Deployment summary
         if: success()
         run: |

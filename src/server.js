@@ -1,7 +1,7 @@
 import "dotenv/config";
 // Imported before Express so the App Insights Node SDK can patch the http
 // stack before any server module loads. See src/telemetry.js.
-import { trackEvent, flushTelemetry } from "./telemetry.js";
+import { trackEvent, trackException, flushTelemetry } from "./telemetry.js";
 import crypto from "node:crypto";
 import express from "express";
 import helmet from "helmet";
@@ -20,6 +20,7 @@ import { getTenant, updateTenant, setResourceAiOptOut, getResourceAiOptOut } fro
 import { buildAiDisclosure } from "./ai/disclosure.js";
 import { getLatestScan, getScannedResourceIds } from "./core/scanStore.js";
 import { CANONICAL_FIELDS } from "./core/canonicalFields.js";
+import { getDb } from "./core/db.js";
 import { getLatestMapping } from "./core/mappingStore.js";
 import { buildFieldPalette } from "./core/fieldPalette.js";
 import { scrubSamples } from "./core/schemaScan.js";
@@ -270,8 +271,15 @@ function ensureCsrfToken(req) {
   return req.session.csrfToken;
 }
 
+// Dedicated flag (set in .env.test) instead of keying the bypass off
+// NODE_ENV: this lets the CSRF tests actually EXERCISE the check by clearing
+// the flag for a request, while the rest of the suite keeps it disabled.
+function csrfDisabled() {
+  return process.env.KEREN_DISABLE_CSRF === "1";
+}
+
 function verifyCsrf(req, res, next) {
-  if (process.env.NODE_ENV === "test") return next();
+  if (csrfDisabled()) return next();
   const expected = req.session?.csrfToken;
   const provided = req.get("X-CSRF-Token");
   if (!expected || !provided || provided !== expected) {
@@ -1069,8 +1077,8 @@ app.get("/api/setup/scan/stream", ensureAuth, async (req, res) => {
   // navigation, so without a CSRF check a third-party page could kick off a
   // scan on the victim's session. EventSource can't set headers, so the token
   // (issued via /auth/session, unreadable cross-origin) is passed as a query
-  // param. Test bypass mirrors verifyCsrf (Lot 5 unifies both onto a flag).
-  if (process.env.NODE_ENV !== "test") {
+  // param. Same flag-based bypass as verifyCsrf.
+  if (!csrfDisabled()) {
     const expected = req.session?.csrfToken;
     if (!expected || req.query.csrf !== expected) {
       return res.status(403).json({ error: "CSRF_MISMATCH" });
@@ -1508,7 +1516,17 @@ app.get("/preview/dashboard", async (req, res) => {
   }
 });
 
-app.get("/healthz", (_req, res) => {
+app.get("/healthz", (req, res) => {
+  // Shallow by default (liveness). ?deep=1 (readiness) verifies the DB is
+  // actually queryable, so a replica with a corrupt/locked SQLite file is
+  // pulled from rotation instead of answering 200 with a dead store.
+  if (req.query.deep === "1") {
+    try {
+      getDb().prepare("SELECT 1").get();
+    } catch (err) {
+      return res.status(503).json({ ok: false, error: "DB_UNAVAILABLE", detail: logSafe(err?.message, 100) });
+    }
+  }
   res.json({ ok: true, mode: config.azureMode, aiProvider: config.aiProvider });
 });
 
@@ -1665,6 +1683,17 @@ app.get("/{*splat}", (req, res, next) => {
   res.sendFile(path.resolve(__dirname, "..", "public", "index.html"));
 });
 
+/* ========== Terminal error handler ==========
+ * Without this, a throw in a route lands in Express's default handler with no
+ * correlated trackException and a stack in the HTTP body. Log it, report it,
+ * and return an opaque 500. Must be last and take 4 args to be recognised. */
+app.use((err, req, res, _next) => {
+  console.error("[error]", logSafe(err?.message), logSafe(err?.stack, 500));
+  trackException(err instanceof Error ? err : new Error(String(err)), { path: req?.path });
+  if (res.headersSent) return;
+  res.status(500).json({ error: "INTERNAL_ERROR" });
+});
+
 /* ========== Server ========== */
 let server;
 let backupScheduler;
@@ -1675,9 +1704,27 @@ if (process.env.NODE_ENV !== "test") {
   // listen() so it completes ahead of the first request (and thus the
   // first lazy getDb()); a failure degrades to the previous behaviour
   // (empty local DB) rather than blocking boot.
+  // Crash safety net: an unhandled rejection/exception would otherwise kill the
+  // process (Node's default) WITHOUT the SIGTERM snapshot, losing up to an hour
+  // of config. Report it, take a final snapshot, then exit non-zero.
+  const crashHandler = (kind) => async (err) => {
+    console.error(`[${kind}]`, logSafe(err?.message), logSafe(err?.stack, 500));
+    try { trackException(err instanceof Error ? err : new Error(String(err)), { kind }); } catch { /* best-effort */ }
+    try { await backupScheduler?.runOnce?.(); } catch { /* best-effort */ }
+    try { await flushTelemetry(); } catch { /* best-effort */ }
+    process.exit(1);
+  };
+  process.on("unhandledRejection", crashHandler("unhandledRejection"));
+  process.on("uncaughtException", crashHandler("uncaughtException"));
+
   (async () => {
     try {
-      await restoreLatestSnapshot({ logger: console });
+      // Cap the restore so a slow/unreachable Blob can't hold the process
+      // before listen() (which would fail the readiness probe and the deploy).
+      await Promise.race([
+        restoreLatestSnapshot({ logger: console }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("restore timed out")), 20000)),
+      ]);
     } catch (err) {
       console.error("[restore] failed — continuing with local DB:", err?.message || err);
     }
@@ -1708,16 +1755,26 @@ if (process.env.NODE_ENV !== "test") {
     const gracefulShutdown = async (signal) => {
       if (shuttingDown) return;
       shuttingDown = true;
-      console.log(`[backup] ${signal} received — final snapshot before exit`);
-      const forced = setTimeout(() => process.exit(0), 5000);
+      console.log(`[shutdown] ${signal} received — draining then snapshotting`);
+      // Force-exit non-zero if the whole drain hangs past the grace window, so
+      // a stuck shutdown surfaces in Container Apps metrics instead of a clean 0.
+      const forced = setTimeout(() => process.exit(1), 8000);
       forced.unref();
+      let exitCode = 0;
+      // 1. Stop accepting new connections FIRST, so the snapshot isn't racing
+      //    in-flight writes from requests still being served.
+      await new Promise((resolve) => server.close(() => resolve()));
+      // 2. Final snapshot (RPO ≈ 0). A failure here means potential data loss —
+      //    exit non-zero so the platform doesn't record a clean shutdown.
       try {
         await backupScheduler?.runOnce?.();
       } catch (err) {
         console.error("[backup] final snapshot failed:", err?.message || err);
+        exitCode = 1;
       }
       await flushTelemetry();
-      server.close(() => process.exit(0));
+      clearTimeout(forced);
+      process.exit(exitCode);
     };
     process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
     process.on("SIGINT", () => gracefulShutdown("SIGINT"));

@@ -1,0 +1,25 @@
+version: 2
+updates:
+  # npm dependencies — keeps the manual `overrides` pins (protobufjs, qs, uuid,
+  # form-data) from rotting silently and surfaces new advisories as PRs.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      dev-dependencies:
+        dependency-type: development
+
+  # GitHub Actions — the workflows pin actions by tag; Dependabot bumps them
+  # (ideally to pinned SHAs once adopted).
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+
+  # Docker base image.
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly

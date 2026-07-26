@@ -479,3 +479,14 @@ export function createRealClient() {
 }
 
 export { AzureApiError };
+
+// Exported for direct unit testing (see tests/realClient.test.js). These are
+// the pure decision functions — error categorization, response normalization,
+// retry-after parsing, result validation — that the tautological old tests
+// never actually exercised.
+export {
+  categorizeAzureError,
+  normalizeAppInsightsResponse,
+  parseRetryAfterMs,
+  validateQueryResult,
+};
