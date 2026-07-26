@@ -620,7 +620,13 @@
     };
 
     let settled = false;
-    const es = new EventSource("/api/setup/scan/stream");
+    // EventSource can't send an X-CSRF-Token header, so pass the token as a
+    // query param — it's unreadable to a cross-origin page (same-origin policy),
+    // which is what the CSRF check on the server relies on.
+    const streamUrl = state.csrfToken
+      ? `/api/setup/scan/stream?csrf=${encodeURIComponent(state.csrfToken)}`
+      : "/api/setup/scan/stream";
+    const es = new EventSource(streamUrl);
     activeEventSource = es;
 
     es.addEventListener("step", (e) => {

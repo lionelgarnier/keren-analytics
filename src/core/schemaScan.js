@@ -142,11 +142,33 @@ export function detectGaps({ schemaProfile, readinessReport, customDimensions })
   return gaps;
 }
 
+// Custom-dimension keys and event names are attacker-influenceable: an end
+// user of the observed app controls what dimension keys / event names get
+// emitted. They flow verbatim into the LLM mapping prompt, so they are a
+// prompt-injection vector. Sanitize at scan time (the single point where they
+// enter the system), not only where they're consumed.
+const SAFE_CUSTOM_KEY = /^[A-Za-z0-9_.-]{1,128}$/;
+
+// A key that isn't allowlist-safe can never build a valid customDimensions[...]
+// access anyway, so replacing it with a marker loses nothing usable while
+// removing any injected KQL/instruction text from the prompt.
+function sanitizeKeyName(key) {
+  if (typeof key !== "string") return null;
+  const scrubbed = scrubPii(key);
+  return SAFE_CUSTOM_KEY.test(scrubbed) ? scrubbed : "<unsafe-key>";
+}
+
+// Event names are free-text (e.g. "search:<query>") so an allowlist is too
+// strict — scrub PII, strip newlines (injected instruction blocks), and cap.
+function sanitizeEventName(name) {
+  return scrubPii(String(name)).replace(/[\r\n]+/g, " ").slice(0, 120);
+}
+
 function normalizeCustomDimensions(rows) {
   if (!Array.isArray(rows)) return [];
   return rows.map((row) => ({
     tableName: row.tableName ?? null,
-    keyName: row.keyName ?? row.key ?? null,
+    keyName: sanitizeKeyName(row.keyName ?? row.key ?? null),
     cardinality: typeof row.cardinality === "number" ? row.cardinality : null,
     occurrences: typeof row.occurrences === "number"
       ? row.occurrences
@@ -159,7 +181,7 @@ function normalizeEventNames(rows) {
   if (!Array.isArray(rows)) return [];
   return rows
     .filter((r) => r && r.name)
-    .map((r) => ({ name: String(r.name), count: Number(r.count) || 0 }));
+    .map((r) => ({ name: sanitizeEventName(r.name), count: Number(r.count) || 0 }));
 }
 
 function normalizeSpan(rows) {

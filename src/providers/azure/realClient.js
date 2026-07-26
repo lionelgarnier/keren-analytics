@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
 import { config } from "../../config.js";
 import { getCurrentToken } from "./tokenStore.js";
 
@@ -239,10 +240,17 @@ const workspaceCache = new Map();
 const MAX_WORKSPACE_CACHE = config.maxWorkspaceCacheSize || 100;
 
 async function resolveWorkspaceCustomerId(workspaceResourceId) {
-  if (workspaceCache.has(workspaceResourceId)) {
-    return workspaceCache.get(workspaceResourceId);
-  }
   const token = getAccessToken();
+  // Key the cache by (token identity, workspace) — NOT workspace alone. A bare
+  // workspace key would let tenant B read the customerId that tenant A resolved
+  // WITHOUT an ARM call, bypassing the RBAC check that gate uses (checkAccess
+  // succeeds off a cache hit). Hashing the token isolates per caller/tenant.
+  const cacheKey =
+    createHash("sha256").update(String(token)).digest("hex").slice(0, 16) +
+    "::" + workspaceResourceId;
+  if (workspaceCache.has(cacheKey)) {
+    return workspaceCache.get(cacheKey);
+  }
   const url = armUrl(workspaceResourceId, "?api-version=2022-10-01");
   const data = await fetchJson(url, {
     headers: { Authorization: `Bearer ${token}` },
@@ -263,7 +271,7 @@ async function resolveWorkspaceCustomerId(workspaceResourceId) {
     const firstKey = workspaceCache.keys().next().value;
     workspaceCache.delete(firstKey);
   }
-  workspaceCache.set(workspaceResourceId, customerId);
+  workspaceCache.set(cacheKey, customerId);
   return customerId;
 }
 

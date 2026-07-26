@@ -104,6 +104,15 @@ const SCHEMA_STATEMENTS = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_validations_tenant
      ON validations(tenant_id, validated_at DESC)`,
+  // Persistent session store (replaces express-session MemoryStore). `data` is
+  // the AES-256-GCM-encrypted session blob (carries the Azure refresh token).
+  // Survives redeploys via the same Blob backup/restore as the rest of the DB.
+  `CREATE TABLE IF NOT EXISTS sessions (
+    sid      TEXT PRIMARY KEY,
+    data     TEXT NOT NULL,
+    expires  INTEGER NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires)`,
 ];
 
 /**

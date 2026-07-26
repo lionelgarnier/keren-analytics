@@ -6,6 +6,7 @@ import crypto from "node:crypto";
 import express from "express";
 import helmet from "helmet";
 import session from "express-session";
+import { createSessionStore } from "./core/sessionStore.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import { config } from "./config.js";
@@ -30,6 +31,7 @@ import { runWithToken } from "./providers/azure/tokenStore.js";
 import { createRateLimiter } from "./core/rateLimit.js";
 import { startBackupScheduler, restoreLatestSnapshot } from "./core/backupScheduler.js";
 import { createAzureFoundryProvider } from "./ai/azureFoundry.js";
+import { isUnderCap, recordUsage } from "./ai/quotaGuard.js";
 import { buildTelemetryContract, renderContractMarkdown } from "./core/telemetryContract.js";
 import { loadKqlTemplate, renderTemplate, validateKqlExpr } from "./core/kql.js";
 import { resolveTimeRange, toKqlDatetime } from "./core/timeRange.js";
@@ -97,6 +99,10 @@ app.use(
     secret: config.sessionSecret,
     resave: false,
     saveUninitialized: false,
+    // Encrypted SQLite store (see core/sessionStore.js): persists across
+    // redeploys, bounds memory, and keeps Azure refresh tokens encrypted at
+    // rest — instead of express-session's default in-memory store.
+    store: createSessionStore(session, { secret: config.sessionSecret }),
     cookie: {
       secure: isProduction,
       httpOnly: true,
@@ -207,6 +213,13 @@ function isValidAzureResourceId(id) {
 // in the funnel without ever sending a raw tenant GUID or PII to App Insights.
 function hashForTelemetry(value) {
   return crypto.createHash("sha256").update(String(value)).digest("hex").slice(0, 16);
+}
+
+// Neutralise untrusted text before it hits a log line: strip CR/LF (log
+// injection / forged log entries) and cap length (a full ARM error body can
+// carry subscription/resource ids we don't want in stdout).
+function logSafe(value, max = 200) {
+  return String(value ?? "").replace(/[\r\n]+/g, " ").slice(0, max);
 }
 
 function decodeJwtPayload(token) {
@@ -450,7 +463,7 @@ app.get("/auth/callback", async (req, res) => {
   const { code, state, error: oauthError, error_description } = req.query;
 
   if (oauthError) {
-    console.error("OAuth error:", oauthError, error_description);
+    console.error("OAuth error:", logSafe(oauthError, 64), logSafe(error_description));
     return res.redirect(`/?auth_error=${encodeURIComponent(error_description || oauthError)}`);
   }
 
@@ -587,7 +600,7 @@ app.get("/azure/discover", ensureAuth, async (req, res) => {
   } catch (error) {
     console.error("Discovery error:", error.message);
     const azureBody = error.body || error.cause?.body;
-    if (azureBody) console.error("Azure API body:", azureBody);
+    if (azureBody) console.error("Azure API body:", logSafe(azureBody, 300));
     let azureError;
     if (azureBody) {
       try { azureError = JSON.parse(azureBody).error || azureBody; } catch { azureError = azureBody; }
@@ -683,9 +696,9 @@ app.get("/dashboard/overview", ensureAuth, async (req, res) => {
     acceptHeader.includes("application/x-ndjson");
   res.set("Cache-Control", "no-store");
   res.vary("Accept");
-  console.log(
-    `[overview] tenant=${tenantId} range=${rangeKey} stream=${wantStream} streamParam=${String(streamParam)} accept=${acceptHeader} query=${JSON.stringify(req.query)}`
-  );
+  // Hash the tenant id (never log a raw GUID or the query string, which can
+  // carry identifiers) — same privacy posture as telemetry events.
+  console.log(`[overview] tenant=${hashForTelemetry(tenantId)} range=${rangeKey} stream=${wantStream}`);
 
   if (wantStream) {
     res.set({ "Content-Type": "application/x-ndjson", "Cache-Control": "no-cache", "X-Accel-Buffering": "no" });
@@ -695,9 +708,7 @@ app.get("/dashboard/overview", ensureAuth, async (req, res) => {
 
     function send(obj) {
       if (closed) return;
-      const line = JSON.stringify(obj) + "\n";
-      console.log("[stream] send:", obj.type, obj.label || "");
-      res.write(line);
+      res.write(JSON.stringify(obj) + "\n");
     }
 
     try {
@@ -755,7 +766,7 @@ app.get("/dashboard/overview", ensureAuth, async (req, res) => {
   } catch (error) {
     console.error("Dashboard pipeline error:", error.message);
     const azureBody = error.body || error.cause?.body;
-    if (azureBody) console.error("Azure API body:", azureBody);
+    if (azureBody) console.error("Azure API body:", logSafe(azureBody, 300));
     let azureError;
     if (azureBody) {
       try { azureError = JSON.parse(azureBody).error || azureBody; } catch { azureError = azureBody; }
@@ -1027,6 +1038,18 @@ app.post("/api/setup/scan", ensureAuth, verifyCsrf, async (req, res) => {
 // "error") so it can't collide with EventSource's native error event.
 app.get("/api/setup/scan/stream", ensureAuth, async (req, res) => {
   const tenantId = req.session.tenantId;
+  // This GET triggers the full CONFIG phase (Log Analytics scan + a billable
+  // LLM call). SameSite=lax lets the session cookie ride a top-level GET
+  // navigation, so without a CSRF check a third-party page could kick off a
+  // scan on the victim's session. EventSource can't set headers, so the token
+  // (issued via /auth/session, unreadable cross-origin) is passed as a query
+  // param. Test bypass mirrors verifyCsrf (Lot 5 unifies both onto a flag).
+  if (process.env.NODE_ENV !== "test") {
+    const expected = req.session?.csrfToken;
+    if (!expected || req.query.csrf !== expected) {
+      return res.status(403).json({ error: "CSRF_MISMATCH" });
+    }
+  }
   res.writeHead(200, {
     "Content-Type": "text/event-stream; charset=utf-8",
     "Cache-Control": "no-cache, no-transform",
@@ -1270,6 +1293,17 @@ app.post("/api/setup/mapping-preview", ensureAuth, verifyCsrf, async (req, res) 
   if (!exprCheck.ok) {
     return res.status(400).json({ error: "INVALID_EXPR", message: exprCheck.reason });
   }
+  // Preview returns cell VALUES, so it is stricter than the dashboard renderer
+  // (which only aggregates). Block the two shapes that turn preview into a raw
+  // log exporter: strcat(...) concatenates several columns into one exfil cell,
+  // and a bare `customDimensions` (not `customDimensions["key"]`) dumps the
+  // whole property bag. This upholds the "no raw log rows / PII" invariant.
+  if (/\bstrcat\s*\(/i.test(expr) || /customDimensions(?!\s*\[)/i.test(expr)) {
+    return res.status(400).json({
+      error: "INVALID_EXPR",
+      message: "Preview a single field: use a column or customDimensions[\"key\"], not strcat() or a bare customDimensions.",
+    });
+  }
 
   // Pick the event table the dashboard would query for this resource.
   const scan = getLatestScan(tenantId, resource.resourceId);
@@ -1302,7 +1336,13 @@ app.post("/api/setup/mapping-preview", ensureAuth, verifyCsrf, async (req, res) 
     let samples = cell("samples");
     if (typeof samples === "string") { try { samples = JSON.parse(samples); } catch { samples = []; } }
     if (!Array.isArray(samples)) samples = [];
-    samples = scrubSamples(samples.slice(0, 5).map((s) => String(s)));
+    // Scrub known PII patterns AND mask: show only a short prefix so the user
+    // can confirm the field resolves to something without the endpoint ever
+    // returning full raw values (scrubSamples' 6 regexes don't catch names,
+    // JWTs, IPv6, free-text — masking is the backstop).
+    samples = scrubSamples(samples.slice(0, 5).map((s) => String(s))).map((v) =>
+      v.length > 6 ? v.slice(0, 4) + "…" : v
+    );
     res.set("Cache-Control", "no-store");
     res.json({
       table: tableName,
@@ -1472,7 +1512,7 @@ app.get("/api/ai/disclosure", ensureAuth, (req, res) => {
   });
 });
 
-app.get("/api/ai/ping", async (_req, res) => {
+app.get("/api/ai/ping", ensureAuth, async (_req, res) => {
   if (config.aiProvider !== "azure-foundry") {
     return res.json({
       ok: true,
@@ -1488,6 +1528,18 @@ app.get("/api/ai/ping", async (_req, res) => {
       provider: "azure-foundry",
       configured: false,
       message: "AZURE_FOUNDRY_ENDPOINT or AZURE_FOUNDRY_DEPLOYMENT is missing.",
+    });
+  }
+
+  // This endpoint makes a real (billable) LLM call, so it must sit behind the
+  // same daily spend cap as the mapping pipeline — otherwise it's an unmetered
+  // cost vector. (It's now also behind ensureAuth.)
+  if (!isUnderCap()) {
+    return res.status(429).json({
+      ok: false,
+      provider: "azure-foundry",
+      configured: true,
+      message: "Daily AI budget reached. Try again tomorrow.",
     });
   }
 
@@ -1509,6 +1561,7 @@ app.get("/api/ai/ping", async (_req, res) => {
         additionalProperties: false,
       },
     });
+    if (probe?.usage) recordUsage(probe.usage);
     if (!probe?.output?.pong) {
       return res.status(503).json({
         ok: false,
@@ -1519,11 +1572,14 @@ app.get("/api/ai/ping", async (_req, res) => {
     }
     return res.json({ ok: true, provider: "azure-foundry", configured: true });
   } catch (error) {
+    // Don't reflect the provider's raw error (endpoint/config detail leak) —
+    // log it server-side, return an opaque message.
+    console.error("AI ping failed:", logSafe(error.message));
     return res.status(503).json({
       ok: false,
       provider: "azure-foundry",
       configured: true,
-      message: error.message,
+      message: "AI provider health check failed.",
     });
   }
 });
