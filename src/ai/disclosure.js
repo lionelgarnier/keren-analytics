@@ -1,7 +1,7 @@
 /**
  * AI disclosure — single source of truth for "what data is sent, where, and
  * to whom" during setup. Powers the Services-hub "Configure" split-button
- * menu and its inline "Quelles données sont envoyées ?" popover.
+ * menu and its inline "What data is sent?" popover.
  *
  * Everything here is derived from `config` (provider + region) plus the
  * privacy contract documented in `docs/architecture-ai.md` § Privacy
