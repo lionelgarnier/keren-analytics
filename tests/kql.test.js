@@ -161,6 +161,12 @@ test("validateKqlExpr rejects injection vectors", () => {
     'resource("/subscriptions/x").T',                       // cross-resource reference
     "a & b",                                                 // smuggled operator
     'broken "quote',                                         // unbalanced string
+    // KQL verbatim strings @"…" do NOT honour backslash escapes: a naive
+    // backslash-aware stripper mis-parses @"\") and swallows the rest, letting
+    // union/app() through. These must be rejected.
+    '@"\\") | project __v=strcat(url,name,user_Id) | take 5000 //"',
+    '@"\\") | union isfuzzy=true app(\'other\').pageViews //"',
+    "@'\\') | union app('x') //'",
     "x".repeat(501),                                         // too long
   ]) {
     assert.equal(validateKqlExpr(expr).ok, false, `should reject ${expr.slice(0, 40)}`);

@@ -62,14 +62,17 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        // js.monitor.azure.com: App Insights browser SDK (self-telemetry,
-        // stage B). The /telemetry.js bootstrap injects this CDN script.
-        scriptSrc: ["'self'", "https://cdn.jsdelivr.net", "https://unpkg.com", "https://js.monitor.azure.com"],
+        // Leaflet + Chart.js are self-hosted under /vendor (no third-party CDN
+        // in script-src — a CDN there would serve arbitrary code and defeat a
+        // CSP that otherwise has no 'unsafe-inline'). js.monitor.azure.com is
+        // the App Insights browser SDK (self-telemetry stage B), injected by
+        // the /telemetry.js bootstrap.
+        scriptSrc: ["'self'", "https://js.monitor.azure.com"],
         // fonts.googleapis.com hosts the @font-face stylesheet (Inter,
         // JetBrains Mono, Instrument Serif) linked from every page; without it
         // the CSP silently blocks the stylesheet and the whole app falls back
         // to system fonts. The font files themselves come from gstatic (fontSrc).
-        styleSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com", "https://fonts.googleapis.com"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
         imgSrc: ["'self'", "data:", "https://*.tile.openstreetmap.org"],
         // *.in.applicationinsights / *.livediagnostics: App Insights ingestion
@@ -77,8 +80,6 @@ app.use(
         // api.github.com: live stargazer count on the landing nav.
         connectSrc: [
           "'self'",
-          "https://cdn.jsdelivr.net",
-          "https://unpkg.com",
           "https://js.monitor.azure.com",
           "https://*.in.applicationinsights.azure.com",
           "https://*.livediagnostics.monitor.azure.com",
@@ -187,6 +188,19 @@ app.use(apiLimiter);
 
 function isValidTenantId(tenantId) {
   return typeof tenantId === "string" && /^[a-zA-Z0-9_-]{1,128}$/.test(tenantId);
+}
+
+// Azure Resource Manager resource id. Validated before it is EVER concatenated
+// into an ARM URL (see realClient.queryWorkspace / resolveWorkspaceCustomerId):
+// a value like "@evil.tld/x" would otherwise turn management.azure.com into a
+// userinfo segment and send the caller's delegated Bearer token to an attacker
+// host (SSRF + token exfiltration). Covers App Insights components and Log
+// Analytics workspaces (single-level resources under one provider).
+const AZURE_RESOURCE_ID =
+  /^\/subscriptions\/[0-9a-fA-F-]{36}\/resourceGroups\/[\w.()-]{1,90}\/providers\/[A-Za-z0-9.]+\/[A-Za-z0-9-]+\/[\w.()-]{1,260}$/;
+
+function isValidAzureResourceId(id) {
+  return typeof id === "string" && AZURE_RESOURCE_ID.test(id);
 }
 
 // Stable, non-reversible id for telemetry. We want to count distinct tenants
@@ -595,6 +609,19 @@ app.post("/azure/select", ensureAuth, verifyCsrf, (req, res) => {
   const { resourceId, workspaceId, subscriptionId, resourceGroup, appInsightsName } = req.body || {};
   if (!resourceId || !workspaceId) {
     return res.status(400).json({ error: "INVALID_SELECTION" });
+  }
+  // Both ids flow into ARM URLs downstream — reject anything that isn't a
+  // well-formed resource id (SSRF / token-exfil guard).
+  if (!isValidAzureResourceId(resourceId) || !isValidAzureResourceId(workspaceId)) {
+    return res.status(400).json({ error: "INVALID_SELECTION", message: "Malformed resource id." });
+  }
+  // Only allow selecting a resource the caller actually discovered (belt &
+  // braces on top of the format check). When the discovery cache is absent we
+  // fall back to the format check alone rather than blocking a valid select.
+  const discovered = getTenant(tenantId).discoveryCache?.resources;
+  if (Array.isArray(discovered) && discovered.length > 0 &&
+      !discovered.some((r) => r.resourceId === resourceId)) {
+    return res.status(400).json({ error: "INVALID_SELECTION", message: "Unknown resource." });
   }
   const prev = getTenant(tenantId).selectedResource;
   const changed = !prev || prev.resourceId !== resourceId;

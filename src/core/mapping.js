@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { validateKqlExpr } from "./kql.js";
 
 export const mappingExpressions = {
   userId: {
@@ -347,9 +348,14 @@ export function allowedKqlExpressions(mapping) {
   const deviceExpr = Object.values(mappingExpressions.device);
 
   if (mapping) {
+    // Defence-in-depth: a persisted/restored override expr is re-validated
+    // here — on EVERY render, since this runs per buildOverviewDashboard — so
+    // a malicious expr that reached the DB (or a Blob-restored one that was
+    // never re-checked) is never self-whitelisted into the renderer. If it
+    // fails, it isn't added to the bucket and renderTemplate rejects it.
     const extend = (bucket, field) => {
       const expr = mapping[field]?.expr;
-      if (expr && !bucket.includes(expr)) bucket.push(expr);
+      if (expr && validateKqlExpr(expr).ok && !bucket.includes(expr)) bucket.push(expr);
     };
     extend(userIdExpr, "canonicalUserId");
     extend(sessionIdExpr, "canonicalSessionId");

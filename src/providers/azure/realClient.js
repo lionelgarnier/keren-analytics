@@ -6,6 +6,24 @@ import { getCurrentToken } from "./tokenStore.js";
 
 const armEndpoint = "https://management.azure.com";
 
+// Build an ARM URL from a caller-supplied resource path and re-assert that the
+// resolved origin is still management.azure.com. A resource id like
+// "@evil.tld/x" would otherwise make the WHATWG URL parser treat the endpoint
+// host as userinfo and send the delegated Bearer token to the attacker host
+// (SSRF + token exfiltration). Server-side format validation already rejects
+// such ids, but this is the last line of defence at the point of use.
+function armUrl(resourcePath, query = "") {
+  const url = new URL(`${resourcePath}${query}`, armEndpoint);
+  if (url.origin !== armEndpoint) {
+    throw new AzureApiError("Refusing to call a non-ARM host.", {
+      status: 400,
+      code: "INVALID_RESOURCE_ID",
+      actionable: "The selected resource id is malformed. Re-select the resource.",
+    });
+  }
+  return url.toString();
+}
+
 // Resolve .env path once (project root)
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const envFilePath = resolve(__dirname, "../../../.env");
@@ -225,7 +243,7 @@ async function resolveWorkspaceCustomerId(workspaceResourceId) {
     return workspaceCache.get(workspaceResourceId);
   }
   const token = getAccessToken();
-  const url = `${armEndpoint}${workspaceResourceId}?api-version=2022-10-01`;
+  const url = armUrl(workspaceResourceId, "?api-version=2022-10-01");
   const data = await fetchJson(url, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -411,7 +429,7 @@ export function createRealClient() {
       const token = getAccessToken();
       const body = JSON.stringify({ query: kql });
       const queryResourceId = resourceId || workspaceId;
-      const url = `${armEndpoint}${queryResourceId}/api/query?api-version=2015-05-01`;
+      const url = armUrl(queryResourceId, "/api/query?api-version=2015-05-01");
 
       let lastError = null;
       for (let attempt = 0; attempt < 2; attempt += 1) {

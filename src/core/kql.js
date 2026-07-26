@@ -55,18 +55,26 @@ export function validateKqlExpr(expr) {
   if (!trimmed) return { ok: false, reason: "expr is empty" };
   if (trimmed.length > 500) return { ok: false, reason: "expr is too long" };
 
-  // Remove "...", '...' and @"..."/@'...' verbatim string literals (honouring
-  // backslash escapes), replacing each with a space so tokens inside them are
-  // ignored by the operator checks below.
+  // Remove string literals, replacing each with a space so tokens inside them
+  // are ignored by the operator checks below. Order matters: KQL VERBATIM
+  // strings `@"…"` / `@'…'` do NOT honour backslash escapes (a `\` is literal;
+  // an embedded quote is doubled `""`), so they must be matched with their own
+  // rule BEFORE the backslash-aware rule — otherwise `@"\")…"` is mis-parsed as
+  // an escaped quote and the rest of the payload is swallowed (KQL injection).
   const stripped = trimmed
-    .replace(/@?"(?:[^"\\]|\\.)*"/g, " ")
-    .replace(/@?'(?:[^'\\]|\\.)*'/g, " ");
+    .replace(/@"(?:[^"]|"")*"/g, " ")
+    .replace(/@'(?:[^']|'')*'/g, " ")
+    .replace(/"(?:[^"\\]|\\.)*"/g, " ")
+    .replace(/'(?:[^'\\]|\\.)*'/g, " ");
 
   // A leftover quote means an unbalanced/unterminated string — reject.
   if (/["'`]/.test(stripped)) return { ok: false, reason: "unbalanced string literal" };
   if (ALLOWED_OUTSIDE_STRINGS.test(stripped)) {
     return { ok: false, reason: "disallowed character outside a string literal" };
   }
+  // Keyword denylist runs on the STRIPPED text so a keyword appearing inside a
+  // legitimate string literal (e.g. a custom-dimension key "app") is allowed,
+  // while a bare `union`/`app(...)` chained after a broken-out string is not.
   if (BLOCKED_KQL_KEYWORDS.test(stripped)) {
     return { ok: false, reason: "disallowed KQL keyword" };
   }

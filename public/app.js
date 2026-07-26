@@ -331,7 +331,7 @@ function renderCmdkList(query) {
     const item = document.createElement("button");
     item.type = "button";
     item.className = `dash-cmdk-item${i === cmdkActiveIdx ? " is-active" : ""}`;
-    item.innerHTML = `<span class="dash-cmdk-item-glyph">&rsaquo;</span><span>${cmd.label}</span><span class="dash-cmdk-item-meta">${cmd.hint}</span>`;
+    item.innerHTML = `<span class="dash-cmdk-item-glyph">&rsaquo;</span><span>${escapeHtmlApp(cmd.label)}</span><span class="dash-cmdk-item-meta">${escapeHtmlApp(cmd.hint || "")}</span>`;
     item.addEventListener("mouseenter", () => { cmdkActiveIdx = i; updateCmdkActive(); });
     item.addEventListener("click", () => runCmdk(i));
     list.appendChild(item);
@@ -386,7 +386,7 @@ function openDrill(title, rows) {
   rows.forEach((r) => {
     const section = document.createElement("div");
     section.className = "dash-drill-section";
-    section.innerHTML = `<div class="dash-drill-section-h">${r.k}</div><div class="dash-drill-val">${r.v}</div>`;
+    section.innerHTML = `<div class="dash-drill-section-h">${escapeHtmlApp(r.k)}</div><div class="dash-drill-val">${escapeHtmlApp(r.v)}</div>`;
     body.appendChild(section);
   });
   modal.classList.remove("hidden");
@@ -992,16 +992,9 @@ function d2EnvKey(env) {
   return "other";
 }
 
-// Minimal HTML escaper for strings interpolated into card markup.
-function escapeHtmlApp(value) {
-  if (value === null || value === undefined) return "";
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
+// Shared HTML escaper (defined in escapeHtml.js, loaded before this script).
+// Kept under the local name so existing call sites don't change.
+const escapeHtmlApp = window.escapeHtml;
 
 /* ===== Configure split-button: AI mode choice + data disclosure ===== */
 
@@ -2280,7 +2273,7 @@ function renderInsights(dashboard) {
     if ((best.visitors || 0) > 0) {
       insights.push({
         kind: "up",
-        text: `Top campaign source: <strong>${best.campaign}</strong> via ${best.source} with <strong>${fmt(best.visitors)}</strong> visitors`,
+        text: `Top campaign source: <strong>${escapeHtmlApp(best.campaign)}</strong> via ${escapeHtmlApp(best.source)} with <strong>${fmt(best.visitors)}</strong> visitors`,
       });
     }
   }
@@ -2802,7 +2795,7 @@ function renderFunnel(navPaths, topPages) {
     const head = document.createElement("div");
     head.className = "dash-funnel-head";
     const labelSpan = document.createElement("span");
-    labelSpan.innerHTML = `<strong>${step.label}</strong>`;
+    labelSpan.innerHTML = `<strong>${escapeHtmlApp(step.label)}</strong>`;
     const metaSpan = document.createElement("span");
     metaSpan.className = "dash-funnel-head-meta";
     metaSpan.textContent = `${fmt(step.count)} \u00B7 ${pct.toFixed(1)}%`;
@@ -3310,7 +3303,7 @@ function renderReadinessScore(readinessScore, readiness) {
               detail.innerHTML = "<p class=\"text-muted\">No prompt available for this signal yet.</p>";
             }
           } catch (err) {
-            detail.innerHTML = `<p class="text-muted">Failed to load prompt: ${err.message}</p>`;
+            detail.innerHTML = `<p class="text-muted">Failed to load prompt: ${escapeHtmlApp(err.message)}</p>`;
           }
         }
       });

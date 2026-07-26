@@ -66,15 +66,8 @@
   // ── DOM helpers ───────────────────────────────────────────────
   function $(id) { return document.getElementById(id); }
 
-  function escapeHtml(value) {
-    if (value === null || value === undefined) return "";
-    return String(value)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
-  }
+  // Shared HTML escaper (defined in escapeHtml.js, loaded before this script).
+  const escapeHtml = window.escapeHtml;
 
   function show(step) {
     state.step = step;
