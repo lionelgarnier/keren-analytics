@@ -61,7 +61,30 @@ async function resolveSelectedResource(tenantId, azureClient) {
  * the dashboard. Called by the setup wizard (`/api/setup/scan*`) and,
  * lazily, by runOverviewPipeline when no snapshot exists yet.
  */
-export async function runSetupScan({ tenantId, azureClient, onProgress, onStep }) {
+// In-process single-flight for the CONFIG phase. Two concurrent scans for the
+// same tenant (double-click, client retry, /scan + /scan/stream racing) would
+// each write a scan row and fire a SEPARATE billable LLM call, neither seeing
+// the other's cache. Coalescing them onto one promise makes the duplicate wait
+// and share the result. Keyed by tenant (a tenant scans its selected resource,
+// so this is effectively per-resource for the concurrency that matters).
+const inflightScans = new Map();
+
+export async function runSetupScan(args) {
+  const key = args?.tenantId;
+  if (key && inflightScans.has(key)) {
+    return inflightScans.get(key);
+  }
+  const promise = runSetupScanImpl(args);
+  if (key) {
+    inflightScans.set(key, promise);
+    promise.finally(() => {
+      if (inflightScans.get(key) === promise) inflightScans.delete(key);
+    });
+  }
+  return promise;
+}
+
+async function runSetupScanImpl({ tenantId, azureClient, onProgress, onStep }) {
   const progress = typeof onProgress === "function" ? onProgress : () => {};
   // F4 streaming: structured per-stage events the setup wizard renders as
   // live previews. No-op when the caller doesn't pass one.
@@ -169,9 +192,11 @@ export async function runSetupScan({ tenantId, azureClient, onProgress, onStep }
     readinessReport,
   });
   let scanId = null;
+  let scanPersisted = false;
   if (scan) {
     try {
       scanId = persistScan(tenantId, selectedResource.resourceId, scan).id;
+      scanPersisted = true;
     } catch (error) {
       logStateTransition(tenantId, {
         state: PipelineStates.SCHEMA_SCAN,
@@ -198,6 +223,11 @@ export async function runSetupScan({ tenantId, azureClient, onProgress, onStep }
     aiMapping = await getOrComputeMapping(tenantId, selectedResource.resourceId, {
       readinessReport,
       optOut: aiOptOut,
+      // Hand the freshly-persisted scan directly so the mapping is computed for
+      // THIS run's scan, not whatever getLatestScan returns (avoids mapping a
+      // concurrent run's scan). If persist failed, scanId is null and we let
+      // getOrComputeMapping fall back rather than map against a stale row.
+      scanRow: scanPersisted && scanId != null ? { id: scanId, payload: scan } : undefined,
     });
     if (aiMapping?.degraded) {
       logStateTransition(tenantId, {

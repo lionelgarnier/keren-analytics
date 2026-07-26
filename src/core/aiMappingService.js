@@ -74,8 +74,12 @@ function noteDegraded(scanId, reason, err) {
  *   LLM entirely and persist the deterministic fallback (no outbound call).
  * @returns {Promise<null | { id, scanId, source, proposals, degraded, createdAt, reason? }>}
  */
-export async function getOrComputeMapping(tenantId, resourceId, { readinessReport, abortSignal, provider, optOut } = {}) {
-  const scan = getLatestScan(tenantId, resourceId);
+export async function getOrComputeMapping(tenantId, resourceId, { readinessReport, abortSignal, provider, optOut, scanRow } = {}) {
+  // Prefer the scan the caller just persisted (orchestrator passes it): under
+  // concurrent scans, re-reading getLatestScan here could pick up a DIFFERENT
+  // run's row and map the neighbour's scan. Fall back to latest only when the
+  // caller didn't hand us one.
+  const scan = scanRow || getLatestScan(tenantId, resourceId);
   if (!scan) return null;
 
   const cached = getMappingForScan(tenantId, scan.id);

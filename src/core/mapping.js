@@ -327,9 +327,16 @@ export function mergeWithValidation(mapping, validation) {
   }
   if (!changed) return mapping;
 
+  // Hash the mapping WITHOUT version/computedAt. `merged` inherits the fresh
+  // `computedAt` (new Date()) from buildMapping on every render, so hashing it
+  // whole made `version` change each load — which changed the cache key and
+  // silently re-ran ~24 Log Analytics queries per dashboard load for any tenant
+  // with overrides (the common accept_all path). The version must be a pure
+  // function of the mapping content, not of when it was computed.
+  const { version: _prevVersion, computedAt: _prevComputedAt, ...hashInput } = merged;
   const version = crypto
     .createHash("sha256")
-    .update(JSON.stringify(merged))
+    .update(JSON.stringify(hashInput))
     .digest("hex")
     .slice(0, 12);
   return { ...merged, version, computedAt: new Date().toISOString() };

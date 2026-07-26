@@ -264,3 +264,20 @@ test("mergeWithValidation applies a device override and recomputes the version",
   assert.equal(merged.canonicalBrowser.matchType, "user-override");
   assert.notEqual(merged.version, mapping.version);
 });
+
+test("mergeWithValidation version is stable across renders (cache-key correctness)", () => {
+  const inputs = {
+    schemaProfile: { tables: { pageViews: true }, customDimensionsKeys: {} },
+    readinessReport: { availableSignals: { pageViews: true }, probeCounts: {} },
+  };
+  const validation = {
+    overrides: { canonicalBrowser: { source: "customDimensions.ua", expr: 'tostring(customDimensions["ua"])' } },
+    validatedAt: "2026-06-08T00:00:00Z",
+  };
+  // Two independent buildMapping calls (each stamps a fresh computedAt) must
+  // yield the SAME merged version — otherwise the dashboard cache key churns
+  // and every load re-runs the queries.
+  const a = mergeWithValidation(buildMapping(inputs), validation);
+  const b = mergeWithValidation(buildMapping(inputs), validation);
+  assert.equal(a.version, b.version, "version must not depend on computedAt");
+});

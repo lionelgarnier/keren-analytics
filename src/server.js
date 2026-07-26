@@ -31,7 +31,7 @@ import { runWithToken } from "./providers/azure/tokenStore.js";
 import { createRateLimiter } from "./core/rateLimit.js";
 import { startBackupScheduler, restoreLatestSnapshot } from "./core/backupScheduler.js";
 import { createAzureFoundryProvider } from "./ai/azureFoundry.js";
-import { isUnderCap, recordUsage } from "./ai/quotaGuard.js";
+import { isUnderCap, recordUsage, getSnapshot as getQuotaSnapshot } from "./ai/quotaGuard.js";
 import { buildTelemetryContract, renderContractMarkdown } from "./core/telemetryContract.js";
 import { loadKqlTemplate, renderTemplate, validateKqlExpr } from "./core/kql.js";
 import { resolveTimeRange, toKqlDatetime } from "./core/timeRange.js";
@@ -220,6 +220,21 @@ function hashForTelemetry(value) {
 // carry subscription/resource ids we don't want in stdout).
 function logSafe(value, max = 200) {
   return String(value ?? "").replace(/[\r\n]+/g, " ").slice(0, max);
+}
+
+// Per-resource readiness/schema, read from the latest scan of the SELECTED
+// resource. The scan payload embeds readinessReport + schemaProfile and is
+// keyed by (tenant, resource) — unlike the tenant "scratch" fields
+// (tenant.readinessReport/schemaProfile), which are last-writer-wins across a
+// tenant's resources and would show the wrong service's readiness after a
+// resource switch. Falls back to the scratch field only when no scan exists.
+function selectedResourceConfig(tenantId, tenant) {
+  const rid = tenant?.selectedResource?.resourceId;
+  const scan = rid ? getLatestScan(tenantId, rid) : null;
+  return {
+    readinessReport: scan?.payload?.readinessReport || tenant?.readinessReport || null,
+    schemaProfile: scan?.payload?.schemaProfile || tenant?.schemaProfile || null,
+  };
 }
 
 function decodeJwtPayload(token) {
@@ -664,8 +679,9 @@ app.get("/readiness", ensureAuth, async (req, res) => {
   if (!tenant.selectedResource) {
     return res.status(409).json({ error: "RESOURCE_NOT_SELECTED" });
   }
-  if (tenant.readinessReport) {
-    return res.json(tenant.readinessReport);
+  const scoped = selectedResourceConfig(tenantId, tenant);
+  if (scoped.readinessReport) {
+    return res.json(scoped.readinessReport);
   }
   const requestedRange = req.query.range || "7d";
   const rangeKey = ["today", "7d", "30d"].includes(requestedRange) ? requestedRange : "7d";
@@ -782,11 +798,12 @@ app.get("/dashboard/overview", ensureAuth, async (req, res) => {
 app.get("/recommendations", ensureAuth, (req, res) => {
   const tenantId = req.session.tenantId;
   const tenant = getTenant(tenantId);
-  if (!tenant.readinessReport) {
+  const { readinessReport } = selectedResourceConfig(tenantId, tenant);
+  if (!readinessReport) {
     return res.status(409).json({ error: "READINESS_NOT_CHECKED", message: "Run readiness check first." });
   }
-  const recommendations = buildRecommendations(tenant.readinessReport);
-  const readinessScore = computeReadinessScore(tenant.readinessReport);
+  const recommendations = buildRecommendations(readinessReport);
+  const readinessScore = computeReadinessScore(readinessReport);
   res.set("Cache-Control", "no-store");
   res.json({ recommendations, readinessScore });
 });
@@ -794,13 +811,14 @@ app.get("/recommendations", ensureAuth, (req, res) => {
 app.get("/prompts", ensureAuth, (req, res) => {
   const tenantId = req.session.tenantId;
   const tenant = getTenant(tenantId);
-  if (!tenant.readinessReport) {
+  const { readinessReport, schemaProfile } = selectedResourceConfig(tenantId, tenant);
+  if (!readinessReport) {
     return res.status(409).json({ error: "READINESS_NOT_CHECKED", message: "Run readiness check first." });
   }
   const resourceName = tenant.selectedResource?.appInsightsName || null;
   const prompts = generatePrompts({
-    readinessReport: tenant.readinessReport,
-    schemaProfile: tenant.schemaProfile,
+    readinessReport,
+    schemaProfile,
     resourceName,
   });
   res.set("Cache-Control", "no-store");
@@ -1582,6 +1600,13 @@ app.get("/api/ai/ping", ensureAuth, async (_req, res) => {
       message: "AI provider health check failed.",
     });
   }
+});
+
+// Daily AI spend observability (was computed but never exposed). Auth-gated —
+// it reveals cost/usage, not tenant data.
+app.get("/api/ai/quota", ensureAuth, (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.json(getQuotaSnapshot());
 });
 
 app.get("/privacy", (_req, res) => {
