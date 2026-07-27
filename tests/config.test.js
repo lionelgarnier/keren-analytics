@@ -43,10 +43,28 @@ test("config: accepts a real secret in production", () => {
   const r = loadConfig({
     NODE_ENV: "production",
     SESSION_SECRET: "a".repeat(64),
+    AZURE_MODE: "real",
   });
   assert.equal(r.code, 0);
   const parsed = JSON.parse(r.stdout);
   assert.equal(parsed.secret, "a".repeat(64));
+});
+
+test("config: throws in production when AZURE_MODE is not real", () => {
+  // Default (no AZURE_MODE) resolves to mock, which disables auth — must fail.
+  const r = loadConfig({ NODE_ENV: "production", SESSION_SECRET: "a".repeat(64) });
+  assert.equal(r.code, 1);
+  assert.match(r.stderr, /AZURE_MODE must be "real" in production/);
+});
+
+test("config: ALLOW_MOCK_IN_PROD allows a deliberate mock demo in production", () => {
+  const r = loadConfig({
+    NODE_ENV: "production",
+    SESSION_SECRET: "a".repeat(64),
+    AZURE_MODE: "mock",
+    ALLOW_MOCK_IN_PROD: "true",
+  });
+  assert.equal(r.code, 0);
 });
 
 test("config: dev mode falls back to default secret with warning", () => {

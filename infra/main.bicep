@@ -81,13 +81,17 @@ param memorySize string = '1Gi'
 // shared session store + shared/replicated DB first (Phase 3). Scale-to-zero
 // (minReplicas=0) is also avoided so cold starts don't drop the warmed cache.
 @description('Minimum replicas. Keep at 1 (single-replica invariant — see Phase 3).')
+// @maxValue(1) makes the single-replica invariant a hard template constraint,
+// not just a comment: SQLite + in-memory sessions/cache are not multi-replica
+// safe, so a `--parameters maxReplicas=3` must be rejected until a shared store
+// ships (Phase 3), not silently corrupt state.
 @minValue(0)
-@maxValue(10)
+@maxValue(1)
 param minReplicas int = 1
 
-@description('Maximum replicas. Keep at 1 (single-replica invariant — see Phase 3).')
+@description('Maximum replicas. LOCKED at 1 (single-replica invariant — see Phase 3).')
 @minValue(1)
-@maxValue(30)
+@maxValue(1)
 param maxReplicas int = 1
 
 @description('AI provider for the setup-wizard / mapping analysis. "none" disables LLM calls; "azure-foundry" wires the Foundry Responses API. ADR 0005 + Track F3.')
@@ -357,16 +361,35 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
           ]
           probes: [
             {
+              // Give a cold boot (Blob restore + schema) time before liveness
+              // starts killing the replica.
+              type: 'Startup'
+              httpGet: { path: '/healthz', port: 3000 }
+              initialDelaySeconds: 5
+              periodSeconds: 5
+              failureThreshold: 12
+              timeoutSeconds: 3
+            }
+            {
+              // Liveness stays shallow — a slow DB shouldn't trigger a restart
+              // loop, only mark the replica not-ready.
               type: 'Liveness'
               httpGet: { path: '/healthz', port: 3000 }
               initialDelaySeconds: 10
               periodSeconds: 30
+              failureThreshold: 3
+              timeoutSeconds: 3
             }
             {
+              // Readiness does a DEEP check (?deep=1 → SELECT 1 on SQLite) so a
+              // replica with a corrupt/locked DB is pulled from rotation.
               type: 'Readiness'
-              httpGet: { path: '/healthz', port: 3000 }
+              httpGet: { path: '/healthz?deep=1', port: 3000 }
               initialDelaySeconds: 5
               periodSeconds: 10
+              failureThreshold: 3
+              successThreshold: 1
+              timeoutSeconds: 3
             }
           ]
         }

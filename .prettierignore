@@ -1,0 +1,7 @@
+node_modules
+public/vendor
+public/llms.txt
+public/.well-known
+coverage
+data
+package-lock.json

@@ -1,10 +1,29 @@
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
 import { config } from "../../config.js";
 import { getCurrentToken } from "./tokenStore.js";
 
 const armEndpoint = "https://management.azure.com";
+
+// Build an ARM URL from a caller-supplied resource path and re-assert that the
+// resolved origin is still management.azure.com. A resource id like
+// "@evil.tld/x" would otherwise make the WHATWG URL parser treat the endpoint
+// host as userinfo and send the delegated Bearer token to the attacker host
+// (SSRF + token exfiltration). Server-side format validation already rejects
+// such ids, but this is the last line of defence at the point of use.
+function armUrl(resourcePath, query = "") {
+  const url = new URL(`${resourcePath}${query}`, armEndpoint);
+  if (url.origin !== armEndpoint) {
+    throw new AzureApiError("Refusing to call a non-ARM host.", {
+      status: 400,
+      code: "INVALID_RESOURCE_ID",
+      actionable: "The selected resource id is malformed. Re-select the resource.",
+    });
+  }
+  return url.toString();
+}
 
 // Resolve .env path once (project root)
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -221,11 +240,18 @@ const workspaceCache = new Map();
 const MAX_WORKSPACE_CACHE = config.maxWorkspaceCacheSize || 100;
 
 async function resolveWorkspaceCustomerId(workspaceResourceId) {
-  if (workspaceCache.has(workspaceResourceId)) {
-    return workspaceCache.get(workspaceResourceId);
-  }
   const token = getAccessToken();
-  const url = `${armEndpoint}${workspaceResourceId}?api-version=2022-10-01`;
+  // Key the cache by (token identity, workspace) — NOT workspace alone. A bare
+  // workspace key would let tenant B read the customerId that tenant A resolved
+  // WITHOUT an ARM call, bypassing the RBAC check that gate uses (checkAccess
+  // succeeds off a cache hit). Hashing the token isolates per caller/tenant.
+  const cacheKey =
+    createHash("sha256").update(String(token)).digest("hex").slice(0, 16) +
+    "::" + workspaceResourceId;
+  if (workspaceCache.has(cacheKey)) {
+    return workspaceCache.get(cacheKey);
+  }
+  const url = armUrl(workspaceResourceId, "?api-version=2022-10-01");
   const data = await fetchJson(url, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -245,7 +271,7 @@ async function resolveWorkspaceCustomerId(workspaceResourceId) {
     const firstKey = workspaceCache.keys().next().value;
     workspaceCache.delete(firstKey);
   }
-  workspaceCache.set(workspaceResourceId, customerId);
+  workspaceCache.set(cacheKey, customerId);
   return customerId;
 }
 
@@ -411,7 +437,7 @@ export function createRealClient() {
       const token = getAccessToken();
       const body = JSON.stringify({ query: kql });
       const queryResourceId = resourceId || workspaceId;
-      const url = `${armEndpoint}${queryResourceId}/api/query?api-version=2015-05-01`;
+      const url = armUrl(queryResourceId, "/api/query?api-version=2015-05-01");
 
       let lastError = null;
       for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -453,3 +479,14 @@ export function createRealClient() {
 }
 
 export { AzureApiError };
+
+// Exported for direct unit testing (see tests/realClient.test.js). These are
+// the pure decision functions — error categorization, response normalization,
+// retry-after parsing, result validation — that the tautological old tests
+// never actually exercised.
+export {
+  categorizeAzureError,
+  normalizeAppInsightsResponse,
+  parseRetryAfterMs,
+  validateQueryResult,
+};

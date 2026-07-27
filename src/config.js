@@ -18,6 +18,27 @@ if (isPlaceholder && nodeEnv === "production") {
 const sessionSecret = rawSessionSecret || "dev-secret-change-me";
 const port = Number(process.env.PORT || 3000);
 
+// Fail-loud on a production boot that would silently run in mock mode. In mock
+// mode `ensureAuth` auto-authenticates any `?tenant=` with no credentials, so a
+// prod deploy that lost AZURE_MODE (e.g. an `az containerapp update` dropping
+// the env var, or a non-Bicep host) would expose every tenant's dashboard and
+// let anyone write arbitrary tenant state. Same fail-loud posture as
+// SESSION_SECRET. Escape hatch: ALLOW_MOCK_IN_PROD=true for a deliberate demo.
+const resolvedAzureMode =
+  nodeEnv === "test" ? "mock" : (process.env.AZURE_MODE || "mock");
+if (
+  nodeEnv === "production" &&
+  resolvedAzureMode !== "real" &&
+  process.env.ALLOW_MOCK_IN_PROD !== "true"
+) {
+  throw new Error(
+    "AZURE_MODE must be \"real\" in production (got \"" +
+      resolvedAzureMode +
+      "\"). Mock mode disables authentication. Set AZURE_MODE=real, or " +
+      "ALLOW_MOCK_IN_PROD=true to intentionally run a public mock demo."
+  );
+}
+
 if (isPlaceholder && nodeEnv !== "test" && nodeEnv !== "production") {
   console.warn(
     "WARNING: Using default session secret. Set SESSION_SECRET environment variable for production use."
@@ -27,7 +48,7 @@ if (isPlaceholder && nodeEnv !== "test" && nodeEnv !== "production") {
 export const config = {
   port,
   // Tests always run in mock mode to avoid hitting real Azure APIs
-  azureMode: process.env.NODE_ENV === "test" ? "mock" : (process.env.AZURE_MODE || "mock"),
+  azureMode: resolvedAzureMode,
   sessionSecret,
   cacheTtlMs: {
     today: 5 * 60 * 1000,

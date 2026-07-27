@@ -1,6 +1,26 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { allowedKqlExpressions, buildMapping, mergeWithValidation } from "../src/core/mapping.js";
+import { CANONICAL_FIELDS } from "../src/core/canonicalFields.js";
+
+test("mergeWithValidation applies an override for every CANONICAL_FIELDS entry", () => {
+  // Guards the accept-list ↔ render contract: the API accepts overrides for
+  // CANONICAL_FIELDS (ALLOWED_OVERRIDE_FIELDS = new Set(CANONICAL_FIELDS)), so
+  // mergeWithValidation MUST apply every one of them — otherwise an accepted
+  // override would be silently dropped at render.
+  const base = buildMapping({
+    schemaProfile: { tables: { pageViews: true }, customDimensionsKeys: {} },
+    readinessReport: { availableSignals: { pageViews: true }, probeCounts: {} },
+  });
+  for (const field of CANONICAL_FIELDS) {
+    const merged = mergeWithValidation(base, {
+      overrides: { [field]: { source: "customDimensions.x", expr: 'tostring(customDimensions["x"])' } },
+      validatedAt: "2026-06-08T00:00:00Z",
+    });
+    assert.equal(merged[field].matchType, "user-override", `override not applied for ${field}`);
+    assert.equal(merged[field].expr, 'tostring(customDimensions["x"])');
+  }
+});
 
 test("buildMapping prefers authenticated user and pageViews", () => {
   const mapping = buildMapping({
@@ -263,4 +283,21 @@ test("mergeWithValidation applies a device override and recomputes the version",
   assert.equal(merged.canonicalBrowser.expr, 'tostring(customDimensions["ua"])');
   assert.equal(merged.canonicalBrowser.matchType, "user-override");
   assert.notEqual(merged.version, mapping.version);
+});
+
+test("mergeWithValidation version is stable across renders (cache-key correctness)", () => {
+  const inputs = {
+    schemaProfile: { tables: { pageViews: true }, customDimensionsKeys: {} },
+    readinessReport: { availableSignals: { pageViews: true }, probeCounts: {} },
+  };
+  const validation = {
+    overrides: { canonicalBrowser: { source: "customDimensions.ua", expr: 'tostring(customDimensions["ua"])' } },
+    validatedAt: "2026-06-08T00:00:00Z",
+  };
+  // Two independent buildMapping calls (each stamps a fresh computedAt) must
+  // yield the SAME merged version — otherwise the dashboard cache key churns
+  // and every load re-runs the queries.
+  const a = mergeWithValidation(buildMapping(inputs), validation);
+  const b = mergeWithValidation(buildMapping(inputs), validation);
+  assert.equal(a.version, b.version, "version must not depend on computedAt");
 });

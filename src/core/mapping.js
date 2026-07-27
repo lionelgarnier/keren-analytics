@@ -1,4 +1,6 @@
 import crypto from "crypto";
+import { validateKqlExpr } from "./kql.js";
+import { CANONICAL_FIELDS } from "./canonicalFields.js";
 
 export const mappingExpressions = {
   userId: {
@@ -308,12 +310,8 @@ export function mergeWithValidation(mapping, validation) {
   if (!validation.overrides) return mapping;
 
   const merged = { ...mapping };
-  const fields = [
-    "canonicalUserId", "canonicalSessionId", "canonicalPagePath", "canonicalReferrer",
-    "canonicalBrowser", "canonicalOs", "canonicalDevice",
-  ];
   let changed = false;
-  for (const field of fields) {
+  for (const field of CANONICAL_FIELDS) {
     const override = validation.overrides[field];
     if (!override || !override.expr || !override.source) continue;
     merged[field] = {
@@ -326,9 +324,16 @@ export function mergeWithValidation(mapping, validation) {
   }
   if (!changed) return mapping;
 
+  // Hash the mapping WITHOUT version/computedAt. `merged` inherits the fresh
+  // `computedAt` (new Date()) from buildMapping on every render, so hashing it
+  // whole made `version` change each load — which changed the cache key and
+  // silently re-ran ~24 Log Analytics queries per dashboard load for any tenant
+  // with overrides (the common accept_all path). The version must be a pure
+  // function of the mapping content, not of when it was computed.
+  const { version: _prevVersion, computedAt: _prevComputedAt, ...hashInput } = merged;
   const version = crypto
     .createHash("sha256")
-    .update(JSON.stringify(merged))
+    .update(JSON.stringify(hashInput))
     .digest("hex")
     .slice(0, 12);
   return { ...merged, version, computedAt: new Date().toISOString() };
@@ -347,9 +352,14 @@ export function allowedKqlExpressions(mapping) {
   const deviceExpr = Object.values(mappingExpressions.device);
 
   if (mapping) {
+    // Defence-in-depth: a persisted/restored override expr is re-validated
+    // here — on EVERY render, since this runs per buildOverviewDashboard — so
+    // a malicious expr that reached the DB (or a Blob-restored one that was
+    // never re-checked) is never self-whitelisted into the renderer. If it
+    // fails, it isn't added to the bucket and renderTemplate rejects it.
     const extend = (bucket, field) => {
       const expr = mapping[field]?.expr;
-      if (expr && !bucket.includes(expr)) bucket.push(expr);
+      if (expr && validateKqlExpr(expr).ok && !bucket.includes(expr)) bucket.push(expr);
     };
     extend(userIdExpr, "canonicalUserId");
     extend(sessionIdExpr, "canonicalSessionId");

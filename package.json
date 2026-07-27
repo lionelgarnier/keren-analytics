@@ -10,11 +10,18 @@
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning src/server.js",
     "dev": "node --disable-warning=ExperimentalWarning src/server.js",
-    "test": "node --disable-warning=ExperimentalWarning --env-file=.env.test --test",
+    "test": "node --disable-warning=ExperimentalWarning --env-file=.env.test --test tests/*.test.js",
+    "test:coverage": "node --disable-warning=ExperimentalWarning --env-file=.env.test --experimental-test-coverage --test tests/*.test.js",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "audit:security": "node scripts/security-audit.mjs",
     "docs:bundle": "bash scripts/build-strategy-bundle.sh",
     "build:contract": "node --disable-warning=ExperimentalWarning scripts/build-telemetry-contract.mjs",
     "backup:sqlite": "node --disable-warning=ExperimentalWarning scripts/backup-sqlite.mjs"
+  },
+  "engines": {
+    "node": ">=22"
   },
   "repository": {
     "type": "git",
@@ -37,11 +44,17 @@
     "helmet": "^8.1.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.8.0",
+    "prettier": "^3.9.6",
     "supertest": "^7.2.2"
   },
   "overrides": {
     "protobufjs": "^7.6.2",
     "qs": "^6.15.2",
-    "uuid": "^11.1.1"
+    "uuid": "^11.1.1",
+    "form-data": "^4.0.6",
+    "@opentelemetry/core": "^2.9.0",
+    "@opentelemetry/propagator-jaeger": "^2.9.0"
   }
 }

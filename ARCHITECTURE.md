@@ -21,8 +21,8 @@ npm install && npm run dev   # http://localhost:3000, mock mode
  ┌────────────────┐   HTTP/JSON   ┌─────────────────────────────────────┐
  │ index.html     │ ───────────▶  │ server.js   Express routes, OAuth,   │
  │ app.js  (SPA)  │ ◀───────────  │             session, CSRF, rate-limit│
- │ setup.html/js  │   NDJSON      └───────────────┬─────────────────────┘
- │ Leaflet+Chart  │   stream                      │
+ │ setup.html/js  │  NDJSON(dash) └───────────────┬─────────────────────┘
+ │ Leaflet+Chart  │  + SSE(setup)                 │
  └────────────────┘                               ▼
                                    ┌─────────────────────────────────────┐
                                    │ core/orchestrator.js                │

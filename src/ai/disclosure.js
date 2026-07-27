@@ -1,7 +1,7 @@
 /**
  * AI disclosure — single source of truth for "what data is sent, where, and
  * to whom" during setup. Powers the Services-hub "Configure" split-button
- * menu and its inline "Quelles données sont envoyées ?" popover.
+ * menu and its inline "What data is sent?" popover.
  *
  * Everything here is derived from `config` (provider + region) plus the
  * privacy contract documented in `docs/architecture-ai.md` § Privacy
@@ -14,25 +14,25 @@
 // blocked by the scrubber before any prompt is built.
 const DATA_CONTRACT = {
   sent: [
-    "Noms des tables (requests, pageViews, …)",
-    "Clés des dimensions personnalisées (pas leurs valeurs)",
-    "Compteurs agrégés, arrondis",
-    "Noms d'événements",
-    "Top chemins de pages (les segments ressemblant à un ID sont hachés)",
-    "Stack détectée (ex. next, node)",
+    "Table names (requests, pageViews, …)",
+    "Custom dimension keys (not their values)",
+    "Aggregated, rounded counters",
+    "Event names",
+    "Top page paths (ID-like segments are hashed)",
+    "Detected stack (e.g. next, node)",
   ],
   never: [
-    "Lignes de logs brutes",
-    "Valeurs des dimensions personnalisées",
-    "E-mails, IP, noms, téléphones (liste de blocage PII)",
-    "Jetons OAuth, cookies de session, clés d'API",
-    "Code source, URLs de dépôt",
+    "Raw log rows",
+    "Custom dimension values",
+    "Emails, IPs, names, phone numbers (PII blocklist)",
+    "OAuth tokens, session cookies, API keys",
+    "Source code, repository URLs",
   ],
 };
 
 /**
  * Describe a single provider as a hub menu option.
- * @param {"azure-foundry"|"ollama"|"none"} mode
+ * @param {"azure-foundry"|"none"} mode
  */
 function describeProvider(mode, config) {
   switch (mode) {
@@ -40,32 +40,22 @@ function describeProvider(mode, config) {
       return {
         mode: "azure-foundry",
         optOut: false,
-        label: "Configurer avec l'IA",
+        label: "Configure with AI",
         provider: "Azure OpenAI",
         location: config.azureFoundryRegion || "Azure",
         outbound: true,
-        detail: "Auto-mapping IA · métadonnées sanitizées uniquement",
-      };
-    case "ollama":
-      return {
-        mode: "ollama",
-        optOut: false,
-        label: "Configurer avec l'IA locale",
-        provider: "Ollama",
-        location: "votre réseau",
-        outbound: false,
-        detail: "Le modèle tourne chez vous · rien ne sort de votre infrastructure",
+        detail: "AI auto-mapping · sanitized metadata only",
       };
     case "none":
     default:
       return {
         mode: "none",
         optOut: true,
-        label: "Configurer sans IA",
+        label: "Configure without AI",
         provider: null,
         location: null,
         outbound: false,
-        detail: "Mapping heuristique · aucun appel sortant",
+        detail: "Heuristic mapping · no outbound calls",
       };
   }
 }
@@ -75,8 +65,7 @@ function describeProvider(mode, config) {
  *
  * `available` is the ordered list of choices the hub split-button renders:
  * always "sans IA", preceded by the configured AI provider when one is
- * wired. The first entry is the default primary action. `ollama` is listed
- * only when explicitly the configured provider (it's not yet auto-probed).
+ * wired. The first entry is the default primary action.
  *
  * @param {object} config - the app config (provider, region)
  * @returns {{provider:string, configured:boolean, available:Array, dataContract:object}}
@@ -91,8 +80,6 @@ export function buildAiDisclosure(config) {
     // If the operator selected Foundry but left it unconfigured, AI can't run
     // — offer only the deterministic path rather than a button that degrades.
     available = configured ? [describeProvider("azure-foundry", config), noAi] : [noAi];
-  } else if (provider === "ollama") {
-    available = [describeProvider("ollama", config), noAi];
   } else {
     available = [noAi];
   }

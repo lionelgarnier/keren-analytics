@@ -66,12 +66,25 @@ describe("buildTelemetryContract", () => {
     }
   });
 
-  it("ships one ready-to-paste prompt per signal recipe with no PII leakage hint", () => {
+  it("ships exactly one recipe per scored signal (no drift from PROMPT_TEMPLATES)", () => {
     const c = buildTelemetryContract();
-    assert.ok(c.recipes.length >= 1);
+    const expected = Object.keys(SIGNAL_WEIGHTS).filter((k) => k !== "userIdDegraded");
+    const recipeSignals = c.recipes.map((r) => r.signal);
+    // The exact set — catches BOTH a scored signal with no recipe
+    // (dependencies/exceptions used to be missing) AND a recipe for a
+    // non-signal (userIdDegraded used to leak in).
+    assert.deepEqual([...recipeSignals].sort(), [...expected].sort());
     for (const r of c.recipes) {
-      assert.ok(r.prompt.length > 0);
-      assert.ok(r.signal && r.label);
+      assert.ok(r.prompt.length > 0, `empty prompt for ${r.signal}`);
+      assert.ok(r.label && r.label !== r.signal, `missing label for ${r.signal}`);
+    }
+  });
+
+  it("every scored signal has SIGNAL_DETAIL (howToEmit / verifyKql), none 'undefined'", () => {
+    const c = buildTelemetryContract();
+    for (const s of c.signals) {
+      const how = s.howToEmit || s.appInsightsTable || s.appInsightsField;
+      assert.ok(how && !String(how).includes("undefined"), `signal ${s.id} lacks detail`);
     }
   });
 });

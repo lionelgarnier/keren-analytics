@@ -66,15 +66,8 @@
   // ── DOM helpers ───────────────────────────────────────────────
   function $(id) { return document.getElementById(id); }
 
-  function escapeHtml(value) {
-    if (value === null || value === undefined) return "";
-    return String(value)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
-  }
+  // Shared HTML escaper (defined in escapeHtml.js, loaded before this script).
+  const escapeHtml = window.escapeHtml;
 
   function show(step) {
     state.step = step;
@@ -153,7 +146,7 @@
       header.innerHTML = `
         <div class="d2-pageheader-l">
           <div class="d2-breadcrumb">
-            <span>vikl.fr</span><span class="d2-breadcrumb-sep">/</span>
+            <span>keren</span><span class="d2-breadcrumb-sep">/</span>
             <span>services</span><span class="d2-breadcrumb-sep">/</span>
             <span class="d2-breadcrumb-here">${escapeHtml(res)}</span><span class="d2-breadcrumb-sep">/</span>
             <span class="d2-breadcrumb-here">setup</span>
@@ -171,7 +164,7 @@
         if (state.manualMode) gotoValidate(); else show("findings");
       });
       bar.innerHTML = cmdbar(
-        `setup · scanning · ${String(state.scanStepIdx + 1).padStart(2, "0")} / 05`,
+        `setup · scanning · 01 / 04`,
         {
           id: "cmdContinue",
           label: state.manualMode ? "Continue → mapping" : "Continue → findings",
@@ -200,7 +193,7 @@
       header.innerHTML = `
         <div class="d2-pageheader-l">
           <div class="d2-breadcrumb">
-            <span>vikl.fr</span><span class="d2-breadcrumb-sep">/</span>
+            <span>keren</span><span class="d2-breadcrumb-sep">/</span>
             <span>${escapeHtml(res)}</span><span class="d2-breadcrumb-sep">/</span>
             <span class="d2-breadcrumb-here">findings</span>
             <span class="d2-breadcrumb-tag d2-breadcrumb-tag--ai">AI · ${escapeHtml(c.modelTag)}</span>
@@ -415,11 +408,13 @@
     const step = SCANNING_STEPS[activeIdx];
     if (!step) return;
     state.scanStepIdx = activeIdx;
-    $("scanNowTag").textContent = `LIVE · STEP ${String(activeIdx + 1).padStart(2, "0")} OF 05`;
+    // Scan sub-stages are labelled "STAGE n OF 05" so they don't get read as
+    // wizard steps — the wizard has 4 steps, this scan has 5 internal stages.
+    $("scanNowTag").textContent = `LIVE · STAGE ${String(activeIdx + 1).padStart(2, "0")} OF 05`;
     $("scanningHeading").textContent = SCAN_TITLES[step.key] || step.label;
     $("scanningNarration").textContent = SCAN_DETAILS[step.key] || step.label;
     const scope = $("setupCmdScope");
-    if (scope) scope.textContent = `setup · scanning · ${String(activeIdx + 1).padStart(2, "0")} / 05`;
+    if (scope) scope.textContent = `setup · scanning · 01 / 04`;
   }
 
   // Mark a stage done, advance the active row, and update the live card.
@@ -609,7 +604,7 @@
       narrationEl.textContent = state.manualMode
         ? "Schema mapped — opening the mapping editor…"
         : "Schema mapped — opening the AI findings…";
-      $("scanNowTag").textContent = "DONE · 05 OF 05";
+      $("scanNowTag").textContent = "SCAN COMPLETE";
       if ($("scanTreeStream")) $("scanTreeStream").style.display = "none";
       state.scanComplete = true;
       if (state.step === "scanning") renderChrome("scanning");
@@ -627,7 +622,13 @@
     };
 
     let settled = false;
-    const es = new EventSource("/api/setup/scan/stream");
+    // EventSource can't send an X-CSRF-Token header, so pass the token as a
+    // query param — it's unreadable to a cross-origin page (same-origin policy),
+    // which is what the CSRF check on the server relies on.
+    const streamUrl = state.csrfToken
+      ? `/api/setup/scan/stream?csrf=${encodeURIComponent(state.csrfToken)}`
+      : "/api/setup/scan/stream";
+    const es = new EventSource(streamUrl);
     activeEventSource = es;
 
     es.addEventListener("step", (e) => {
@@ -861,7 +862,9 @@
       return;
     }
     if (section) section.classList.remove("hidden");
-    intro.textContent = "Two signals away from a complete picture — we've drafted the prompts you can paste into your codebase.";
+    const n = ms.length;
+    const signalWord = n === 1 ? "signal" : "signals";
+    intro.textContent = `${n} ${signalWord} away from a complete picture — we've drafted the prompts you can paste into your codebase.`;
     for (const s of ms) {
       const item = document.createElement("div");
       item.className = "d2-find-improve-item";
@@ -1024,6 +1027,10 @@
         }
         renderValidate();
         updateValidateButtons();
+        // renderValidate() rebuilds the tbody, dropping keyboard focus — restore
+        // it to this field's control so tabbing through the mapping isn't reset.
+        const restored = tbody.querySelector(`tr[data-field="${field}"] select[data-bind="select"]`);
+        if (restored) restored.focus();
       });
     });
     tbody.querySelectorAll('button[data-action="reset"]').forEach((btn) => {

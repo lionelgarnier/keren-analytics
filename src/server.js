@@ -1,11 +1,12 @@
 import "dotenv/config";
 // Imported before Express so the App Insights Node SDK can patch the http
 // stack before any server module loads. See src/telemetry.js.
-import { trackEvent, flushTelemetry } from "./telemetry.js";
+import { trackEvent, trackException, flushTelemetry } from "./telemetry.js";
 import crypto from "node:crypto";
 import express from "express";
 import helmet from "helmet";
 import session from "express-session";
+import { createSessionStore } from "./core/sessionStore.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import { config } from "./config.js";
@@ -18,6 +19,8 @@ import { generatePrompts } from "./core/promptGenerator.js";
 import { getTenant, updateTenant, setResourceAiOptOut, getResourceAiOptOut } from "./core/metadataStore.js";
 import { buildAiDisclosure } from "./ai/disclosure.js";
 import { getLatestScan, getScannedResourceIds } from "./core/scanStore.js";
+import { CANONICAL_FIELDS } from "./core/canonicalFields.js";
+import { getDb } from "./core/db.js";
 import { getLatestMapping } from "./core/mappingStore.js";
 import { buildFieldPalette } from "./core/fieldPalette.js";
 import { scrubSamples } from "./core/schemaScan.js";
@@ -30,6 +33,7 @@ import { runWithToken } from "./providers/azure/tokenStore.js";
 import { createRateLimiter } from "./core/rateLimit.js";
 import { startBackupScheduler, restoreLatestSnapshot } from "./core/backupScheduler.js";
 import { createAzureFoundryProvider } from "./ai/azureFoundry.js";
+import { isUnderCap, recordUsage, getSnapshot as getQuotaSnapshot } from "./ai/quotaGuard.js";
 import { buildTelemetryContract, renderContractMarkdown } from "./core/telemetryContract.js";
 import { loadKqlTemplate, renderTemplate, validateKqlExpr } from "./core/kql.js";
 import { resolveTimeRange, toKqlDatetime } from "./core/timeRange.js";
@@ -62,14 +66,17 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        // js.monitor.azure.com: App Insights browser SDK (self-telemetry,
-        // stage B). The /telemetry.js bootstrap injects this CDN script.
-        scriptSrc: ["'self'", "https://cdn.jsdelivr.net", "https://unpkg.com", "https://js.monitor.azure.com"],
+        // Leaflet + Chart.js are self-hosted under /vendor (no third-party CDN
+        // in script-src — a CDN there would serve arbitrary code and defeat a
+        // CSP that otherwise has no 'unsafe-inline'). js.monitor.azure.com is
+        // the App Insights browser SDK (self-telemetry stage B), injected by
+        // the /telemetry.js bootstrap.
+        scriptSrc: ["'self'", "https://js.monitor.azure.com"],
         // fonts.googleapis.com hosts the @font-face stylesheet (Inter,
         // JetBrains Mono, Instrument Serif) linked from every page; without it
         // the CSP silently blocks the stylesheet and the whole app falls back
         // to system fonts. The font files themselves come from gstatic (fontSrc).
-        styleSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com", "https://fonts.googleapis.com"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
         imgSrc: ["'self'", "data:", "https://*.tile.openstreetmap.org"],
         // *.in.applicationinsights / *.livediagnostics: App Insights ingestion
@@ -77,8 +84,6 @@ app.use(
         // api.github.com: live stargazer count on the landing nav.
         connectSrc: [
           "'self'",
-          "https://cdn.jsdelivr.net",
-          "https://unpkg.com",
           "https://js.monitor.azure.com",
           "https://*.in.applicationinsights.azure.com",
           "https://*.livediagnostics.monitor.azure.com",
@@ -96,6 +101,10 @@ app.use(
     secret: config.sessionSecret,
     resave: false,
     saveUninitialized: false,
+    // Encrypted SQLite store (see core/sessionStore.js): persists across
+    // redeploys, bounds memory, and keeps Azure refresh tokens encrypted at
+    // rest — instead of express-session's default in-memory store.
+    store: createSessionStore(session, { secret: config.sessionSecret }),
     cookie: {
       secure: isProduction,
       httpOnly: true,
@@ -124,14 +133,21 @@ app.use(
  * express.static so the dynamic handler is authoritative, and before the rate
  * limiters since these are public, cacheable discovery endpoints with no
  * tenant data. */
+// Memoize the built contract + rendered markdown once per process: they're
+// deterministic (content hash), so rebuilding them on every anonymous hit was
+// pure CPU amplification. Serve pre-serialized strings behind a 1h cache.
+let _contractJson = null;
+let _contractMarkdown = null;
 app.get("/.well-known/telemetry-contract.json", (_req, res) => {
+  if (_contractJson === null) _contractJson = JSON.stringify(buildTelemetryContract());
   res.set("Cache-Control", "public, max-age=3600");
-  res.json(buildTelemetryContract());
+  res.type("application/json").send(_contractJson);
 });
 app.get("/llms.txt", (_req, res) => {
+  if (_contractMarkdown === null) _contractMarkdown = renderContractMarkdown();
   res.set("Content-Type", "text/plain; charset=utf-8");
   res.set("Cache-Control", "public, max-age=3600");
-  res.send(renderContractMarkdown());
+  res.send(_contractMarkdown);
 });
 
 const MEDIA_EXTENSIONS = new Set([
@@ -189,10 +205,45 @@ function isValidTenantId(tenantId) {
   return typeof tenantId === "string" && /^[a-zA-Z0-9_-]{1,128}$/.test(tenantId);
 }
 
+// Azure Resource Manager resource id. Validated before it is EVER concatenated
+// into an ARM URL (see realClient.queryWorkspace / resolveWorkspaceCustomerId):
+// a value like "@evil.tld/x" would otherwise turn management.azure.com into a
+// userinfo segment and send the caller's delegated Bearer token to an attacker
+// host (SSRF + token exfiltration). Covers App Insights components and Log
+// Analytics workspaces (single-level resources under one provider).
+const AZURE_RESOURCE_ID =
+  /^\/subscriptions\/[0-9a-fA-F-]{36}\/resourceGroups\/[\w.()-]{1,90}\/providers\/[A-Za-z0-9.]+\/[A-Za-z0-9-]+\/[\w.()-]{1,260}$/;
+
+function isValidAzureResourceId(id) {
+  return typeof id === "string" && AZURE_RESOURCE_ID.test(id);
+}
+
 // Stable, non-reversible id for telemetry. We want to count distinct tenants
 // in the funnel without ever sending a raw tenant GUID or PII to App Insights.
 function hashForTelemetry(value) {
   return crypto.createHash("sha256").update(String(value)).digest("hex").slice(0, 16);
+}
+
+// Neutralise untrusted text before it hits a log line: strip CR/LF (log
+// injection / forged log entries) and cap length (a full ARM error body can
+// carry subscription/resource ids we don't want in stdout).
+function logSafe(value, max = 200) {
+  return String(value ?? "").replace(/[\r\n]+/g, " ").slice(0, max);
+}
+
+// Per-resource readiness/schema, read from the latest scan of the SELECTED
+// resource. The scan payload embeds readinessReport + schemaProfile and is
+// keyed by (tenant, resource) — unlike the tenant "scratch" fields
+// (tenant.readinessReport/schemaProfile), which are last-writer-wins across a
+// tenant's resources and would show the wrong service's readiness after a
+// resource switch. Falls back to the scratch field only when no scan exists.
+function selectedResourceConfig(tenantId, tenant) {
+  const rid = tenant?.selectedResource?.resourceId;
+  const scan = rid ? getLatestScan(tenantId, rid) : null;
+  return {
+    readinessReport: scan?.payload?.readinessReport || tenant?.readinessReport || null,
+    schemaProfile: scan?.payload?.schemaProfile || tenant?.schemaProfile || null,
+  };
 }
 
 function decodeJwtPayload(token) {
@@ -220,8 +271,15 @@ function ensureCsrfToken(req) {
   return req.session.csrfToken;
 }
 
+// Dedicated flag (set in .env.test) instead of keying the bypass off
+// NODE_ENV: this lets the CSRF tests actually EXERCISE the check by clearing
+// the flag for a request, while the rest of the suite keeps it disabled.
+function csrfDisabled() {
+  return process.env.KEREN_DISABLE_CSRF === "1";
+}
+
 function verifyCsrf(req, res, next) {
-  if (process.env.NODE_ENV === "test") return next();
+  if (csrfDisabled()) return next();
   const expected = req.session?.csrfToken;
   const provided = req.get("X-CSRF-Token");
   if (!expected || !provided || provided !== expected) {
@@ -436,7 +494,7 @@ app.get("/auth/callback", async (req, res) => {
   const { code, state, error: oauthError, error_description } = req.query;
 
   if (oauthError) {
-    console.error("OAuth error:", oauthError, error_description);
+    console.error("OAuth error:", logSafe(oauthError, 64), logSafe(error_description));
     return res.redirect(`/?auth_error=${encodeURIComponent(error_description || oauthError)}`);
   }
 
@@ -573,7 +631,7 @@ app.get("/azure/discover", ensureAuth, async (req, res) => {
   } catch (error) {
     console.error("Discovery error:", error.message);
     const azureBody = error.body || error.cause?.body;
-    if (azureBody) console.error("Azure API body:", azureBody);
+    if (azureBody) console.error("Azure API body:", logSafe(azureBody, 300));
     let azureError;
     if (azureBody) {
       try { azureError = JSON.parse(azureBody).error || azureBody; } catch { azureError = azureBody; }
@@ -595,6 +653,19 @@ app.post("/azure/select", ensureAuth, verifyCsrf, (req, res) => {
   const { resourceId, workspaceId, subscriptionId, resourceGroup, appInsightsName } = req.body || {};
   if (!resourceId || !workspaceId) {
     return res.status(400).json({ error: "INVALID_SELECTION" });
+  }
+  // Both ids flow into ARM URLs downstream — reject anything that isn't a
+  // well-formed resource id (SSRF / token-exfil guard).
+  if (!isValidAzureResourceId(resourceId) || !isValidAzureResourceId(workspaceId)) {
+    return res.status(400).json({ error: "INVALID_SELECTION", message: "Malformed resource id." });
+  }
+  // Only allow selecting a resource the caller actually discovered (belt &
+  // braces on top of the format check). When the discovery cache is absent we
+  // fall back to the format check alone rather than blocking a valid select.
+  const discovered = getTenant(tenantId).discoveryCache?.resources;
+  if (Array.isArray(discovered) && discovered.length > 0 &&
+      !discovered.some((r) => r.resourceId === resourceId)) {
+    return res.status(400).json({ error: "INVALID_SELECTION", message: "Unknown resource." });
   }
   const prev = getTenant(tenantId).selectedResource;
   const changed = !prev || prev.resourceId !== resourceId;
@@ -624,8 +695,9 @@ app.get("/readiness", ensureAuth, async (req, res) => {
   if (!tenant.selectedResource) {
     return res.status(409).json({ error: "RESOURCE_NOT_SELECTED" });
   }
-  if (tenant.readinessReport) {
-    return res.json(tenant.readinessReport);
+  const scoped = selectedResourceConfig(tenantId, tenant);
+  if (scoped.readinessReport) {
+    return res.json(scoped.readinessReport);
   }
   const requestedRange = req.query.range || "7d";
   const rangeKey = ["today", "7d", "30d"].includes(requestedRange) ? requestedRange : "7d";
@@ -656,9 +728,9 @@ app.get("/dashboard/overview", ensureAuth, async (req, res) => {
     acceptHeader.includes("application/x-ndjson");
   res.set("Cache-Control", "no-store");
   res.vary("Accept");
-  console.log(
-    `[overview] tenant=${tenantId} range=${rangeKey} stream=${wantStream} streamParam=${String(streamParam)} accept=${acceptHeader} query=${JSON.stringify(req.query)}`
-  );
+  // Hash the tenant id (never log a raw GUID or the query string, which can
+  // carry identifiers) — same privacy posture as telemetry events.
+  console.log(`[overview] tenant=${hashForTelemetry(tenantId)} range=${rangeKey} stream=${wantStream}`);
 
   if (wantStream) {
     res.set({ "Content-Type": "application/x-ndjson", "Cache-Control": "no-cache", "X-Accel-Buffering": "no" });
@@ -668,9 +740,7 @@ app.get("/dashboard/overview", ensureAuth, async (req, res) => {
 
     function send(obj) {
       if (closed) return;
-      const line = JSON.stringify(obj) + "\n";
-      console.log("[stream] send:", obj.type, obj.label || "");
-      res.write(line);
+      res.write(JSON.stringify(obj) + "\n");
     }
 
     try {
@@ -728,7 +798,7 @@ app.get("/dashboard/overview", ensureAuth, async (req, res) => {
   } catch (error) {
     console.error("Dashboard pipeline error:", error.message);
     const azureBody = error.body || error.cause?.body;
-    if (azureBody) console.error("Azure API body:", azureBody);
+    if (azureBody) console.error("Azure API body:", logSafe(azureBody, 300));
     let azureError;
     if (azureBody) {
       try { azureError = JSON.parse(azureBody).error || azureBody; } catch { azureError = azureBody; }
@@ -744,11 +814,12 @@ app.get("/dashboard/overview", ensureAuth, async (req, res) => {
 app.get("/recommendations", ensureAuth, (req, res) => {
   const tenantId = req.session.tenantId;
   const tenant = getTenant(tenantId);
-  if (!tenant.readinessReport) {
+  const { readinessReport } = selectedResourceConfig(tenantId, tenant);
+  if (!readinessReport) {
     return res.status(409).json({ error: "READINESS_NOT_CHECKED", message: "Run readiness check first." });
   }
-  const recommendations = buildRecommendations(tenant.readinessReport);
-  const readinessScore = computeReadinessScore(tenant.readinessReport);
+  const recommendations = buildRecommendations(readinessReport);
+  const readinessScore = computeReadinessScore(readinessReport);
   res.set("Cache-Control", "no-store");
   res.json({ recommendations, readinessScore });
 });
@@ -756,13 +827,14 @@ app.get("/recommendations", ensureAuth, (req, res) => {
 app.get("/prompts", ensureAuth, (req, res) => {
   const tenantId = req.session.tenantId;
   const tenant = getTenant(tenantId);
-  if (!tenant.readinessReport) {
+  const { readinessReport, schemaProfile } = selectedResourceConfig(tenantId, tenant);
+  if (!readinessReport) {
     return res.status(409).json({ error: "READINESS_NOT_CHECKED", message: "Run readiness check first." });
   }
   const resourceName = tenant.selectedResource?.appInsightsName || null;
   const prompts = generatePrompts({
-    readinessReport: tenant.readinessReport,
-    schemaProfile: tenant.schemaProfile,
+    readinessReport,
+    schemaProfile,
     resourceName,
   });
   res.set("Cache-Control", "no-store");
@@ -1000,6 +1072,18 @@ app.post("/api/setup/scan", ensureAuth, verifyCsrf, async (req, res) => {
 // "error") so it can't collide with EventSource's native error event.
 app.get("/api/setup/scan/stream", ensureAuth, async (req, res) => {
   const tenantId = req.session.tenantId;
+  // This GET triggers the full CONFIG phase (Log Analytics scan + a billable
+  // LLM call). SameSite=lax lets the session cookie ride a top-level GET
+  // navigation, so without a CSRF check a third-party page could kick off a
+  // scan on the victim's session. EventSource can't set headers, so the token
+  // (issued via /auth/session, unreadable cross-origin) is passed as a query
+  // param. Same flag-based bypass as verifyCsrf.
+  if (!csrfDisabled()) {
+    const expected = req.session?.csrfToken;
+    if (!expected || req.query.csrf !== expected) {
+      return res.status(403).json({ error: "CSRF_MISMATCH" });
+    }
+  }
   res.writeHead(200, {
     "Content-Type": "text/event-stream; charset=utf-8",
     "Cache-Control": "no-cache, no-transform",
@@ -1050,16 +1134,6 @@ app.get("/api/setup/scan/stream", ensureAuth, async (req, res) => {
     if (!closed) res.end();
   }
 });
-
-const CANONICAL_FIELDS = [
-  "canonicalUserId",
-  "canonicalSessionId",
-  "canonicalPagePath",
-  "canonicalReferrer",
-  "canonicalBrowser",
-  "canonicalOs",
-  "canonicalDevice",
-];
 
 function confidenceFromMatchType(matchType) {
   if (matchType === "builtin") return "high";
@@ -1150,10 +1224,10 @@ app.get("/api/setup/findings", ensureAuth, (req, res) => {
   });
 });
 
-const ALLOWED_OVERRIDE_FIELDS = new Set([
-  "canonicalUserId", "canonicalSessionId", "canonicalPagePath", "canonicalReferrer",
-  "canonicalBrowser", "canonicalOs", "canonicalDevice",
-]);
+// Both the render (mergeWithValidation) and this accept-list derive from the
+// same CANONICAL_FIELDS, so an accepted override can never be silently dropped
+// at render time.
+const ALLOWED_OVERRIDE_FIELDS = new Set(CANONICAL_FIELDS);
 const VALID_DECISIONS = new Set(["accept_all", "override", "reject"]);
 
 // Persist the user's accept/override/reject decision. Subsequent dashboard
@@ -1243,6 +1317,17 @@ app.post("/api/setup/mapping-preview", ensureAuth, verifyCsrf, async (req, res) 
   if (!exprCheck.ok) {
     return res.status(400).json({ error: "INVALID_EXPR", message: exprCheck.reason });
   }
+  // Preview returns cell VALUES, so it is stricter than the dashboard renderer
+  // (which only aggregates). Block the two shapes that turn preview into a raw
+  // log exporter: strcat(...) concatenates several columns into one exfil cell,
+  // and a bare `customDimensions` (not `customDimensions["key"]`) dumps the
+  // whole property bag. This upholds the "no raw log rows / PII" invariant.
+  if (/\bstrcat\s*\(/i.test(expr) || /customDimensions(?!\s*\[)/i.test(expr)) {
+    return res.status(400).json({
+      error: "INVALID_EXPR",
+      message: "Preview a single field: use a column or customDimensions[\"key\"], not strcat() or a bare customDimensions.",
+    });
+  }
 
   // Pick the event table the dashboard would query for this resource.
   const scan = getLatestScan(tenantId, resource.resourceId);
@@ -1275,7 +1360,13 @@ app.post("/api/setup/mapping-preview", ensureAuth, verifyCsrf, async (req, res) 
     let samples = cell("samples");
     if (typeof samples === "string") { try { samples = JSON.parse(samples); } catch { samples = []; } }
     if (!Array.isArray(samples)) samples = [];
-    samples = scrubSamples(samples.slice(0, 5).map((s) => String(s)));
+    // Scrub known PII patterns AND mask: show only a short prefix so the user
+    // can confirm the field resolves to something without the endpoint ever
+    // returning full raw values (scrubSamples' 6 regexes don't catch names,
+    // JWTs, IPv6, free-text — masking is the backstop).
+    samples = scrubSamples(samples.slice(0, 5).map((s) => String(s))).map((v) =>
+      v.length > 6 ? v.slice(0, 4) + "…" : v
+    );
     res.set("Cache-Control", "no-store");
     res.json({
       table: tableName,
@@ -1425,7 +1516,17 @@ app.get("/preview/dashboard", async (req, res) => {
   }
 });
 
-app.get("/healthz", (_req, res) => {
+app.get("/healthz", (req, res) => {
+  // Shallow by default (liveness). ?deep=1 (readiness) verifies the DB is
+  // actually queryable, so a replica with a corrupt/locked SQLite file is
+  // pulled from rotation instead of answering 200 with a dead store.
+  if (req.query.deep === "1") {
+    try {
+      getDb().prepare("SELECT 1").get();
+    } catch (err) {
+      return res.status(503).json({ ok: false, error: "DB_UNAVAILABLE", detail: logSafe(err?.message, 100) });
+    }
+  }
   res.json({ ok: true, mode: config.azureMode, aiProvider: config.aiProvider });
 });
 
@@ -1445,7 +1546,7 @@ app.get("/api/ai/disclosure", ensureAuth, (req, res) => {
   });
 });
 
-app.get("/api/ai/ping", async (_req, res) => {
+app.get("/api/ai/ping", ensureAuth, async (_req, res) => {
   if (config.aiProvider !== "azure-foundry") {
     return res.json({
       ok: true,
@@ -1461,6 +1562,18 @@ app.get("/api/ai/ping", async (_req, res) => {
       provider: "azure-foundry",
       configured: false,
       message: "AZURE_FOUNDRY_ENDPOINT or AZURE_FOUNDRY_DEPLOYMENT is missing.",
+    });
+  }
+
+  // This endpoint makes a real (billable) LLM call, so it must sit behind the
+  // same daily spend cap as the mapping pipeline — otherwise it's an unmetered
+  // cost vector. (It's now also behind ensureAuth.)
+  if (!isUnderCap()) {
+    return res.status(429).json({
+      ok: false,
+      provider: "azure-foundry",
+      configured: true,
+      message: "Daily AI budget reached. Try again tomorrow.",
     });
   }
 
@@ -1482,6 +1595,7 @@ app.get("/api/ai/ping", async (_req, res) => {
         additionalProperties: false,
       },
     });
+    if (probe?.usage) recordUsage(probe.usage);
     if (!probe?.output?.pong) {
       return res.status(503).json({
         ok: false,
@@ -1492,13 +1606,23 @@ app.get("/api/ai/ping", async (_req, res) => {
     }
     return res.json({ ok: true, provider: "azure-foundry", configured: true });
   } catch (error) {
+    // Don't reflect the provider's raw error (endpoint/config detail leak) —
+    // log it server-side, return an opaque message.
+    console.error("AI ping failed:", logSafe(error.message));
     return res.status(503).json({
       ok: false,
       provider: "azure-foundry",
       configured: true,
-      message: error.message,
+      message: "AI provider health check failed.",
     });
   }
+});
+
+// Daily AI spend observability (was computed but never exposed). Auth-gated —
+// it reveals cost/usage, not tenant data.
+app.get("/api/ai/quota", ensureAuth, (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.json(getQuotaSnapshot());
 });
 
 app.get("/privacy", (_req, res) => {
@@ -1559,6 +1683,17 @@ app.get("/{*splat}", (req, res, next) => {
   res.sendFile(path.resolve(__dirname, "..", "public", "index.html"));
 });
 
+/* ========== Terminal error handler ==========
+ * Without this, a throw in a route lands in Express's default handler with no
+ * correlated trackException and a stack in the HTTP body. Log it, report it,
+ * and return an opaque 500. Must be last and take 4 args to be recognised. */
+app.use((err, req, res, _next) => {
+  console.error("[error]", logSafe(err?.message), logSafe(err?.stack, 500));
+  trackException(err instanceof Error ? err : new Error(String(err)), { path: req?.path });
+  if (res.headersSent) return;
+  res.status(500).json({ error: "INTERNAL_ERROR" });
+});
+
 /* ========== Server ========== */
 let server;
 let backupScheduler;
@@ -1569,9 +1704,27 @@ if (process.env.NODE_ENV !== "test") {
   // listen() so it completes ahead of the first request (and thus the
   // first lazy getDb()); a failure degrades to the previous behaviour
   // (empty local DB) rather than blocking boot.
+  // Crash safety net: an unhandled rejection/exception would otherwise kill the
+  // process (Node's default) WITHOUT the SIGTERM snapshot, losing up to an hour
+  // of config. Report it, take a final snapshot, then exit non-zero.
+  const crashHandler = (kind) => async (err) => {
+    console.error(`[${kind}]`, logSafe(err?.message), logSafe(err?.stack, 500));
+    try { trackException(err instanceof Error ? err : new Error(String(err)), { kind }); } catch { /* best-effort */ }
+    try { await backupScheduler?.runOnce?.(); } catch { /* best-effort */ }
+    try { await flushTelemetry(); } catch { /* best-effort */ }
+    process.exit(1);
+  };
+  process.on("unhandledRejection", crashHandler("unhandledRejection"));
+  process.on("uncaughtException", crashHandler("uncaughtException"));
+
   (async () => {
     try {
-      await restoreLatestSnapshot({ logger: console });
+      // Cap the restore so a slow/unreachable Blob can't hold the process
+      // before listen() (which would fail the readiness probe and the deploy).
+      await Promise.race([
+        restoreLatestSnapshot({ logger: console }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("restore timed out")), 20000)),
+      ]);
     } catch (err) {
       console.error("[restore] failed — continuing with local DB:", err?.message || err);
     }
@@ -1602,16 +1755,26 @@ if (process.env.NODE_ENV !== "test") {
     const gracefulShutdown = async (signal) => {
       if (shuttingDown) return;
       shuttingDown = true;
-      console.log(`[backup] ${signal} received — final snapshot before exit`);
-      const forced = setTimeout(() => process.exit(0), 5000);
+      console.log(`[shutdown] ${signal} received — draining then snapshotting`);
+      // Force-exit non-zero if the whole drain hangs past the grace window, so
+      // a stuck shutdown surfaces in Container Apps metrics instead of a clean 0.
+      const forced = setTimeout(() => process.exit(1), 8000);
       forced.unref();
+      let exitCode = 0;
+      // 1. Stop accepting new connections FIRST, so the snapshot isn't racing
+      //    in-flight writes from requests still being served.
+      await new Promise((resolve) => server.close(() => resolve()));
+      // 2. Final snapshot (RPO ≈ 0). A failure here means potential data loss —
+      //    exit non-zero so the platform doesn't record a clean shutdown.
       try {
         await backupScheduler?.runOnce?.();
       } catch (err) {
         console.error("[backup] final snapshot failed:", err?.message || err);
+        exitCode = 1;
       }
       await flushTelemetry();
-      server.close(() => process.exit(0));
+      clearTimeout(forced);
+      process.exit(exitCode);
     };
     process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
     process.on("SIGINT", () => gracefulShutdown("SIGINT"));

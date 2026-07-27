@@ -93,17 +93,38 @@ const SCHEMA_STATEMENTS = [
      ON signals(tenant_id, scan_id)`,
   // Track F4 — user validations on AI proposals. `resource_id` scopes
   // the validation to one App Insights resource (see scans above).
+  // mapping_id is ON DELETE SET NULL (not CASCADE): a validation is the ONLY
+  // record of "this resource is configured" (+ its overrides). Scans are pruned
+  // past a retention cap, and mappings cascade from scans, so a CASCADE here
+  // silently deleted the user's config after enough re-scans. SET NULL keeps
+  // the validation; validationStore tolerates a null mapping_id.
   `CREATE TABLE IF NOT EXISTS validations (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     tenant_id     TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     resource_id   TEXT,
-    mapping_id    INTEGER REFERENCES mappings(id) ON DELETE CASCADE,
+    mapping_id    INTEGER REFERENCES mappings(id) ON DELETE SET NULL,
     decision      TEXT NOT NULL,
     overrides     TEXT,
     validated_at  TEXT NOT NULL
   )`,
   `CREATE INDEX IF NOT EXISTS idx_validations_tenant
      ON validations(tenant_id, validated_at DESC)`,
+  // Persistent session store (replaces express-session MemoryStore). `data` is
+  // the AES-256-GCM-encrypted session blob (carries the Azure refresh token).
+  // Survives redeploys via the same Blob backup/restore as the rest of the DB.
+  `CREATE TABLE IF NOT EXISTS sessions (
+    sid      TEXT PRIMARY KEY,
+    data     TEXT NOT NULL,
+    expires  INTEGER NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires)`,
+  // Daily LLM spend accounting — persisted so the cap survives a redeploy
+  // (in-memory state reset the cap to "per process lifetime", not per day).
+  `CREATE TABLE IF NOT EXISTS ai_quota (
+    day_key     TEXT PRIMARY KEY,
+    spend_eur   REAL NOT NULL DEFAULT 0,
+    call_count  INTEGER NOT NULL DEFAULT 0
+  )`,
 ];
 
 /**
@@ -147,6 +168,51 @@ function migrateTenantColumns(db) {
   }
 }
 
+/**
+ * Older DBs created `validations.mapping_id` with ON DELETE CASCADE, which
+ * silently deleted a tenant's config when the referenced scan/mapping was
+ * pruned. Rebuild the table with ON DELETE SET NULL. SQLite can't ALTER a
+ * foreign key, so we recreate + copy. Idempotent: skipped once the FK is
+ * already SET NULL. Data-preserving.
+ */
+function migrateValidationsFk(db) {
+  const fks = db.prepare("PRAGMA foreign_key_list(validations)").all();
+  const mappingFk = fks.find((f) => f.from === "mapping_id" && f.table === "mappings");
+  // `on_delete` reads "CASCADE" on old DBs, "SET NULL" once migrated.
+  if (!mappingFk || mappingFk.on_delete === "SET NULL") return;
+
+  // FK enforcement must be off while we swap the table (also required for the
+  // rebuild to not trip on the transient state). Restore it after.
+  db.exec("PRAGMA foreign_keys = OFF");
+  db.exec("BEGIN");
+  try {
+    db.exec(`CREATE TABLE validations_new (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id     TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+      resource_id   TEXT,
+      mapping_id    INTEGER REFERENCES mappings(id) ON DELETE SET NULL,
+      decision      TEXT NOT NULL,
+      overrides     TEXT,
+      validated_at  TEXT NOT NULL
+    )`);
+    db.exec(`INSERT INTO validations_new (id, tenant_id, resource_id, mapping_id, decision, overrides, validated_at)
+             SELECT id, tenant_id, resource_id, mapping_id, decision, overrides, validated_at FROM validations`);
+    db.exec("DROP TABLE validations");
+    db.exec("ALTER TABLE validations_new RENAME TO validations");
+    // The dropped table took its indexes with it — recreate the non-resource
+    // one here (the resource-scoped index is (re)built by RESOURCE_SCOPED_INDEXES
+    // after this migration runs).
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_validations_tenant
+             ON validations(tenant_id, validated_at DESC)`);
+    db.exec("COMMIT");
+  } catch (err) {
+    db.exec("ROLLBACK");
+    throw err;
+  } finally {
+    db.exec("PRAGMA foreign_keys = ON");
+  }
+}
+
 function backfillResourceId(db, table) {
   const tenants = db
     .prepare("SELECT id, selected_resource FROM tenants WHERE selected_resource IS NOT NULL")
@@ -155,7 +221,9 @@ function backfillResourceId(db, table) {
     `UPDATE ${table} SET resource_id = ? WHERE tenant_id = ? AND resource_id IS NULL`
   );
   for (const row of tenants) {
-    let resourceId = null;
+    // Declared without an initializer: both branches below assign it, so a
+    // `= null` here would be dead (flagged by no-useless-assignment).
+    let resourceId;
     try {
       resourceId = JSON.parse(row.selected_resource)?.resourceId || null;
     } catch {
@@ -184,6 +252,7 @@ function applySchema(db) {
   // before the resource-scoped indexes (which reference the column).
   migrateResourceIdColumns(db);
   migrateTenantColumns(db);
+  migrateValidationsFk(db);
   for (const stmt of RESOURCE_SCOPED_INDEXES) {
     db.exec(stmt);
   }

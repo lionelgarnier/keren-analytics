@@ -62,11 +62,6 @@ commands and one `.env` file.
 
 ## What's inside
 
-<!--
-Screenshots placeholder (A3 / press-kit — see docs/maintainer-todo.md).
-One image per group below would let the bullet list breathe.
--->
-
 - **Three pre-built views** — Marketing (acquisition, geo, funnels,
   campaigns), Technical (latency percentiles, error rate, top slow
   endpoints), Readiness (telemetry coverage 0–100 + AI prompts).
@@ -86,7 +81,7 @@ One image per group below would let the bullet list breathe.
 - **Versioned KQL templates** rendered server-side with strict
   parameter substitution. Tenant identifiers never reach a query
   string.
-- **MIT-licensed, single binary** — Node 22, Express 5, Helmet,
+- **MIT-licensed, single container** — Node 22, Express 5, Helmet,
   in-memory query cache, SQLite setup state. No agent to deploy on your apps.
 
 ## How it compares
@@ -127,9 +122,10 @@ depends on where you run it:
 That promise is encoded as automated checks in
 [`scripts/security-audit.mjs`](scripts/security-audit.mjs). Seven
 controls run on every push & PR plus a Monday cron — sensitive-data
-logging, session-cookie hardening, CSP `script-src` purity, no-raw-
-telemetry-persistence, committed `.env*` placeholders, `npm audit`
-high+. The Security audit badge above is the green light.
+logging, session-cookie hardening, CSP `script-src` purity, CSP CDN
+allowlist review, no-raw-telemetry-persistence, committed `.env*`
+placeholders, `npm audit` high+. The Security audit badge above is the
+green light.
 
 A separate badge for `npm test` makes regressions visible the moment
 they land. Production refuses to boot without a real `SESSION_SECRET`

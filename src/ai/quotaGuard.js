@@ -1,73 +1,67 @@
 /**
- * In-memory daily quota guard for LLM spend — Track F3 (ADR 0005).
+ * Daily quota guard for LLM spend — Track F3 (ADR 0005).
  *
- * Tracks accumulated EUR spend per UTC day. Once `dailyEurCap` is
- * reached, subsequent `tryReserve()` calls return `{ allowed: false }`
- * and the caller must degrade to the deterministic fallback. Spend is
- * computed from the provider's reported token usage (which we trust).
+ * Tracks accumulated EUR spend per UTC day, persisted in SQLite so the cap is a
+ * genuine *daily* budget that survives a redeploy — the previous in-memory
+ * counter reset on every process restart, turning "10 €/day" into "10 € per
+ * process lifetime". Once `dailyEurCap` is reached, `isUnderCap()` returns
+ * false and callers degrade to the deterministic fallback.
  *
- * Resets at UTC midnight. Single-process — multi-instance deployments
- * would each have their own counter; acceptable while we run a single
- * replica on Container Apps (cf. CLAUDE.md § Known gaps).
+ * Spend is computed from the provider's reported token usage (which we trust).
+ * `isUnderCap()` is a soft pre-check (it does NOT pre-debit); actual usage is
+ * recorded via `recordUsage()` once the provider returns.
  */
 import { config } from "../config.js";
+import { getDb } from "../core/db.js";
 
-let state = {
-  dayKey: null,
-  spendEur: 0,
-  callCount: 0,
-};
-
-function dayKey(date = new Date()) {
-  return date.toISOString().slice(0, 10);
+function dayKey(now) {
+  // Passed in by callers that can supply a clock; `new Date()` is disallowed in
+  // some contexts, but here we accept an injected time for testability.
+  return (now instanceof Date ? now : new Date()).toISOString().slice(0, 10);
 }
 
-function rolloverIfNeeded(now = new Date()) {
-  const today = dayKey(now);
-  if (state.dayKey !== today) {
-    state = { dayKey: today, spendEur: 0, callCount: 0 };
-  }
+function readRow(key) {
+  const row = getDb().prepare("SELECT spend_eur, call_count FROM ai_quota WHERE day_key = ?").get(key);
+  return row || { spend_eur: 0, call_count: 0 };
 }
 
-export function getSnapshot() {
-  rolloverIfNeeded();
+export function getSnapshot(now) {
+  const key = dayKey(now);
+  const row = readRow(key);
   return {
-    dayKey: state.dayKey,
-    spendEur: state.spendEur,
-    callCount: state.callCount,
+    dayKey: key,
+    spendEur: row.spend_eur,
+    callCount: row.call_count,
     capEur: config.aiDailyEurCap,
-    remainingEur: Math.max(0, config.aiDailyEurCap - state.spendEur),
+    remainingEur: Math.max(0, config.aiDailyEurCap - row.spend_eur),
   };
 }
 
-/**
- * Check whether a call is allowed under today's cap. Does NOT pre-debit
- * — callers must record actual usage via `recordUsage()` once the
- * provider returns. The cap is a soft pre-check + hard post-check.
- */
-export function isUnderCap() {
-  rolloverIfNeeded();
-  return state.spendEur < config.aiDailyEurCap;
+export function isUnderCap(now) {
+  return readRow(dayKey(now)).spend_eur < config.aiDailyEurCap;
 }
 
-/**
- * Convert token usage to EUR using the configured per-million prices.
- */
 export function estimateCost({ inputTokens = 0, outputTokens = 0 } = {}) {
   const inEur = (Number(inputTokens) || 0) * (config.aiPricePerMillionInputEur / 1_000_000);
   const outEur = (Number(outputTokens) || 0) * (config.aiPricePerMillionOutputEur / 1_000_000);
   return inEur + outEur;
 }
 
-export function recordUsage(usage) {
-  rolloverIfNeeded();
+export function recordUsage(usage, now) {
+  const key = dayKey(now);
   const cost = estimateCost(usage);
-  state.spendEur += cost;
-  state.callCount += 1;
-  return { cost, snapshot: getSnapshot() };
+  getDb()
+    .prepare(
+      `INSERT INTO ai_quota (day_key, spend_eur, call_count) VALUES (?, ?, 1)
+       ON CONFLICT(day_key) DO UPDATE SET
+         spend_eur = spend_eur + excluded.spend_eur,
+         call_count = call_count + 1`
+    )
+    .run(key, cost);
+  return { cost, snapshot: getSnapshot(now) };
 }
 
-/** Test-only: force the counter back to zero. */
+/** Test-only: clear all recorded spend. */
 export function __resetQuotaForTests() {
-  state = { dayKey: null, spendEur: 0, callCount: 0 };
+  getDb().prepare("DELETE FROM ai_quota").run();
 }

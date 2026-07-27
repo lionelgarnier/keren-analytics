@@ -30,8 +30,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run security audit
+      - name: Run repo secret scan
         run: npm run audit:security -- --ci
 
-      - name: Run test suite
-        run: npm test
+      # Fail the build on a newly-disclosed high/critical advisory in a
+      # dependency (the manual `overrides` pins would otherwise rot silently).
+      - name: npm audit (high+)
+        run: npm audit --audit-level=high

@@ -52,9 +52,12 @@ async function checkNoSensitiveLogging() {
   // avoid false positives on words like "secretStatus".
   const sensitive = /console\.\w+\([^)]*\b(?:access[_-]?[Tt]oken|refresh[_-]?[Tt]oken|code[_-]?[Vv]erifier|client[_-]?[Ss]ecret|sessionSecret|cookieSecret|authorization|api[_-]?key|password|req\.headers)\b/;
   // Lines that only log a length, prefix, or status are intentionally allowed.
+  // The .length exemption is scoped to the SENSITIVE value's own length
+  // (e.g. token.length) — a blanket `.length` match let `console.log(f(token),
+  // x.length)` slip through.
   const safe = [
     /\.substring\s*\(\s*0\s*,/,
-    /\.length\b/,
+    /(?:token|secret|verifier|key|password)\.length\b/i,
     /\bsecretStatus\b/,
   ];
   const offenders = [];
@@ -77,9 +80,12 @@ async function checkNoSensitiveLogging() {
 // ── Check: session cookie hardening ─────────────────────────────────────
 async function checkSessionHardening() {
   const content = await fs.readFile(path.join(repoRoot, "src/server.js"), "utf8");
-  const block = content.match(/session\s*\(\s*\{([\s\S]*?)\}\s*\)/);
+  // Match the cookie sub-block directly rather than the whole session({...})
+  // call — the latter can contain nested `{ ... }` (e.g. store: factory({...}))
+  // that a non-greedy matcher would stop at before reaching the cookie config.
+  const block = content.match(/cookie\s*:\s*\{([\s\S]*?)\}/);
   if (!block) {
-    record("Session cookie hardening", "FAIL", "session({...}) block not found");
+    record("Session cookie hardening", "FAIL", "session cookie block not found");
     return;
   }
   const cfg = block[1];
