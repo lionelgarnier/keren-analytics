@@ -221,7 +221,9 @@ function backfillResourceId(db, table) {
     `UPDATE ${table} SET resource_id = ? WHERE tenant_id = ? AND resource_id IS NULL`
   );
   for (const row of tenants) {
-    let resourceId = null;
+    // Declared without an initializer: both branches below assign it, so a
+    // `= null` here would be dead (flagged by no-useless-assignment).
+    let resourceId;
     try {
       resourceId = JSON.parse(row.selected_resource)?.resourceId || null;
     } catch {
