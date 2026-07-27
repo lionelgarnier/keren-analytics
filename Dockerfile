@@ -1,7 +1,7 @@
 # Pin a specific minor for reproducibility. For a fully reproducible build,
 # pin by digest (FROM node:22-alpine@sha256:...) once your registry mirror is
 # known; a floating `22-alpine` tag can change under the same commit.
-FROM node:22-alpine
+FROM node:26-alpine
 
 WORKDIR /app
 
