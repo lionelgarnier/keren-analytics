@@ -95,6 +95,17 @@ for the per-track status.
   rather than forcing a detour. (See `docs/backlog/ai-setup-wizard.md`
   § "Two-click wizard".)
 
+### Removed
+- **Render deploy target (`render.yaml`)** — the blueprint auto-deployed
+  `main` to a Render web service in **mock mode**, i.e. a shadow instance
+  of production serving the fake sample dataset with authentication
+  disabled. Azure Container Apps (`https://keren.run`, ADR 0004) has been
+  the real deploy target since Phase A, so the blueprint was dead weight
+  that quietly kept a second public URL alive. Self-hosting is documented
+  via Docker / `docker compose` instead. Deleting the Render *service*
+  itself is a maintainer step — see `docs/maintainer-todo.md`
+  § "Retire the legacy Render service".
+
 ### Security
 - **CSRF tokens** enforced on every mutating route (`verifyCsrf` in
   `src/server.js`; token issued via `/auth/session`, sent as

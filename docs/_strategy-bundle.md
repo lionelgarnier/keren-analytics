@@ -39,13 +39,11 @@
 
 > Turn Azure Application Insights into shareable **Marketing & Technical
 > dashboards in under 2 minutes** — AI-mapped schema, deterministic KQL,
-> no raw telemetry persistence outside your tenant. MIT.
+> raw telemetry rows never persisted. MIT.
 
-<!--
-HERO GIF placeholder (A3 — see docs/maintainer-todo.md).
-30-45s screencast: connect → dashboard renders → tabs → readiness → copy prompt.
-Replace this block with: ![hero](docs/assets/hero.gif)
--->
+<p align="center">
+  <img src="public/demo.gif" alt="Keren Analytics — scan telemetry, AI-map the schema, render Marketing &amp; Technical dashboards in under 2 minutes" width="100%">
+</p>
 
 **Live demo** · [keren.run](https://keren.run) — sample
 dataset, sign in with any Microsoft work/school account to point it at your
@@ -78,8 +76,13 @@ For production-like local runs, set a real session secret first:
 
 ```bash
 SESSION_SECRET=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))") \
-NODE_ENV=production docker compose up --build
+NODE_ENV=production ALLOW_MOCK_IN_PROD=true docker compose up --build
 ```
+
+`ALLOW_MOCK_IN_PROD=true` is required here because mock mode disables
+authentication: the app refuses to start in production unless you say
+explicitly that a public mock demo is what you want. Drop it once you set
+`AZURE_MODE=real`.
 
 For real Azure mode, see [Setup: Entra ID](docs/setup-entra-id.md). Three
 commands and one `.env` file.
@@ -95,11 +98,6 @@ commands and one `.env` file.
 > someone from their org signs in; that's a single click.
 
 ## What's inside
-
-<!--
-Screenshots placeholder (A3 / press-kit — see docs/maintainer-todo.md).
-One image per group below would let the bullet list breathe.
--->
 
 - **Three pre-built views** — Marketing (acquisition, geo, funnels,
   campaigns), Technical (latency percentiles, error rate, top slow
@@ -117,10 +115,10 @@ One image per group below would let the bullet list breathe.
   ~80% of real-world custom dimension naming (`uid`, `visitor_id`,
   `accountId`, etc.) with zero config; optional Azure Foundry mapping
   can refine proposals in setup.
-- **26 versioned KQL templates** rendered server-side with strict
+- **Versioned KQL templates** rendered server-side with strict
   parameter substitution. Tenant identifiers never reach a query
   string.
-- **MIT-licensed, single binary** — Node 22, Express 5, Helmet,
+- **MIT-licensed, single container** — Node 22, Express 5, Helmet,
   in-memory query cache, SQLite setup state. No agent to deploy on your apps.
 
 ## How it compares
@@ -131,7 +129,7 @@ One image per group below would let the bullet list breathe.
 | Marketing vs Technical separation| Built-in            | Manual workbook     | Add-on                | Manual report      |
 | Readiness scoring + AI prompts   | **0–100, LLM-ready prompts** | No        | Limited                | No                 |
 | Custom-dimension auto-mapping    | Alias + regex (LLM optional) | Manual    | Manual                | Manual             |
-| Data residency                   | **No raw telemetry rows are persisted outside your tenant** | Native | New endpoint   | New endpoint       |
+| Data residency                   | **Raw telemetry rows never persisted; self-host to keep all processing in-network** | Native | New endpoint   | New endpoint       |
 | License / cost                   | **MIT, free**       | Included w/ Azure   | Per-host $$$          | Per-user $$        |
 | Self-hostable                    | Yes (`docker compose up`) | N/A           | No (SaaS)             | Limited            |
 
@@ -141,19 +139,30 @@ mature and have features we don't.
 
 ## Privacy & security
 
-The product promise is that **raw telemetry rows are not persisted
-outside your Azure tenant**. The service stores setup metadata and
-aggregated dashboard outputs in SQLite. Most browser payloads are
-aggregated metrics (counts, percentiles, geo/browser distributions,
-top-N pages); a few setup/technical surfaces can include scrubbed,
-bounded event-level snippets (for example recent session timelines).
+The product promise is that **raw telemetry rows are never persisted** —
+no log table, no event store. The service keeps only setup metadata and
+aggregated dashboard outputs in SQLite. What that means in practice
+depends on where you run it:
+
+- **Self-hosted** — the whole thing runs inside your own infrastructure,
+  so no telemetry ever leaves your network.
+- **Hosted (`keren.run`)** — the server holds your *delegated* OAuth
+  token and runs the KQL against your Application Insights on your
+  behalf. Query results therefore transit and are aggregated **on the
+  Keren server** before being returned; they are never stored. Most
+  payloads are aggregated metrics (counts, percentiles, geo/browser
+  distributions, top-N pages); a few setup/technical surfaces can
+  include scrubbed, bounded event-level snippets (for example recent
+  session timelines). If you'd rather no data touched a third-party
+  server at all, self-host.
 
 That promise is encoded as automated checks in
 [`scripts/security-audit.mjs`](scripts/security-audit.mjs). Seven
 controls run on every push & PR plus a Monday cron — sensitive-data
-logging, session-cookie hardening, CSP `script-src` purity, no-raw-
-telemetry-persistence, committed `.env*` placeholders, `npm audit`
-high+. The Security audit badge above is the green light.
+logging, session-cookie hardening, CSP `script-src` purity, CSP CDN
+allowlist review, no-raw-telemetry-persistence, committed `.env*`
+placeholders, `npm audit` high+. The Security audit badge above is the
+green light.
 
 A separate badge for `npm test` makes regressions visible the moment
 they land. Production refuses to boot without a real `SESSION_SECRET`
@@ -200,13 +209,37 @@ Selected API surface (full list in [`src/server.js`](src/server.js)):
 
 ## Contributing
 
-PRs welcome. Read [CLAUDE.md](CLAUDE.md) first — it documents the
-invariants (mock parity, no raw log persistence, KQL substitution-only,
-range whitelist, OAuth secret handling) that PRs must respect. Short
-[`CONTRIBUTING.md`](CONTRIBUTING.md) has the dev-loop and the
-file-an-issue paths.
+**MIT — here's the architecture, PRs and good-first-issues welcome.**
+
+The repo runs in mock mode with no Azure account, so you can be poking at
+real data flows within a couple of minutes:
+
+```bash
+git clone https://github.com/lionelgarnier/keren-analytics.git
+cd keren-analytics && npm install && npm run dev   # http://localhost:3000
+```
+
+- **New here?** [`ARCHITECTURE.md`](ARCHITECTURE.md) maps the code for a
+  human — the request flow, where mock mode / readiness score / LLM
+  prompts live.
+- **Looking for a first task?**
+  [`docs/good-first-issues.md`](docs/good-first-issues.md) lists starter
+  tasks anchored in real files, from 30-minute cosmetics to small
+  features. They're also filed as
+  [`good first issue`](https://github.com/lionelgarnier/keren-analytics/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+  on the tracker.
+- **Opening a PR?** [`CONTRIBUTING.md`](CONTRIBUTING.md) has the dev loop
+  and what we expect; [`CLAUDE.md`](CLAUDE.md) documents the invariants
+  PRs must respect (mock parity, no raw log persistence, KQL
+  substitution-only, range whitelist, OAuth secret handling).
 
 Code of conduct: [Contributor Covenant 2.1](CODE_OF_CONDUCT.md).
+
+### Contributors
+
+Thanks to everyone who has sent a PR — this project is better for it. 🙏
+
+[![Contributors](https://contrib.rocks/image?repo=lionelgarnier/keren-analytics&excludeBots=true&excludeUser=claude,cursoragent)](https://github.com/lionelgarnier/keren-analytics/graphs/contributors)
 
 ## License
 
@@ -474,6 +507,23 @@ Three layers, in priority order:
 We instrument these from day one — see launch-readiness for the specific
 analytics setup.
 
+**Dogfooding — Keren watches its own launch.** The app now emits its own
+telemetry to a dedicated App Insights (`appi-keren-analytics`), so point a
+Keren dashboard at Keren itself and the launch shows up in its own views:
+
+- **Marketing view** — `pageViews`/`sessions`/`geo` from the browser SDK:
+  the demo-visitor count, the world map of where traffic comes from, top
+  pages, referrers (HN vs Reddit vs direct) — i.e. the *Acquisition* layer
+  above, live.
+- **Technical view** — server `requests`/`dependencies`/`exceptions`:
+  health and latency under launch-day load.
+- **Funnel** — `customEvents` (`tenant_connected` → `setup_scan_completed`
+  → `validation_accepted` → `dashboard_rendered`) give the *Engagement*
+  layer: how many visitors actually connect a tenant and reach a dashboard.
+  Tenant ids are hashed — no PII.
+
+Toggle with `TELEMETRY_ENABLED`; see `docs/maintainer-todo.md` § Self-telemetry.
+
 ## 9. Risks and mitigations
 
 | Risk                                          | Likelihood | Mitigation |
@@ -669,6 +719,26 @@ Tables:
 Session analysis:
 - Session timelines (reconstructed user journeys from page view events)
 
+### Backend View
+Server-side / APM telemetry beyond request latency, mined from the
+`dependencies`, `exceptions` and `cloud_RoleName` signals.
+
+KPIs:
+- Dependency calls and distinct targets
+- Dependency failure rate
+- Dependency P95 latency
+- Exception count (and distinct exception types)
+
+Charts:
+- Dependency type mix (SQL/HTTP/Redis/blob/queue doughnut)
+- Response status-code distribution (2xx/3xx/4xx/5xx)
+
+Tables:
+- Slow dependencies (target + type, p50/p95, calls, failure rate)
+- Top exceptions (type, count, affected operations and users — **no raw
+  messages or stack traces**, only types and aggregate counts)
+- Service health (per `cloud_RoleName`: requests, avg/p95 latency, 5xx rate)
+
 ## User Journey
 1. Connect Azure tenant (OAuth SSO via Entra ID).
 2. Discover App Insights resources and linked workspaces.
@@ -677,8 +747,8 @@ Session analysis:
    hub and go straight to setup.
 4. **AI setup wizard** (per resource, see below) — scan → AI findings →
    one-click build.
-5. Show the overview dashboard (Marketing / Technical / Readiness) reusing
-   the validated config snapshot — no re-scan or LLM call per load.
+5. Show the overview dashboard (Marketing / Technical / Backend / Readiness)
+   reusing the validated config snapshot — no re-scan or LLM call per load.
 6. Display recommendations with actionable, copy-paste prompts.
 
 ## AI Setup Wizard
@@ -709,17 +779,19 @@ service redeploys.
 
 ## Readiness Score
 
-The system probes telemetry and produces a gamified readiness score (0-100):
+The system probes telemetry and produces a gamified readiness score (0-120):
 
 | Signal | Points | Status |
 |--------|--------|--------|
 | Traffic (pageViews) | 20 | Required |
 | Sessions | 15 | Required |
-| Backend performance | 15 | Required |
-| Custom events | 15 | Recommended |
-| Geo enrichment | 10 | Optional |
-| Browser timings | 10 | Optional |
+| Backend performance (requests) | 15 | Required |
 | Custom user IDs | 15 | Recommended |
+| Device & browser | 10 | Recommended |
+| Geo enrichment | 10 | Optional |
+| Browser timings | 15 | Optional |
+| Dependencies | 10 | Recommended |
+| Exceptions | 10 | Recommended |
 
 The score drives engagement: users are motivated to improve their telemetry
 coverage, which in turn makes the dashboard more valuable.
@@ -734,6 +806,31 @@ When signals are missing, the system generates:
 
 This creates a virtuous cycle: better telemetry leads to a richer dashboard,
 which increases perceived value and drives continued improvement.
+
+## Telemetry Contract (instrument-first)
+
+Smart Recommendations help *after* the fact — they tell you what your existing
+telemetry is missing. The **Telemetry Contract** is the mirror image: a public,
+versioned spec a coding agent (Cursor, Copilot, Claude Code) can read *before*
+or *during* instrumentation, so a new app renders the full dashboard from its
+very first scan — no manual mapping step.
+
+It answers, in machine- and LLM-readable form:
+- **Which signals to emit** and what each is worth toward the readiness score.
+- **How to name custom dimensions** so Keren auto-detects them (e.g. call your
+  user id `userId` and it maps with zero setup).
+- **Config best practices** — pseudonymize user ids, never send PII, exclude
+  health-check endpoints, flush on shutdown, set a per-service role name.
+- **A ready-to-paste prompt per signal**, the same ones the in-app
+  recommendations use.
+
+It's available with no sign-in at `https://keren.run/.well-known/telemetry-contract.json`
+(machine-readable) and `https://keren.run/llms.txt` (readable brief). Nothing
+in it is your data — only the contract and the scoring rules.
+
+Roadmap: this contract is the foundation for an MCP server that lets agents
+query it interactively and, eventually, validate a proposed instrumentation
+plan and confirm the live result.
 
 ## Data Sources
 
@@ -1235,18 +1332,68 @@ links to the agent-side work that depends on it.
   `ca-keren-analytics` ; secrets `azure-client-secret` + `session-secret`
   présents ; OAuth real mode live (keren.run sert en HTTP 200).
 
+### Self-telemetry — Application Insights (dogfooding)
+- **Why**: Keren now emits its own telemetry so a Keren dashboard can be
+  pointed at Keren itself to watch the launch (Marketing map + funnel,
+  Technical health). Server SDK (`applicationinsights`, stage A) +
+  browser SDK (page-served `/telemetry.js`, stage B). Provisioned by
+  `infra/main.bicep` (`appi-keren-analytics`, workspace-based on the
+  existing Log Analytics).
+- **Important — local auth stays enabled**: `DisableLocalAuth: false` on
+  the App Insights component is **deliberate**. The browser SDK
+  authenticates with the connection string's ingestion key, which is
+  **write-only by design** (it can post telemetry, never read it). Do not
+  flip this to Entra-only or stage B (pageViews/sessions/geo — i.e. the
+  whole Marketing + Readiness surface, 85/100 readiness points) goes dark.
+- **CSP**: the browser SDK is loaded from the `js.monitor.azure.com` CDN
+  (per the maintainer's choice). This adds a CDN origin to `scriptSrc` /
+  `connectSrc` — same supply-chain class as the existing jsdelivr/unpkg
+  origins (tracked under CLAUDE.md known gaps). Self-host under
+  `public/vendor/` if/when the supply-chain gap is closed.
+- **Kill-switch**: set Bicep param `telemetryEnabled=false` (or env
+  `TELEMETRY_ENABLED` ≠ `true`) to disable both stages — `/telemetry.js`
+  then serves a no-op stub and the server SDK never loads.
+- **To use it**: in the Keren UI, connect to the subscription holding
+  `appi-keren-analytics` and select it as the App Insights resource — you
+  get Keren's own Marketing/Technical/Readiness views. Funnel events land
+  in `customEvents`: `tenant_connected`, `setup_scan_completed`,
+  `validation_accepted`, `dashboard_rendered` (tenant ids are SHA-256
+  hashed — no PII).
+- **Status**: code + infra shipped on branch
+  `claude/app-insights-telemetry-check`. **Maintainer action**: redeploy
+  `infra/main.bicep` so `appi-keren-analytics` is provisioned and the
+  connection string is wired into the Container App.
+
 ### Demo deploy target
 - **Why**: the Show HN / Reddit launch needs a clickable URL.
 - **When**: launch eve.
 - **How**: post-ADR 0004 the demo target is **Azure Container Apps West
   Europe** (`keren-analytics-prod`), provisioned by `infra/main.bicep`
-  via `.github/workflows/deploy-azure.yml`. The `render.yaml` blueprint
-  remains in-repo as a self-host hint but is no longer the demo target.
+  via `.github/workflows/deploy-azure.yml`. Azure is now the *only* deploy
+  target — the `render.yaml` blueprint was removed 2026-07-27 (see
+  "Retire the legacy Render service" below).
   URL: `https://keren.run` (DNS step below).
 - **Status**: DONE — vérifié 2026-06-04. `https://keren.run` répond HTTP
   200, servi par `ca-keren-analytics` (France Central) ; deploys CI verts
   (dernier run `deploy-azure.yml` success). La démo est en mode `real`
   (Foundry), pas mock.
+
+### Retire the legacy Render service
+- **Why**: a Render web service was still auto-deploying `main` in **mock
+  mode** — a shadow instance of production, serving the fake sample dataset
+  with authentication disabled, on a URL nobody was watching. It surfaced on
+  2026-07-27 when the new production guard in `src/config.js` (refuse to boot
+  on `NODE_ENV=production` + `AZURE_MODE=mock`) made it crash-loop instead of
+  silently running. Azure Container Apps (`keren.run`) is unaffected and is
+  the real production. `render.yaml` has been deleted from the repo, so the
+  service will no longer pick up new commits — but the service itself still
+  exists in the Render account until deleted there.
+- **When**: now — it's a live public URL serving a stale build.
+- **How**: Render dashboard → the `keren-analytics` web service → *Settings*
+  → **Delete Service** (or *Suspend* first if you want to keep the logs).
+  Then confirm nothing else points at the `*.onrender.com` hostname.
+- **Status**: TODO — repo side done (blueprint removed); dashboard side is
+  maintainer-only (needs Render account access).
 
 ### Launch-week scaling policy (`minReplicas=1`, `maxReplicas=1`)
 - **Why**: sessions are in-memory (`express-session` default store). For launch
@@ -1337,6 +1484,22 @@ links to the agent-side work that depends on it.
   preserve `AZURE_REDIRECT_URI=https://keren.run/auth/callback`
   and the custom-domain binding. A what-if dry-run before the next deploy
   is still good hygiene.
+
+---
+
+### `AZURE_FOUNDRY_REGION` (setup AI disclosure)
+- **What**: the human-readable region shown to users in the setup
+  "Configure with AI" menu + data popover ("where your sanitized metadata
+  is processed"). Added 2026-06-05 with the per-resource AI opt-out work.
+- **Why manual**: the Foundry **project** endpoint hostname
+  (`<project>.services.ai.azure.com`) does **not** encode the region, so it
+  can't be derived in code. The disclosure would otherwise show a default.
+- **When**: only if the Foundry deployment is **not** France Central. The
+  code default is `France Central (UE)` (matches ADR 0004), so prod is
+  already correct and **no action is needed unless you move regions**.
+- **How**: set the `AZURE_FOUNDRY_REGION` env var on the Container App (or in
+  Key Vault wiring) to the actual region label, e.g. `West Europe (UE)`.
+  Not in Bicep yet — set it alongside the other `AZURE_FOUNDRY_*` vars.
 
 ---
 
@@ -2658,6 +2821,17 @@ for the per-track status.
   rather than forcing a detour. (See `docs/backlog/ai-setup-wizard.md`
   § "Two-click wizard".)
 
+### Removed
+- **Render deploy target (`render.yaml`)** — the blueprint auto-deployed
+  `main` to a Render web service in **mock mode**, i.e. a shadow instance
+  of production serving the fake sample dataset with authentication
+  disabled. Azure Container Apps (`https://keren.run`, ADR 0004) has been
+  the real deploy target since Phase A, so the blueprint was dead weight
+  that quietly kept a second public URL alive. Self-hosting is documented
+  via Docker / `docker compose` instead. Deleting the Render *service*
+  itself is a maintainer step — see `docs/maintainer-todo.md`
+  § "Retire the legacy Render service".
+
 ### Security
 - **CSRF tokens** enforced on every mutating route (`verifyCsrf` in
   `src/server.js`; token issued via `/auth/session`, sent as
@@ -2767,5 +2941,5 @@ First public release. Everything below is what shipped on day one.
 
 ---
 
-_Bundle generated: 2026-06-04 15:18 UTC_
+_Bundle generated: 2026-07-27 15:38 UTC_
 _Generator: scripts/build-strategy-bundle.sh_

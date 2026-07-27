@@ -110,7 +110,9 @@ together replace the original SaaS-track gate logic.
   Production: Azure Container Apps via Bicep (`infra/main.bicep`)
   + `deploy/azure-deploy.sh` wrapper for first-time / infra-change deploys
   + `.github/workflows/deploy-azure.yml` for image-only pushes via OIDC.
-  Render blueprint kept as a fallback but no longer the canonical path.
+  Azure Container Apps is the only deploy target — the legacy `render.yaml`
+  blueprint was removed (it auto-deployed `main` in mock mode as a shadow
+  instance). Self-hosting goes through Docker / docker compose.
 
 ## Commands
 

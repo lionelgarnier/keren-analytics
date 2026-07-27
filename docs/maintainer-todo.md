@@ -87,13 +87,31 @@ links to the agent-side work that depends on it.
 - **When**: launch eve.
 - **How**: post-ADR 0004 the demo target is **Azure Container Apps West
   Europe** (`keren-analytics-prod`), provisioned by `infra/main.bicep`
-  via `.github/workflows/deploy-azure.yml`. The `render.yaml` blueprint
-  remains in-repo as a self-host hint but is no longer the demo target.
+  via `.github/workflows/deploy-azure.yml`. Azure is now the *only* deploy
+  target — the `render.yaml` blueprint was removed 2026-07-27 (see
+  "Retire the legacy Render service" below).
   URL: `https://keren.run` (DNS step below).
 - **Status**: DONE — vérifié 2026-06-04. `https://keren.run` répond HTTP
   200, servi par `ca-keren-analytics` (France Central) ; deploys CI verts
   (dernier run `deploy-azure.yml` success). La démo est en mode `real`
   (Foundry), pas mock.
+
+### Retire the legacy Render service
+- **Why**: a Render web service was still auto-deploying `main` in **mock
+  mode** — a shadow instance of production, serving the fake sample dataset
+  with authentication disabled, on a URL nobody was watching. It surfaced on
+  2026-07-27 when the new production guard in `src/config.js` (refuse to boot
+  on `NODE_ENV=production` + `AZURE_MODE=mock`) made it crash-loop instead of
+  silently running. Azure Container Apps (`keren.run`) is unaffected and is
+  the real production. `render.yaml` has been deleted from the repo, so the
+  service will no longer pick up new commits — but the service itself still
+  exists in the Render account until deleted there.
+- **When**: now — it's a live public URL serving a stale build.
+- **How**: Render dashboard → the `keren-analytics` web service → *Settings*
+  → **Delete Service** (or *Suspend* first if you want to keep the logs).
+  Then confirm nothing else points at the `*.onrender.com` hostname.
+- **Status**: TODO — repo side done (blueprint removed); dashboard side is
+  maintainer-only (needs Render account access).
 
 ### Launch-week scaling policy (`minReplicas=1`, `maxReplicas=1`)
 - **Why**: sessions are in-memory (`express-session` default store). For launch
