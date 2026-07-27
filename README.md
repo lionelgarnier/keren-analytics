@@ -44,8 +44,13 @@ For production-like local runs, set a real session secret first:
 
 ```bash
 SESSION_SECRET=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))") \
-NODE_ENV=production docker compose up --build
+NODE_ENV=production ALLOW_MOCK_IN_PROD=true docker compose up --build
 ```
+
+`ALLOW_MOCK_IN_PROD=true` is required here because mock mode disables
+authentication: the app refuses to start in production unless you say
+explicitly that a public mock demo is what you want. Drop it once you set
+`AZURE_MODE=real`.
 
 For real Azure mode, see [Setup: Entra ID](docs/setup-entra-id.md). Three
 commands and one `.env` file.

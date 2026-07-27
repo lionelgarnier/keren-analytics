@@ -17,9 +17,17 @@ services:
         value: production
       - key: AZURE_MODE
         value: mock
+      # This blueprint is a deliberate one-click PUBLIC MOCK DEMO: it serves
+      # the deterministic sample dataset, with no Azure account and no real
+      # tenant data. Mock mode disables authentication, so src/config.js
+      # refuses to boot on NODE_ENV=production unless that intent is stated
+      # explicitly — this flag is that statement. Remove it (and set
+      # AZURE_MODE=real below) for an instance serving real telemetry.
+      - key: ALLOW_MOCK_IN_PROD
+        value: "true"
       - key: SESSION_SECRET
         generateValue: true
-      # --- Uncomment for real Azure mode ---
+      # --- Uncomment for real Azure mode (and delete ALLOW_MOCK_IN_PROD) ---
       # - key: AZURE_MODE
       #   value: real
       # - key: AZURE_CLIENT_ID
