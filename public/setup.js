@@ -1205,6 +1205,7 @@
         if (next === "dark") document.documentElement.setAttribute("data-theme", "dark");
         else document.documentElement.removeAttribute("data-theme");
         try { localStorage.setItem("theme", next); } catch {}
+        window.__setThemeColorMeta?.(next === "dark");
       });
     }
 

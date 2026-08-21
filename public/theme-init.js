@@ -1,10 +1,20 @@
+// Keep the browser chrome tint on the page background. A prefers-color-scheme
+// meta pair can't do this: the in-app toggle is stored in localStorage and
+// diverges from the OS setting the moment someone uses it.
+window.__setThemeColorMeta = function (dark) {
+  var meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", dark ? "#0f1117" : "#f8f9fb");
+};
+
 // Apply persisted theme before first paint to prevent flash.
 (function applyInitialTheme() {
   var theme = localStorage.getItem("theme");
   var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  if (theme === "dark" || (!theme && prefersDark)) {
+  var dark = theme === "dark" || (!theme && prefersDark);
+  if (dark) {
     document.documentElement.setAttribute("data-theme", "dark");
   }
+  window.__setThemeColorMeta(dark);
 })();
 
 // Hide the legacy navbar until app.js resolves the route (auth + service list),

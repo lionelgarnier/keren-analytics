@@ -138,6 +138,7 @@ function toggleTheme() {
     document.documentElement.removeAttribute("data-theme");
   }
   try { localStorage.setItem("theme", next); } catch {}
+  window.__setThemeColorMeta?.(next === "dark");
   applyChartThemeDefaults();
   updateSankeySVGColors();
 }
@@ -174,6 +175,7 @@ window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e)
   } else {
     document.documentElement.removeAttribute("data-theme");
   }
+  window.__setThemeColorMeta?.(e.matches);
   applyChartThemeDefaults();
   updateSankeySVGColors();
 });

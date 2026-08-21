@@ -519,3 +519,24 @@ body.landing-active .navbar { display: none; }
   .lv2-nav-right a.lv2-nav-muted[href="/auth/login"] { display: none; }
   #landingPreviewBtn { padding: 8px 14px; font-size: 12.5px; }
 }
+
+/* The dots are 8px by design; padding gives them a real hit area on touch
+   while background-clip keeps the dot itself small. */
+@media (pointer: coarse) {
+  .lv2-carousel-dots { gap: 0; }
+  .lv2-carousel-dot {
+    box-sizing: content-box;
+    padding: 12px 8px;
+    background-clip: content-box;
+  }
+}
+
+/* Nav links are controls, not prose, so the inline-link exemption from the
+   target-size rule doesn't cover them. */
+@media (pointer: coarse) {
+  .lv2-nav-links a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}

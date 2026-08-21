@@ -4556,7 +4556,10 @@ html.booting .navbar { display: none; }
    9 · PAGE LAYOUT
    ────────────────────────────────────────────────────────────────── */
 .d2-page {
+  /* svh, not vh: iOS Safari resolves vh against the largest viewport, so a
+     100vh shell hides its last rows behind the dynamic toolbars. */
   min-height: 100vh;
+  min-height: 100svh;
   display: flex; flex-direction: column;
   background: var(--bg);
 }
@@ -5751,4 +5754,87 @@ body.d2-route #resourcePanel.d2-page { margin: 0; }
   /* Narrow desktop windows (and 400% zoom, which keeps a fine pointer) still
      render the command bar, so let it wrap instead of overflowing. */
   .d2-cmdbar { flex-wrap: wrap; gap: 8px 0; }
+}
+
+/* Platform baseline. Applies everywhere — these are correctness fixes, not
+   phone styling. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* Pull-to-refresh reloads the SPA and drops the loaded dashboard; the UI
+     has its own refresh. */
+  overscroll-behavior-y: contain;
+}
+button,
+a,
+select,
+input,
+[role="button"],
+[role="tab"] {
+  touch-action: manipulation;
+}
+
+@media (hover: none), (pointer: coarse) {
+  /* Under 16px iOS zooms the page when a field takes focus, and never zooms
+     back out. */
+  .setup-input,
+  .dash-cmdk-input,
+  .svc-switch-filter,
+  .d2-search input,
+  .resource-search-input,
+  .select,
+  .input {
+    font-size: 16px;
+  }
+
+  /* Fingers need ~44px; the browser default tap highlight is replaced by the
+     :active states below so taps still acknowledge. */
+  .dash-range-btn,
+  .dash-subtab,
+  .view-toggle-btn,
+  .d2-headeraction,
+  .d2-cfg-primary,
+  .d2-cfg-caret,
+  .d2-cmdbar-action,
+  .setup-row-btn,
+  .d2-chip,
+  .theme-toggle,
+  .dash-filterchip-x,
+  .kpi-hint {
+    min-height: 44px;
+  }
+  .view-toggle-btn { padding: 8px 14px; }
+  .kpi-hint { display: inline-flex; align-items: center; }
+
+  a,
+  button,
+  [role="button"] { -webkit-tap-highlight-color: transparent; }
+
+  .dash-subtab:active,
+  .dash-range-btn:active,
+  .view-toggle-btn:active,
+  .d2-headeraction:active,
+  .d2-cfg-primary:active,
+  .d2-cfg-caret:active { filter: brightness(0.94); }
+}
+
+/* Wraps a banner that would otherwise push the page sideways at 390px. */
+.onboarding-banner { flex-wrap: wrap; }
+
+@media (hover: none), (pointer: coarse) {
+  /* Icon-only controls: the min-height above gives them the vertical size,
+     but they stay narrow without a matching floor on width. */
+  #dashThemeToggle,
+  #dashConfigCaret,
+  .d2-cfg-caret,
+  .theme-toggle { min-width: 44px; }
+
+  .d2-tab { min-height: 44px; display: inline-flex; align-items: center; }
+  .preview-banner .btn,
+  .onboarding-banner .btn { min-height: 40px; }
+
+  /* The search field is the tap target, not its wrapper, so it needs the
+     height itself. */
+  .d2-search { padding: 4px 12px; }
+  .d2-search input { min-height: 40px; }
 }
