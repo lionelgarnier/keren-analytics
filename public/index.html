@@ -518,27 +518,9 @@
       <section id="statusPanel" class="status-bar" role="status" aria-live="polite"></section>
 
       <!-- Resource selection -->
-      <section id="resourcePanel" class="resource-panel hidden">
-        <div class="resource-panel-header">
-          <div class="resource-panel-icon-wrapper">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="28" height="28">
-              <rect x="2" y="3" width="20" height="14" rx="2" />
-              <line x1="8" y1="21" x2="16" y2="21" />
-              <line x1="12" y1="17" x2="12" y2="21" />
-            </svg>
-          </div>
-          <h2>Select a Resource</h2>
-          <p class="resource-panel-subtitle">Choose which Application Insights resource to analyze.<br>Your dashboard will be ready in seconds.</p>
-          <div id="resourceSearchWrapper" class="resource-search-wrapper hidden">
-            <svg class="resource-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input type="text" id="resourceSearchInput" class="resource-search-input" placeholder="Filter resources..." />
-          </div>
-        </div>
-        <div id="resourceList" class="resource-list"></div>
-        <div id="resourceEmptySearch" class="resource-empty-search hidden">
-          <p>No resources match your search.</p>
-        </div>
-      </section>
+      <!-- Filled by renderResources, which replaces the whole subtree before
+           unhiding it — anything placed here would never be seen. -->
+      <section id="resourcePanel" class="resource-panel hidden"></section>
 
       <!-- ========== Dashboard (D v2) ========== -->
       <section id="dashboardPanel" class="hidden d2-page" style="position:relative">
