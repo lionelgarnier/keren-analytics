@@ -4058,12 +4058,39 @@ html.booting .navbar { display: none; }
   cursor: pointer; text-decoration: none;
 }
 .d2-tab.is-active { color: var(--text-primary); border-color: var(--text-primary); }
+.d2-avatar-wrap { position: relative; display: flex; }
 .d2-avatar {
   width: 26px; height: 26px; border-radius: 50%;
   background: var(--border-light);
   display: flex; align-items: center; justify-content: center;
   font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 11px; font-weight: 600;
+  border: none; padding: 0; margin: 0; cursor: pointer;
+  color: var(--text-primary);
+  position: relative;
 }
+.d2-avatar:hover { background: var(--border); }
+
+/* Account menu. Anchored to the avatar rather than the viewport: the topbars
+   are not sticky, so an absolute menu tracks its trigger through a scroll. */
+.avatar-menu {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 200;
+  min-width: 168px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.35);
+  padding: 6px;
+  display: flex; flex-direction: column;
+}
+.avatar-menu-item {
+  display: flex; align-items: center;
+  padding: 8px 10px; border-radius: 8px;
+  font-family: inherit; font-size: 13px; text-align: left;
+  color: var(--text-primary); text-decoration: none;
+  background: none; border: none; cursor: pointer;
+}
+.avatar-menu-item:hover { background: var(--bg); }
+.avatar-menu-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 
 /* ──────────────────────────────────────────────────────────────────────
@@ -5932,4 +5959,15 @@ input,
    already a scroll container. */
 @media (max-width: 720px) {
   .dash-panel { min-width: 0; }
+}
+
+/* The avatar keeps its 26px circle — a min-height would stretch it into an
+   oval — so the touch target comes from an invisible extension instead. */
+@media (hover: none), (pointer: coarse) {
+  .d2-avatar::after {
+    content: "";
+    position: absolute;
+    inset: -9px;
+  }
+  .avatar-menu-item { min-height: 44px; }
 }

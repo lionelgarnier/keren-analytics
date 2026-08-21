@@ -518,20 +518,22 @@ connectButton.addEventListener("click", () => {
 });
 
 async function logout() {
-  await apiFetch("/auth/logout", { method: "POST" });
+  // A failed destroy still means the user asked to leave: land them on the
+  // public page rather than leaving them on a dashboard with no feedback.
+  try {
+    await apiFetch("/auth/logout", { method: "POST" });
+  } catch {
+    // Session may survive server-side; the redirect below re-checks auth.
+  }
   window.location.href = "/";
 }
 
 logoutButton.addEventListener("click", logout);
 
-// Operator-console topbar tabs are re-rendered with the services hub, so the
-// Logout tab is wired through a delegated listener rather than a direct bind.
-document.addEventListener("click", (event) => {
-  const trigger = event.target.closest('[data-action="logout"]');
-  if (!trigger) return;
-  event.preventDefault();
-  logout();
-});
+const ACCOUNT_MENU_ITEMS = [
+  { label: "Docs", href: "/docs" },
+  { label: "Logout", onSelect: logout },
+];
 
 // Lightweight confirm dialog. Resolves true on confirm, false on cancel/Esc/
 // outside-click. Built on demand (no static markup), CSP-safe (no inline JS).
@@ -1030,6 +1032,9 @@ const D2_THEME_TOGGLE_SVG =
 const dashThemeToggleEl = document.getElementById("dashThemeToggle");
 if (dashThemeToggleEl) dashThemeToggleEl.innerHTML = D2_THEME_TOGGLE_SVG;
 
+// The dashboard topbar is static markup, so one bind at boot is enough.
+window.initAvatarMenu?.(document.getElementById("dashAvatarBtn"), ACCOUNT_MENU_ITEMS);
+
 // Bucket detectEnvironment()'s css class into a D v2 chip filter key.
 function d2EnvKey(env) {
   if (env.css === "env-prod") return "prod";
@@ -1348,14 +1353,12 @@ function renderResources(resources) {
         <span class="d2-mark">Keren<span class="d2-mark-dot">.</span></span>
         <div class="d2-tabs">
           <a class="d2-tab is-active" href="/services">Services</a>
-          <a class="d2-tab" href="/docs">Docs</a>
-          <a class="d2-tab" href="/auth/logout" data-action="logout">Logout</a>
         </div>
       </div>
       <div class="d2-topbar-r">
         <button type="button" id="d2ThemeToggle" class="theme-toggle" aria-label="Toggle dark mode" title="Toggle theme">${D2_THEME_TOGGLE_SVG}</button>
         <span class="d2-mark-tag" style="margin-left:0">⌘ K</span>
-        <span class="d2-avatar">··</span>
+        <span class="d2-avatar-wrap"><button type="button" class="d2-avatar" aria-haspopup="menu" aria-expanded="false" aria-label="Account menu">··</button></span>
       </div>
     </div>
     <div class="d2-page-body">
@@ -1535,6 +1538,10 @@ function renderResources(resources) {
 
   // Theme toggle inside the d2 topbar (the global .navbar toggle is hidden).
   resourcePanel.querySelector("#d2ThemeToggle")?.addEventListener("click", toggleTheme);
+
+  // The hub topbar is rebuilt on every render, so the avatar is a new element
+  // each time and needs re-wiring alongside the theme toggle.
+  window.initAvatarMenu?.(resourcePanel.querySelector(".d2-avatar"), ACCOUNT_MENU_ITEMS);
 
   // "Connect workspace" reuses the existing Azure connect flow.
   const connect = () => { window.location.href = "/auth/login"; };

@@ -136,6 +136,50 @@ async function checkOverlay(page, name, open, selector) {
   else pass(`${name} releases the scroll lock`);
 }
 
+// Not routed through checkOverlay: that helper scrolls down 600px, and the
+// menu is anchored to a topbar that scrolls away with the page.
+async function checkAvatarMenu(page) {
+  console.log("\n[avatar menu]");
+  const strayTab = await page.evaluate(
+    () => !!document.querySelector('.d2-tabs a[href="/auth/logout"], .d2-tabs [data-action="logout"]'),
+  );
+  if (strayTab) fail("avatar menu", "Logout is still a topbar tab, one mis-tap from Services");
+  else pass("Logout is not a topbar tab");
+
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.evaluate(() => document.querySelector(".d2-avatar")?.click());
+  await page.waitForTimeout(250);
+
+  const menu = await page.evaluate(() => {
+    const el = document.querySelector(".avatar-menu");
+    if (!el || el.classList.contains("hidden")) return null;
+    const r = el.getBoundingClientRect();
+    const items = [...el.querySelectorAll('[role="menuitem"]')].map((i) => i.textContent.trim());
+    return {
+      inViewport: r.left >= -1 && r.top >= -1 && r.right <= innerWidth + 1 && r.bottom <= innerHeight + 1,
+      rect: `${Math.round(r.width)}x${Math.round(r.height)} at ${Math.round(r.x)},${Math.round(r.y)}`,
+      items,
+    };
+  });
+
+  if (!menu) {
+    fail("avatar menu", "menu did not open on tap");
+    return;
+  }
+  if (!menu.inViewport) fail("avatar menu", `menu outside the viewport: ${menu.rect}`);
+  else pass("menu opens inside the viewport");
+  if (!menu.items.some((t) => /logout/i.test(t))) fail("avatar menu", `no Logout item: ${JSON.stringify(menu.items)}`);
+  else pass("menu holds Logout");
+
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(200);
+  const collapsed = await page.evaluate(
+    () => document.querySelector(".d2-avatar")?.getAttribute("aria-expanded") === "false",
+  );
+  if (collapsed) pass("menu closes on Escape");
+  else fail("avatar menu", "menu did not close on Escape");
+}
+
 const browser = await chromium.launch();
 const context = await browser.newContext({
   ...devices["iPhone 14"],
@@ -160,6 +204,7 @@ try {
   await page.goto(`${BASE_URL}/services`, { waitUntil: "domcontentloaded" });
   await page.waitForSelector(".d2-rescard", { timeout: 15000 }).catch(() => {});
   await checkRoute(page, "/services", "hub");
+  await checkAvatarMenu(page);
 
   // The preview dashboard renders every panel without needing a configured
   // resource, so it is the widest surface to check.
