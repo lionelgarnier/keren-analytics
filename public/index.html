@@ -1249,32 +1249,26 @@
           </div>
         </div>
 
-        <!-- ⌘K command palette (vanilla, hidden by default) -->
-        <div id="dashCmdk" class="hidden" role="dialog" aria-modal="true" aria-label="Command palette">
-          <div class="dash-cmdk-scrim" data-cmdk-close>
-            <div class="dash-cmdk">
-              <input id="dashCmdkInput" class="dash-cmdk-input" type="text" placeholder="Filter pages, switch tab, set range…" autocomplete="off" />
-              <div id="dashCmdkList" class="dash-cmdk-list"></div>
-              <div class="dash-cmdk-foot">
-                <span><span class="d2-cmdbar-kbd">↑</span><span class="d2-cmdbar-kbd">↓</span> navigate</span>
-                <span><span class="d2-cmdbar-kbd">↵</span> select</span>
-                <span><span class="d2-cmdbar-kbd">esc</span> close</span>
-              </div>
-            </div>
+        <!-- ⌘K command palette. Native dialog: the [open] attribute governs
+             visibility, and ::backdrop replaces the scrim element. -->
+        <dialog id="dashCmdk" class="dash-cmdk" aria-label="Command palette">
+          <input id="dashCmdkInput" class="dash-cmdk-input" type="text" placeholder="Filter pages, switch tab, set range…" autocomplete="off" />
+          <div id="dashCmdkList" class="dash-cmdk-list"></div>
+          <div class="dash-cmdk-foot">
+            <span><span class="d2-cmdbar-kbd">↑</span><span class="d2-cmdbar-kbd">↓</span> navigate</span>
+            <span><span class="d2-cmdbar-kbd">↵</span> select</span>
+            <span><span class="d2-cmdbar-kbd">esc</span> close</span>
           </div>
-        </div>
+        </dialog>
 
-        <!-- KPI drill drawer (vanilla, hidden by default) -->
-        <div id="dashDrill" class="hidden" role="dialog" aria-modal="true" aria-label="Metric detail">
-          <div class="dash-drill-scrim" data-drill-close></div>
-          <aside class="dash-drill">
-            <div class="dash-drill-head">
-              <h3 id="dashDrillTitle" class="dash-drill-title">Metric</h3>
-              <button type="button" class="dash-drill-close" data-drill-close aria-label="Close">&times;</button>
-            </div>
-            <div id="dashDrillBody" class="dash-drill-body"></div>
-          </aside>
-        </div>
+        <!-- KPI drill drawer -->
+        <dialog id="dashDrill" class="dash-drill" aria-label="Metric detail">
+          <div class="dash-drill-head">
+            <h3 id="dashDrillTitle" class="dash-drill-title">Metric</h3>
+            <button type="button" class="dash-drill-close" data-drill-close aria-label="Close">&times;</button>
+          </div>
+          <div id="dashDrillBody" class="dash-drill-body"></div>
+        </dialog>
 
       </section>
     </main>

@@ -5399,27 +5399,23 @@ body.d2-route #resourcePanel.d2-page { margin: 0; }
 }
 .dash-kpi-b { position: relative; }
 
-/* Command palette overlay */
-/* Fixed, not absolute: anchored to #dashboardPanel these overlays laid out
-   against the full document height, so opening one after scrolling put the
-   dialog off-screen. z-index clears .svc-switch-menu (200) while staying
-   under .kr-confirm-scrim (1000) and .d2-cfg-menu (1100). */
-.dash-cmdk-scrim {
-  position: fixed; inset: 0;
-  background: rgba(0, 0, 0, 0.32);
-  display: flex; align-items: flex-start; justify-content: center;
-  padding-top: 96px;
-  z-index: 220;
-  backdrop-filter: blur(2px);
-}
-[data-theme="light"] .dash-cmdk-scrim { background: rgba(15, 12, 8, 0.18); }
+/* Command palette — native <dialog>. The top layer removes the z-index race
+   these overlays used to run against the menus, and the margin does what the
+   scrim's flex centring did. */
 .dash-cmdk {
   width: 640px; max-width: calc(100% - 80px);
+  margin: 96px auto auto;
+  padding: 0;
   background: var(--surface);
+  color: inherit;
   border: 1px solid var(--ghost-hover-border);
   border-radius: 14px;
   box-shadow: 0 24px 60px -20px rgba(0,0,0,0.45);
   overflow: hidden;
+}
+.dash-cmdk::backdrop {
+  background: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(2px);
 }
 .dash-cmdk-input {
   display: flex; align-items: center; gap: 12px;
@@ -5496,16 +5492,27 @@ body.d2-route #resourcePanel.d2-page { margin: 0; }
 }
 .dash-cmdk-foot-cell { display: inline-flex; align-items: center; gap: 6px; }
 
-/* Drill drawer — right-side slide-in panel */
+/* Drill drawer — right-side slide-in panel, native <dialog>. The UA defaults
+   have to be undone one by one: margin:auto would centre it, max-height would
+   crop it, and the border would draw on all four sides. */
 .dash-drill {
-  position: fixed; inset: 0 0 0 auto;
+  inset: 0 0 0 auto;
   width: min(520px, 100vw);
+  height: auto;
+  max-height: none;
+  max-width: none;
+  margin: 0;
+  padding: 0;
   background: var(--surface);
+  color: inherit;
+  border: 0;
   border-left: 1px solid var(--ghost-hover-border);
   box-shadow: -24px 0 48px -16px rgba(0,0,0,0.35);
-  display: flex; flex-direction: column;
-  z-index: 231;
 }
+/* Scoped to [open]: a bare display:flex would beat the UA's display:none and
+   leave the closed drawer painted over the page. */
+.dash-drill[open] { display: flex; flex-direction: column; }
+.dash-drill::backdrop { background: rgba(0,0,0,0.18); }
 .dash-drill-head {
   display: flex; justify-content: space-between; align-items: flex-start;
   padding: 18px 20px 14px;
@@ -5556,13 +5563,6 @@ body.d2-route #resourcePanel.d2-page { margin: 0; }
   color: var(--text-primary);
 }
 
-/* Scrim behind drill drawer (just a soft dim, not a hard modal) */
-.dash-drill-scrim {
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,0.18);
-  z-index: 230;
-}
-[data-theme="light"] .dash-drill-scrim { background: rgba(15, 12, 8, 0.08); }
 
 /* Phone overlays. Must stay after the base rules above — same specificity, so
    the cascade decides. A 520px side panel leaves nothing of a 390px screen,
@@ -5579,8 +5579,7 @@ body.d2-route #resourcePanel.d2-page { margin: 0; }
     border-radius: 16px 16px 0 0;
   }
   .dash-drill-body { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
-  .dash-cmdk-scrim { padding: 12px 12px 0; }
-  .dash-cmdk { width: 100%; max-width: calc(100vw - 24px); }
+  .dash-cmdk { width: 100%; max-width: calc(100vw - 24px); margin: 12px auto auto; }
 }
 
 /* ───── Section divider title (Marketing only — between groups) ───── */

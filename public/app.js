@@ -389,23 +389,34 @@ function updateCmdkActive() {
   [...list.children].forEach((el, i) => el.classList.toggle("is-active", i === cmdkActiveIdx));
 }
 
+// The dialog's own `close` event is queued, not synchronous, so the unlock
+// cannot live there alone: runCmdk closes and then runs a command that may
+// scroll, and a late unlock would restore the old offset over it. Programmatic
+// closes release the lock first; the listener is the safety net for the native
+// Escape, and the flag keeps the double path harmless.
+let cmdkLocked = false;
+function releaseCmdkLock() {
+  if (!cmdkLocked) return;
+  cmdkLocked = false;
+  unlockScroll();
+}
+
 function openCmdk() {
   const { modal, input } = cmdkEls();
-  if (!modal || !modal.classList.contains("hidden")) return;
+  if (!modal || modal.open) return;
   cmdkActiveIdx = 0;
   renderCmdkList("");
-  modal.classList.remove("hidden");
+  modal.showModal();
   lockScroll();
+  cmdkLocked = true;
   if (input) { input.value = ""; input.focus(); }
 }
 
-// Escape closes both overlays blind, so unlock only when this one was open —
-// otherwise the shared counter drifts and the page stays pinned.
 function closeCmdk() {
   const { modal } = cmdkEls();
-  if (!modal || modal.classList.contains("hidden")) return;
-  modal.classList.add("hidden");
-  unlockScroll();
+  if (!modal || !modal.open) return;
+  releaseCmdkLock();
+  modal.close();
 }
 
 function runCmdk(idx) {
@@ -422,11 +433,21 @@ cmdkEls().input?.addEventListener("keydown", (e) => {
   else if (e.key === "ArrowUp") { e.preventDefault(); cmdkActiveIdx = Math.max(cmdkActiveIdx - 1, 0); updateCmdkActive(); }
   else if (e.key === "Enter") { e.preventDefault(); runCmdk(cmdkActiveIdx); }
 });
-document.querySelectorAll("#dashCmdk [data-cmdk-close]").forEach((el) =>
-  el.addEventListener("click", (e) => { if (e.target === e.currentTarget) closeCmdk(); })
-);
+const dashCmdkEl = document.getElementById("dashCmdk");
+if (dashCmdkEl) {
+  wireBackdropClose(dashCmdkEl, closeCmdk);
+  dashCmdkEl.addEventListener("close", releaseCmdkLock);
+}
 
 /* ----- KPI drill drawer ----- */
+// Same split as the palette: release synchronously, keep the event as a net.
+let drillLocked = false;
+function releaseDrillLock() {
+  if (!drillLocked) return;
+  drillLocked = false;
+  unlockScroll();
+}
+
 function openDrill(title, rows) {
   const modal = document.getElementById("dashDrill");
   const titleEl = document.getElementById("dashDrillTitle");
@@ -440,17 +461,18 @@ function openDrill(title, rows) {
     section.innerHTML = `<div class="dash-drill-section-h">${escapeHtmlApp(r.k)}</div><div class="dash-drill-val">${escapeHtmlApp(r.v)}</div>`;
     body.appendChild(section);
   });
-  if (modal.classList.contains("hidden")) {
-    modal.classList.remove("hidden");
+  if (!modal.open) {
+    modal.showModal();
     lockScroll();
+    drillLocked = true;
   }
 }
 
 function closeDrill() {
   const modal = document.getElementById("dashDrill");
-  if (!modal || modal.classList.contains("hidden")) return;
-  modal.classList.add("hidden");
-  unlockScroll();
+  if (!modal || !modal.open) return;
+  releaseDrillLock();
+  modal.close();
 }
 
 function wireKpiDrill(grid) {
@@ -475,6 +497,11 @@ function wireKpiDrill(grid) {
 }
 
 document.querySelectorAll("#dashDrill [data-drill-close]").forEach((el) => el.addEventListener("click", closeDrill));
+const dashDrillEl = document.getElementById("dashDrill");
+if (dashDrillEl) {
+  wireBackdropClose(dashDrillEl, closeDrill);
+  dashDrillEl.addEventListener("close", releaseDrillLock);
+}
 
 /* ----- Global dashboard keyboard shortcuts ----- */
 function inEditableTarget(e) {
@@ -490,8 +517,7 @@ document.addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
     if (dashOpen) {
       e.preventDefault();
-      const open = !document.getElementById("dashCmdk")?.classList.contains("hidden");
-      open ? closeCmdk() : openCmdk();
+      document.getElementById("dashCmdk")?.open ? closeCmdk() : openCmdk();
     } else if (hubOpen) {
       const search = resourcePanel.querySelector("#resourceSearchInput");
       if (search) { e.preventDefault(); search.focus(); search.select(); }
@@ -505,11 +531,9 @@ document.addEventListener("keydown", (e) => {
     exportDashboard();
     return;
   }
-  if (e.key === "Escape") {
-    closeCmdk();
-    closeDrill();
-    return;
-  }
+  // Escape is handled natively by the dialogs, which close only the topmost
+  // one — closing both from here would dismiss a drawer sitting behind the
+  // palette as well.
   if (!dashOpen || inEditableTarget(e)) return;
   if (e.key === "r" || e.key === "R") {
     e.preventDefault();
@@ -1213,10 +1237,14 @@ function openAiDataPopover(disclosure) {
 // then "sans IA", then the data popover. Fixed-positioned off the button rect
 // so it never clips inside the grid's overflow.
 let openConfigMenuEl = null;
+let openConfigMenuAnchor = null;
 function closeConfigMenu() {
   if (openConfigMenuEl) {
     openConfigMenuEl.remove();
     openConfigMenuEl = null;
+    // The caret kept announcing an expanded menu long after it was gone.
+    openConfigMenuAnchor?.setAttribute("aria-expanded", "false");
+    openConfigMenuAnchor = null;
     document.removeEventListener("click", closeConfigMenu, { capture: true });
     document.removeEventListener("keydown", onConfigMenuKey);
     window.removeEventListener("scroll", closeConfigMenu);
@@ -1287,6 +1315,7 @@ async function openConfigureMenu(anchorBtn, resource) {
     : `${below}px`;
 
   openConfigMenuEl = menu;
+  openConfigMenuAnchor = anchorBtn;
   anchorBtn.setAttribute("aria-expanded", "true");
   setTimeout(() => {
     document.addEventListener("click", closeConfigMenu, { capture: true });
@@ -1349,6 +1378,7 @@ function openDashboardConfigMenu(anchorBtn) {
     : `${below}px`;
 
   openConfigMenuEl = menu;
+  openConfigMenuAnchor = anchorBtn;
   anchorBtn.setAttribute("aria-expanded", "true");
   setTimeout(() => {
     document.addEventListener("click", closeConfigMenu, { capture: true });
