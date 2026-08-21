@@ -38,7 +38,7 @@
   "dependencies": {
     "@azure/identity": "^4.13.1",
     "@azure/storage-blob": "^12.28.0",
-    "applicationinsights": "^3.9.0",
+    "applicationinsights": "^3.16.0",
     "dotenv": "^17.2.4",
     "express": "^5.2.1",
     "express-session": "^1.19.0",
