@@ -5838,3 +5838,71 @@ input,
   .d2-search { padding: 4px 12px; }
   .d2-search input { min-height: 40px; }
 }
+
+/* Phone layout for the mapping editor. A five-column table of field, source,
+   KQL and status stretched the page to ~570px on a 390px screen: the selects
+   collapsed to two characters ("Au v") and the expressions broke letter by
+   letter. Each row becomes a card instead — display:block turns the table
+   into blocks without touching the markup, and the row stays the unit the
+   editor's own handlers already address by data-field. */
+@media (max-width: 720px) {
+  #validateTable,
+  #validateTable tbody,
+  #validateTable tr,
+  #validateTable td {
+    display: block;
+    width: auto;
+  }
+  #validateTable thead { display: none; }
+
+  #validateTable tr[data-field] {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+  #validateTable tr[data-field] td {
+    border-bottom: none;
+    padding: 4px 0;
+  }
+  #validateTable .map-group-row {
+    border: none;
+    padding: 0;
+    margin: 0;
+  }
+  #validateTable .map-group-head { padding: 16px 0 6px; }
+
+  /* The status cell holds the badge plus Test and Reset — it cannot stay on
+     one line at this width. */
+  #validateTable .map-status {
+    white-space: normal;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Option labels like "* customDimensions.user_AuthenticatedId · 33 distinct"
+     set the select's intrinsic width; without a cap they alone widen the page. */
+  .map-select,
+  .map-custom-source,
+  .setup-input-mono {
+    width: 100%;
+    max-width: 100%;
+  }
+  .map-expr {
+    display: block;
+    overflow-x: auto;
+  }
+
+  .setup-panel { padding: 20px 16px; }
+  .setup-footer { flex-wrap: wrap; gap: 10px; }
+  .inv-item { word-break: break-word; }
+}
+
+/* Only the active step keeps its label; four monospace captions do not fit a
+   phone. Targets the labels, never the container — setup.js sets an inline
+   display on it for the advanced-mapping path. */
+@media (max-width: 640px) {
+  .d2-progress-step:not(.is-active) .d2-progress-label { visibility: hidden; }
+}
