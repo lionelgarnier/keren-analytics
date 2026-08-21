@@ -1170,6 +1170,7 @@ function closeConfigMenu() {
     openConfigMenuEl = null;
     document.removeEventListener("click", closeConfigMenu, { capture: true });
     document.removeEventListener("keydown", onConfigMenuKey);
+    window.removeEventListener("scroll", closeConfigMenu);
   }
 }
 function onConfigMenuKey(e) { if (e.key === "Escape") closeConfigMenu(); }
@@ -1230,7 +1231,7 @@ async function openConfigureMenu(anchorBtn, resource) {
   document.body.appendChild(menu);
   const r = anchorBtn.getBoundingClientRect();
   // Prefer dropping below-right of the caret; flip up if it would overflow.
-  menu.style.left = `${Math.min(r.left, window.innerWidth - menu.offsetWidth - 12)}px`;
+  menu.style.left = `${Math.max(12, Math.min(r.left, window.innerWidth - menu.offsetWidth - 12))}px`;
   const below = r.bottom + 6;
   menu.style.top = below + menu.offsetHeight > window.innerHeight
     ? `${Math.max(12, r.top - menu.offsetHeight - 6)}px`
@@ -1241,6 +1242,9 @@ async function openConfigureMenu(anchorBtn, resource) {
   setTimeout(() => {
     document.addEventListener("click", closeConfigMenu, { capture: true });
     document.addEventListener("keydown", onConfigMenuKey);
+    // The menu is fixed-positioned against the caret's coordinates, so it
+    // drifts away from its button as soon as the page moves.
+    window.addEventListener("scroll", closeConfigMenu, { once: true, passive: true });
   }, 0);
 }
 
@@ -1289,7 +1293,7 @@ function openDashboardConfigMenu(anchorBtn) {
 
   document.body.appendChild(menu);
   const r = anchorBtn.getBoundingClientRect();
-  menu.style.left = `${Math.min(r.left, window.innerWidth - menu.offsetWidth - 12)}px`;
+  menu.style.left = `${Math.max(12, Math.min(r.left, window.innerWidth - menu.offsetWidth - 12))}px`;
   const below = r.bottom + 6;
   menu.style.top = below + menu.offsetHeight > window.innerHeight
     ? `${Math.max(12, r.top - menu.offsetHeight - 6)}px`
@@ -1300,6 +1304,9 @@ function openDashboardConfigMenu(anchorBtn) {
   setTimeout(() => {
     document.addEventListener("click", closeConfigMenu, { capture: true });
     document.addEventListener("keydown", onConfigMenuKey);
+    // The menu is fixed-positioned against the caret's coordinates, so it
+    // drifts away from its button as soon as the page moves.
+    window.addEventListener("scroll", closeConfigMenu, { once: true, passive: true });
   }, 0);
 }
 
@@ -2007,6 +2014,10 @@ function renderGeoMap(data) {
 
   geoMapInstance = L.map(container, {
     scrollWheelZoom: false,
+    // One-finger panning swallows the page scroll: a swipe started over the
+    // map moves the map instead of the page, trapping the reader. The zoom
+    // buttons keep the map usable without dragging.
+    dragging: !window.matchMedia("(pointer: coarse)").matches,
     zoomControl: true,
     attributionControl: true,
   }).setView([25, 10], 2);
@@ -2448,6 +2459,26 @@ function renderPeakHours(data, availability) {
     }
   });
   container.appendChild(grid);
+
+  // A title attribute never fires on touch, so the grid's numbers were
+  // unreadable without a mouse. Tapping a cell puts its reading here.
+  const readout = document.createElement("div");
+  readout.className = "dash-peaks-readout";
+  readout.textContent = "Tap a cell to read its traffic.";
+  container.appendChild(readout);
+
+  grid.addEventListener("click", (e) => {
+    const cell = e.target.closest(".dash-peaks-cell");
+    if (!cell) return;
+    const wasFocused = cell.classList.contains("is-focused");
+    grid.querySelectorAll(".dash-peaks-cell.is-focused").forEach((c) => c.classList.remove("is-focused"));
+    if (wasFocused) {
+      readout.textContent = "Tap a cell to read its traffic.";
+      return;
+    }
+    cell.classList.add("is-focused");
+    readout.textContent = cell.title;
+  });
 
   const foot = document.createElement("div");
   foot.className = "dash-peaks-foot";

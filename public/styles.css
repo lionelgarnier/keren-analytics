@@ -5000,6 +5000,12 @@ body.d2-route #resourcePanel.d2-page { margin: 0; }
   font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 9.5px;
   color: var(--text-muted); padding: 4px 0 0 28px;
 }
+.dash-peaks-readout {
+  font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 11px;
+  color: var(--text-secondary);
+  padding: 10px 0 0 28px;
+  min-height: 18px;
+}
 
 /* ───── Donut chart (browser / OS / device) ───── */
 .dash-donut {
@@ -5905,4 +5911,17 @@ input,
    display on it for the advanced-mapping path. */
 @media (max-width: 640px) {
   .d2-progress-step:not(.is-active) .d2-progress-label { visibility: hidden; }
+}
+
+/* Floating menus are wider than a phone. min-width has to come down with
+   max-width — on its own a max-width loses to it. */
+@media (max-width: 720px) {
+  .d2-cfg-menu {
+    min-width: min(300px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
+  }
+  .svc-switch-menu {
+    min-width: 0;
+    width: min(420px, calc(100vw - 32px));
+  }
 }
