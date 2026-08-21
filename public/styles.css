@@ -4324,10 +4324,12 @@ html.booting .navbar { display: none; }
 .d2-cfg-info { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 11px; border-radius: 0 0 8px 8px; }
 .d2-cfg-info .d2-cfg-label { color: var(--text-secondary); font-weight: 400; }
 
-/* "What data is sent" disclosure popover (reuses .kr-confirm-scrim). */
+/* "What data is sent" disclosure popover — native <dialog>, backdrop declared
+   next to .kr-confirm whose button styles it borrows. */
 .ai-data-pop {
-  width: 100%; max-width: 560px;
+  width: 100%; max-width: min(560px, calc(100vw - 48px));
   background: var(--surface); border: 1px solid var(--border);
+  color: inherit;
   border-radius: var(--radius);
   box-shadow: 0 24px 48px -16px rgba(0, 0, 0, 0.4);
   padding: 24px;
@@ -5622,21 +5624,22 @@ body.d2-route #resourcePanel.d2-page { margin: 0; }
   border-radius: 14px;
 }
 
-/* ── Confirm dialog (destructive-nav guard, e.g. Setup re-scan) ──────────── */
-.kr-confirm-scrim {
-  position: fixed; inset: 0; z-index: 1000;
-  display: flex; align-items: center; justify-content: center;
-  background: rgba(8, 10, 16, 0.5);
-  padding: 24px;
-}
+/* ── Confirm dialog (destructive-nav guard, e.g. Setup re-scan) ────────────
+   Native <dialog>: the top layer replaces the z-index, ::backdrop replaces the
+   scrim, and margin:auto centres it. The max-width keeps the gutter the scrim's
+   padding used to provide. .kr-confirm-cancel/-ok below are also worn by the
+   AI-disclosure popover's button (app.js) — keep them if this block is pruned. */
 .kr-confirm {
-  width: 100%; max-width: 420px;
+  width: 100%; max-width: min(420px, calc(100vw - 48px));
   background: var(--surface);
+  color: inherit;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: 0 24px 48px -16px rgba(0, 0, 0, 0.4);
   padding: 24px;
 }
+.kr-confirm::backdrop,
+.ai-data-pop::backdrop { background: rgba(8, 10, 16, 0.5); }
 .kr-confirm-title {
   margin: 0 0 8px; font-size: 17px; font-weight: 600;
   color: var(--text-primary);

@@ -326,6 +326,20 @@ function unlockScroll() {
   window.scrollTo(0, scrollLockY);
 }
 
+/* Close a <dialog> when the click lands on its backdrop.
+   Testing `e.target === dlg` alone is not enough: a dialog with its own
+   padding reports itself as the target for clicks in that padding, which would
+   close it from inside. Comparing against its box tells the two apart. */
+function wireBackdropClose(dlg, closeFn) {
+  dlg.addEventListener("click", (e) => {
+    if (e.target !== dlg) return;
+    const r = dlg.getBoundingClientRect();
+    const outside =
+      e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+    if (outside) closeFn();
+  });
+}
+
 /* ----- ⌘K command palette ----- */
 const CMDK_COMMANDS = [
   { label: "Go to Marketing", hint: "tab", run: () => activateTab("marketing") },
@@ -537,39 +551,59 @@ const ACCOUNT_MENU_ITEMS = [
 
 // Lightweight confirm dialog. Resolves true on confirm, false on cancel/Esc/
 // outside-click. Built on demand (no static markup), CSP-safe (no inline JS).
+// A native <dialog> gives the top layer, the inert background, the focus trap
+// and Escape for free — hand-rolled scrims provided none of them.
 function krConfirm({ title, body, confirmText = "Continue", cancelText = "Cancel" }) {
   return new Promise((resolve) => {
-    const overlay = document.createElement("div");
-    overlay.className = "kr-confirm-scrim";
-    overlay.innerHTML = `
-      <div class="kr-confirm" role="dialog" aria-modal="true" aria-labelledby="krConfirmTitle">
-        <h3 id="krConfirmTitle" class="kr-confirm-title"></h3>
-        <p class="kr-confirm-body"></p>
-        <div class="kr-confirm-actions">
-          <button type="button" class="kr-confirm-cancel"></button>
-          <button type="button" class="kr-confirm-ok"></button>
-        </div>
+    // The labelling id is fixed, so a second instance would duplicate it.
+    if (document.querySelector("dialog.kr-confirm[open]")) {
+      resolve(false);
+      return;
+    }
+    const dlg = document.createElement("dialog");
+    dlg.className = "kr-confirm";
+    dlg.setAttribute("aria-labelledby", "krConfirmTitle");
+    dlg.innerHTML = `
+      <h3 id="krConfirmTitle" class="kr-confirm-title"></h3>
+      <p class="kr-confirm-body"></p>
+      <div class="kr-confirm-actions">
+        <button type="button" class="kr-confirm-cancel"></button>
+        <button type="button" class="kr-confirm-ok"></button>
       </div>`;
-    overlay.querySelector(".kr-confirm-title").textContent = title;
-    overlay.querySelector(".kr-confirm-body").textContent = body;
-    const cancelBtn = overlay.querySelector(".kr-confirm-cancel");
-    const okBtn = overlay.querySelector(".kr-confirm-ok");
+    dlg.querySelector(".kr-confirm-title").textContent = title;
+    dlg.querySelector(".kr-confirm-body").textContent = body;
+    const cancelBtn = dlg.querySelector(".kr-confirm-cancel");
+    const okBtn = dlg.querySelector(".kr-confirm-ok");
     cancelBtn.textContent = cancelText;
     okBtn.textContent = confirmText;
 
-    function close(result) {
-      document.removeEventListener("keydown", onKey);
-      overlay.remove();
-      resolve(result);
+    // Escape closes natively without running this, so the result defaults to
+    // a refusal and the close listener is the single place that resolves.
+    let result = false;
+    let locked = false;
+    function release() {
+      if (!locked) return;
+      locked = false;
+      unlockScroll();
     }
-    function onKey(e) {
-      if (e.key === "Escape") close(false);
+    function close(value) {
+      result = value;
+      release();
+      dlg.close();
     }
-    overlay.addEventListener("click", (e) => { if (e.target === overlay) close(false); });
     cancelBtn.addEventListener("click", () => close(false));
     okBtn.addEventListener("click", () => close(true));
-    document.addEventListener("keydown", onKey);
-    document.body.appendChild(overlay);
+    wireBackdropClose(dlg, () => close(false));
+    dlg.addEventListener("close", () => {
+      release();
+      dlg.remove();
+      resolve(result);
+    });
+
+    document.body.appendChild(dlg);
+    dlg.showModal();
+    lockScroll();
+    locked = true;
     okBtn.focus();
   });
 }
@@ -1132,10 +1166,11 @@ function openAiDataPopover(disclosure) {
     : "no AI configured";
   const list = (items) =>
     items.map((i) => `<li>${escapeHtmlApp(i)}</li>`).join("");
-  const overlay = document.createElement("div");
-  overlay.className = "kr-confirm-scrim";
-  overlay.innerHTML = `
-    <div class="ai-data-pop" role="dialog" aria-modal="true" aria-labelledby="aiDataPopTitle">
+  if (document.querySelector("dialog.ai-data-pop[open]")) return;
+  const dlg = document.createElement("dialog");
+  dlg.className = "ai-data-pop";
+  dlg.setAttribute("aria-labelledby", "aiDataPopTitle");
+  dlg.innerHTML = `
       <h3 id="aiDataPopTitle" class="ai-data-pop-title">What data is sent?</h3>
       <p class="ai-data-pop-dest">AI analysis: <strong>${dest}</strong>${aiOption && aiOption.outbound === false ? " (local, nothing leaves)" : ""}</p>
       <div class="ai-data-pop-cols">
@@ -1151,18 +1186,27 @@ function openAiDataPopover(disclosure) {
       <p class="ai-data-pop-foot">Choosing "without AI" disables every outbound call for this resource.</p>
       <div class="ai-data-pop-actions">
         <button type="button" class="kr-confirm-ok ai-data-pop-close">Got it</button>
-      </div>
-    </div>`;
-  function close() {
-    document.removeEventListener("keydown", onKey);
-    overlay.remove();
+      </div>`;
+  let locked = false;
+  function release() {
+    if (!locked) return;
+    locked = false;
+    unlockScroll();
   }
-  function onKey(e) { if (e.key === "Escape") close(); }
-  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
-  overlay.querySelector(".ai-data-pop-close").addEventListener("click", close);
-  document.addEventListener("keydown", onKey);
-  document.body.appendChild(overlay);
-  overlay.querySelector(".ai-data-pop-close").focus();
+  dlg.querySelector(".ai-data-pop-close").addEventListener("click", () => {
+    release();
+    dlg.close();
+  });
+  wireBackdropClose(dlg, () => { release(); dlg.close(); });
+  dlg.addEventListener("close", () => {
+    release();
+    dlg.remove();
+  });
+  document.body.appendChild(dlg);
+  dlg.showModal();
+  lockScroll();
+  locked = true;
+  dlg.querySelector(".ai-data-pop-close").focus();
 }
 
 // Floating menu anchored to a card's caret: the configured AI provider(s)
