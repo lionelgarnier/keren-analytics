@@ -295,6 +295,35 @@ function exportDashboard() {
   setStatus("Dashboard exported.", "success");
 }
 
+/* ----- Overlay body scroll lock -----
+   iOS Safari ignores `overflow: hidden` on body for touch scrolling, so the
+   page keeps moving under an open overlay. Pinning the body at its current
+   offset is the technique that holds there; the counter keeps nested opens
+   from unlocking early, and the saved offset is restored on the way out. */
+let scrollLockCount = 0;
+let scrollLockY = 0;
+
+function lockScroll() {
+  if (scrollLockCount++ > 0) return;
+  scrollLockY = window.scrollY;
+  document.body.style.position = "fixed";
+  document.body.style.top = `${-scrollLockY}px`;
+  document.body.style.left = "0";
+  document.body.style.right = "0";
+  document.body.style.width = "100%";
+}
+
+function unlockScroll() {
+  if (scrollLockCount === 0) return;
+  if (--scrollLockCount > 0) return;
+  document.body.style.position = "";
+  document.body.style.top = "";
+  document.body.style.left = "";
+  document.body.style.right = "";
+  document.body.style.width = "";
+  window.scrollTo(0, scrollLockY);
+}
+
 /* ----- ⌘K command palette ----- */
 const CMDK_COMMANDS = [
   { label: "Go to Marketing", hint: "tab", run: () => activateTab("marketing") },
@@ -346,15 +375,21 @@ function updateCmdkActive() {
 
 function openCmdk() {
   const { modal, input } = cmdkEls();
-  if (!modal) return;
+  if (!modal || !modal.classList.contains("hidden")) return;
   cmdkActiveIdx = 0;
   renderCmdkList("");
   modal.classList.remove("hidden");
+  lockScroll();
   if (input) { input.value = ""; input.focus(); }
 }
 
+// Escape closes both overlays blind, so unlock only when this one was open —
+// otherwise the shared counter drifts and the page stays pinned.
 function closeCmdk() {
-  cmdkEls().modal?.classList.add("hidden");
+  const { modal } = cmdkEls();
+  if (!modal || modal.classList.contains("hidden")) return;
+  modal.classList.add("hidden");
+  unlockScroll();
 }
 
 function runCmdk(idx) {
@@ -389,11 +424,17 @@ function openDrill(title, rows) {
     section.innerHTML = `<div class="dash-drill-section-h">${escapeHtmlApp(r.k)}</div><div class="dash-drill-val">${escapeHtmlApp(r.v)}</div>`;
     body.appendChild(section);
   });
-  modal.classList.remove("hidden");
+  if (modal.classList.contains("hidden")) {
+    modal.classList.remove("hidden");
+    lockScroll();
+  }
 }
 
 function closeDrill() {
-  document.getElementById("dashDrill")?.classList.add("hidden");
+  const modal = document.getElementById("dashDrill");
+  if (!modal || modal.classList.contains("hidden")) return;
+  modal.classList.add("hidden");
+  unlockScroll();
 }
 
 function wireKpiDrill(grid) {

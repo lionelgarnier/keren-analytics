@@ -2298,6 +2298,10 @@ html.booting .navbar { display: none; }
   height: 340px;
   border-radius: var(--radius-sm);
   overflow: hidden;
+  /* Keep this z-index: combined with the position:relative Leaflet sets at
+     runtime it forms a stacking context that traps Leaflet's own panes and
+     controls (z 200-1000) at layer 1. Without it they paint over the drill
+     drawer and command palette. */
   z-index: 1;
 }
 
@@ -5358,12 +5362,16 @@ body.d2-route #resourcePanel.d2-page { margin: 0; }
 .dash-kpi-b { position: relative; }
 
 /* Command palette overlay */
+/* Fixed, not absolute: anchored to #dashboardPanel these overlays laid out
+   against the full document height, so opening one after scrolling put the
+   dialog off-screen. z-index clears .svc-switch-menu (200) while staying
+   under .kr-confirm-scrim (1000) and .d2-cfg-menu (1100). */
 .dash-cmdk-scrim {
-  position: absolute; inset: 0;
+  position: fixed; inset: 0;
   background: rgba(0, 0, 0, 0.32);
   display: flex; align-items: flex-start; justify-content: center;
   padding-top: 96px;
-  z-index: 40;
+  z-index: 220;
   backdrop-filter: blur(2px);
 }
 [data-theme="light"] .dash-cmdk-scrim { background: rgba(15, 12, 8, 0.18); }
@@ -5397,6 +5405,12 @@ body.d2-route #resourcePanel.d2-page { margin: 0; }
   font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 10px;
   padding: 2px 7px; border: 1px solid var(--border); border-radius: 4px;
   color: var(--text-muted);
+}
+.dash-cmdk-list {
+  max-height: 60vh;
+  max-height: 60svh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .dash-cmdk-group {
   padding: 10px 6px 12px;
@@ -5446,13 +5460,13 @@ body.d2-route #resourcePanel.d2-page { margin: 0; }
 
 /* Drill drawer — right-side slide-in panel */
 .dash-drill {
-  position: absolute; top: 0; right: 0; bottom: 0;
-  width: 520px;
+  position: fixed; inset: 0 0 0 auto;
+  width: min(520px, 100vw);
   background: var(--surface);
   border-left: 1px solid var(--ghost-hover-border);
   box-shadow: -24px 0 48px -16px rgba(0,0,0,0.35);
   display: flex; flex-direction: column;
-  z-index: 45;
+  z-index: 231;
 }
 .dash-drill-head {
   display: flex; justify-content: space-between; align-items: flex-start;
@@ -5482,9 +5496,13 @@ body.d2-route #resourcePanel.d2-page { margin: 0; }
   padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px;
   background: transparent; color: var(--text-muted); cursor: pointer;
 }
+@media (pointer: coarse) {
+  .dash-drill-close { min-width: 44px; min-height: 44px; font-size: 14px; }
+}
 .dash-drill-body {
   padding: 16px 20px; display: flex; flex-direction: column; gap: 18px;
   overflow-y: auto; flex: 1;
+  overscroll-behavior: contain;
 }
 .dash-drill-section {
   display: flex; flex-direction: column; gap: 10px;
@@ -5502,11 +5520,30 @@ body.d2-route #resourcePanel.d2-page { margin: 0; }
 
 /* Scrim behind drill drawer (just a soft dim, not a hard modal) */
 .dash-drill-scrim {
-  position: absolute; inset: 0;
+  position: fixed; inset: 0;
   background: rgba(0,0,0,0.18);
-  z-index: 44;
+  z-index: 230;
 }
 [data-theme="light"] .dash-drill-scrim { background: rgba(15, 12, 8, 0.08); }
+
+/* Phone overlays. Must stay after the base rules above — same specificity, so
+   the cascade decides. A 520px side panel leaves nothing of a 390px screen,
+   hence the bottom sheet; the palette drops its 96px top offset so the input
+   clears the software keyboard. */
+@media (max-width: 720px) {
+  .dash-drill {
+    inset: auto 0 0 0;
+    width: auto;
+    max-height: 85vh;
+    max-height: 85svh;
+    border-left: none;
+    border-top: 1px solid var(--ghost-hover-border);
+    border-radius: 16px 16px 0 0;
+  }
+  .dash-drill-body { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+  .dash-cmdk-scrim { padding: 12px 12px 0; }
+  .dash-cmdk { width: 100%; max-width: calc(100vw - 24px); }
+}
 
 /* ───── Section divider title (Marketing only — between groups) ───── */
 .dash-section-h {
