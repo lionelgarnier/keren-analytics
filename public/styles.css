@@ -5700,3 +5700,55 @@ body.d2-route #resourcePanel.d2-page { margin: 0; }
     display: none;
   }
 }
+
+/* Phone layout for the dashboard chrome. The pageheader is shared with the
+   hub and the wizard, which carry two or three buttons and only need to wrap;
+   the dashboard's four controls (range, mapping split, Export, Change) need
+   real rows, or the split button's label breaks over three lines and the
+   range group clips mid-label. */
+@media (max-width: 720px) {
+  .d2-pageheader-r { flex-wrap: wrap; }
+
+  #dashboardPanel .d2-pageheader-r {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    justify-content: stretch;
+  }
+  #dashboardPanel .dash-range,
+  #dashboardPanel .d2-cfg-split { grid-column: 1 / -1; }
+  #dashboardPanel .dash-range {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+  }
+  #dashboardPanel .dash-range-btn {
+    justify-content: center;
+    font-size: 13px;
+  }
+  #dashboardPanel .d2-headeraction { justify-content: center; }
+
+  /* The tab strip scrolls instead of clipping "Readiness" at the edge; the
+     partly-cut tab is the affordance that tells you to swipe. */
+  .dash-subtabs {
+    display: flex;
+    overflow-x: auto;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+  }
+  .dash-subtabs::-webkit-scrollbar { display: none; }
+  .dash-subtab { flex: 0 0 auto; scroll-snap-align: start; }
+
+  /* Data tables scroll inside themselves rather than pushing the page
+     sideways — the five-column campaign table alone measured 431px against a
+     390px viewport. Scrolling a table is allowed where scrolling the page is
+     not; display:block gives the scroll container without new markup. */
+  .dash-table {
+    display: block;
+    overflow-x: auto;
+    width: 100%;
+  }
+
+  /* Narrow desktop windows (and 400% zoom, which keeps a fine pointer) still
+     render the command bar, so let it wrap instead of overflowing. */
+  .d2-cmdbar { flex-wrap: wrap; gap: 8px 0; }
+}
