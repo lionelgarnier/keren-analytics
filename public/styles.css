@@ -5674,3 +5674,29 @@ body.d2-route #resourcePanel.d2-page { margin: 0; }
 .svc-switch-foot a { font-size: 12.5px; color: var(--text-secondary); text-decoration: none; }
 .svc-switch-foot a:hover { color: var(--accent); }
 .svc-switch-empty { padding: 16px 10px; color: var(--text-muted); font-size: 13px; text-align: center; }
+
+/* ═════════════════════════════════════════════════════════════════════
+   TOUCH ADAPTATION
+   Keyed on input modality, not width: a phone in landscape is still a
+   finger, and a narrow desktop window is still a mouse. Lives at the end of
+   the file so these rules win the cascade over the component defaults above.
+   ═════════════════════════════════════════════════════════════════════ */
+
+/* Keyboard-only chrome. None of this is reachable without a hardware
+   keyboard, and on a phone it costs the scarcest thing on screen — the
+   status bars alone took 56px off every route and collided with Safari's own
+   bottom toolbar. Every command bar CTA is duplicated in the page flow
+   (hub "+ Connect workspace" in the pageheader, the wizard's Continue/Build/
+   Save in each step's own header or footer), so nothing becomes unreachable. */
+@media (hover: none), (pointer: coarse) {
+  .d2-cmdbar,
+  .d2-mark-tag,
+  .d2-search-kbd,
+  .d2-cfg-primary-kbd,
+  .dash-cmdk-foot,
+  .prompt-action-icon,
+  .kbd-hint,
+  #d2FilterBtn {
+    display: none;
+  }
+}
