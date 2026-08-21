@@ -18,7 +18,8 @@
     "audit:security": "node scripts/security-audit.mjs",
     "docs:bundle": "bash scripts/build-strategy-bundle.sh",
     "build:contract": "node --disable-warning=ExperimentalWarning scripts/build-telemetry-contract.mjs",
-    "backup:sqlite": "node --disable-warning=ExperimentalWarning scripts/backup-sqlite.mjs"
+    "backup:sqlite": "node --disable-warning=ExperimentalWarning scripts/backup-sqlite.mjs",
+    "test:mobile": "node scripts/mobile-smoke.mjs"
   },
   "engines": {
     "node": ">=22"
@@ -46,6 +47,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "eslint": "^10.8.0",
+    "playwright": "^1.56.1",
     "prettier": "^3.9.6",
     "supertest": "^7.2.2"
   },

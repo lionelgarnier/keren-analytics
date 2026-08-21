@@ -2,11 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Keren Analytics — Azure App Insights dashboards in 2 minutes</title>
     <meta name="description" content="Turn Azure Application Insights into Marketing & Technical dashboards in under 2 minutes. Open-source, MIT-licensed, no agent to deploy, no raw data leaving your tenant." />
     <link rel="canonical" href="https://keren.run/" />
-    <meta name="theme-color" content="#2d6cf2" />
+    <meta name="theme-color" content="#f8f9fb" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/favicon.svg" />
     <meta property="og:site_name" content="Keren Analytics" />
@@ -518,27 +518,9 @@
       <section id="statusPanel" class="status-bar" role="status" aria-live="polite"></section>
 
       <!-- Resource selection -->
-      <section id="resourcePanel" class="resource-panel hidden">
-        <div class="resource-panel-header">
-          <div class="resource-panel-icon-wrapper">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="28" height="28">
-              <rect x="2" y="3" width="20" height="14" rx="2" />
-              <line x1="8" y1="21" x2="16" y2="21" />
-              <line x1="12" y1="17" x2="12" y2="21" />
-            </svg>
-          </div>
-          <h2>Select a Resource</h2>
-          <p class="resource-panel-subtitle">Choose which Application Insights resource to analyze.<br>Your dashboard will be ready in seconds.</p>
-          <div id="resourceSearchWrapper" class="resource-search-wrapper hidden">
-            <svg class="resource-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input type="text" id="resourceSearchInput" class="resource-search-input" placeholder="Filter resources..." />
-          </div>
-        </div>
-        <div id="resourceList" class="resource-list"></div>
-        <div id="resourceEmptySearch" class="resource-empty-search hidden">
-          <p>No resources match your search.</p>
-        </div>
-      </section>
+      <!-- Filled by renderResources, which replaces the whole subtree before
+           unhiding it — anything placed here would never be seen. -->
+      <section id="resourcePanel" class="resource-panel hidden"></section>
 
       <!-- ========== Dashboard (D v2) ========== -->
       <section id="dashboardPanel" class="hidden d2-page" style="position:relative">
@@ -559,14 +541,12 @@
             <span class="d2-mark">Keren<span class="d2-mark-dot">.</span></span>
             <div class="d2-tabs">
               <a class="d2-tab is-active" href="/services">Services</a>
-              <a class="d2-tab" href="/docs">Docs</a>
-              <a class="d2-tab" href="/auth/logout" data-action="logout">Logout</a>
             </div>
           </div>
           <div class="d2-topbar-r">
             <button type="button" id="dashThemeToggle" class="theme-toggle" aria-label="Toggle dark mode" title="Toggle theme"></button>
             <button type="button" id="dashCmdkBtn" class="d2-mark-tag" style="margin-left:0;cursor:pointer;background:none;border:none">⌘ K</button>
-            <span class="d2-avatar">··</span>
+            <span class="d2-avatar-wrap"><button type="button" class="d2-avatar" id="dashAvatarBtn" aria-haspopup="menu" aria-expanded="false" aria-label="Account menu">··</button></span>
           </div>
         </div>
 
@@ -618,7 +598,7 @@
                 <button type="button" class="d2-cfg-primary" id="dashConfigPrimary" title="Modifier le mapping des champs de ce service"><span class="d2-cfg-primary-label">Modifier le mapping</span></button>
                 <button type="button" class="d2-cfg-caret" id="dashConfigCaret" aria-haspopup="menu" aria-expanded="false" aria-label="Options de configuration">▾</button>
               </div>
-              <button type="button" class="d2-headeraction" id="dashExportBtn">⌘E Export</button>
+              <button type="button" class="d2-headeraction" id="dashExportBtn"><span class="kbd-hint">⌘E</span> Export</button>
               <button type="button" class="d2-headeraction" id="dashChangeBtn">Change</button>
             </div>
           </div>
@@ -1251,32 +1231,26 @@
           </div>
         </div>
 
-        <!-- ⌘K command palette (vanilla, hidden by default) -->
-        <div id="dashCmdk" class="hidden" role="dialog" aria-modal="true" aria-label="Command palette">
-          <div class="dash-cmdk-scrim" data-cmdk-close>
-            <div class="dash-cmdk">
-              <input id="dashCmdkInput" class="dash-cmdk-input" type="text" placeholder="Filter pages, switch tab, set range…" autocomplete="off" />
-              <div id="dashCmdkList" class="dash-cmdk-list"></div>
-              <div class="dash-cmdk-foot">
-                <span><span class="d2-cmdbar-kbd">↑</span><span class="d2-cmdbar-kbd">↓</span> navigate</span>
-                <span><span class="d2-cmdbar-kbd">↵</span> select</span>
-                <span><span class="d2-cmdbar-kbd">esc</span> close</span>
-              </div>
-            </div>
+        <!-- ⌘K command palette. Native dialog: the [open] attribute governs
+             visibility, and ::backdrop replaces the scrim element. -->
+        <dialog id="dashCmdk" class="dash-cmdk" aria-label="Command palette">
+          <input id="dashCmdkInput" class="dash-cmdk-input" type="text" placeholder="Filter pages, switch tab, set range…" autocomplete="off" />
+          <div id="dashCmdkList" class="dash-cmdk-list"></div>
+          <div class="dash-cmdk-foot">
+            <span><span class="d2-cmdbar-kbd">↑</span><span class="d2-cmdbar-kbd">↓</span> navigate</span>
+            <span><span class="d2-cmdbar-kbd">↵</span> select</span>
+            <span><span class="d2-cmdbar-kbd">esc</span> close</span>
           </div>
-        </div>
+        </dialog>
 
-        <!-- KPI drill drawer (vanilla, hidden by default) -->
-        <div id="dashDrill" class="hidden" role="dialog" aria-modal="true" aria-label="Metric detail">
-          <div class="dash-drill-scrim" data-drill-close></div>
-          <aside class="dash-drill">
-            <div class="dash-drill-head">
-              <h3 id="dashDrillTitle" class="dash-drill-title">Metric</h3>
-              <button type="button" class="dash-drill-close" data-drill-close aria-label="Close">&times;</button>
-            </div>
-            <div id="dashDrillBody" class="dash-drill-body"></div>
-          </aside>
-        </div>
+        <!-- KPI drill drawer -->
+        <dialog id="dashDrill" class="dash-drill" aria-label="Metric detail">
+          <div class="dash-drill-head">
+            <h3 id="dashDrillTitle" class="dash-drill-title">Metric</h3>
+            <button type="button" class="dash-drill-close" data-drill-close aria-label="Close">&times;</button>
+          </div>
+          <div id="dashDrillBody" class="dash-drill-body"></div>
+        </dialog>
 
       </section>
     </main>
@@ -1286,6 +1260,7 @@
     <script src="/vendor/chartjs/chart.umd.js"></script>
     <script src="/escapeHtml.js"></script>
     <script src="/promptActionButton.js"></script>
+    <script src="/avatarMenu.js"></script>
     <script src="/landingCarousel.js"></script>
     <script src="/app.js"></script>
   </body>

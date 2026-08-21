@@ -1,23 +1,27 @@
+// Subscription segment must be a real GUID: /azure/select validates both
+// resourceId and workspaceId against isValidAzureResourceId (server.js), the
+// SSRF guard on ids that end up in ARM URLs. A "mock-sub" placeholder makes
+// the mock hub dead-end on "Malformed resource id."
 export const mockResources = [
   {
     resourceId:
-      "/subscriptions/mock-sub/resourceGroups/mock-rg/providers/Microsoft.Insights/components/mock-appinsights",
-    subscriptionId: "mock-sub",
+      "/subscriptions/00000000-0000-4000-a000-000000000001/resourceGroups/mock-rg/providers/Microsoft.Insights/components/mock-appinsights",
+    subscriptionId: "00000000-0000-4000-a000-000000000001",
     resourceGroup: "mock-rg",
     appInsightsName: "mock-appinsights",
     workspaceId:
-      "/subscriptions/mock-sub/resourceGroups/mock-rg/providers/Microsoft.OperationalInsights/workspaces/mock-law",
+      "/subscriptions/00000000-0000-4000-a000-000000000001/resourceGroups/mock-rg/providers/Microsoft.OperationalInsights/workspaces/mock-law",
     lastTelemetryAt: new Date().toISOString(),
     environmentHint: "prod",
   },
   {
     resourceId:
-      "/subscriptions/mock-sub/resourceGroups/mock-rg/providers/Microsoft.Insights/components/mock-appinsights-staging",
-    subscriptionId: "mock-sub",
+      "/subscriptions/00000000-0000-4000-a000-000000000001/resourceGroups/mock-rg/providers/Microsoft.Insights/components/mock-appinsights-staging",
+    subscriptionId: "00000000-0000-4000-a000-000000000001",
     resourceGroup: "mock-rg",
     appInsightsName: "mock-appinsights-staging",
     workspaceId:
-      "/subscriptions/mock-sub/resourceGroups/mock-rg/providers/Microsoft.OperationalInsights/workspaces/mock-law-staging",
+      "/subscriptions/00000000-0000-4000-a000-000000000001/resourceGroups/mock-rg/providers/Microsoft.OperationalInsights/workspaces/mock-law-staging",
     lastTelemetryAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
     environmentHint: "staging",
   },

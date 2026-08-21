@@ -1205,6 +1205,7 @@
         if (next === "dark") document.documentElement.setAttribute("data-theme", "dark");
         else document.documentElement.removeAttribute("data-theme");
         try { localStorage.setItem("theme", next); } catch {}
+        window.__setThemeColorMeta?.(next === "dark");
       });
     }
 
@@ -1214,6 +1215,19 @@
     } catch {
       state.csrfToken = null;
     }
+
+    // The wizard had no way out before the account menu; wire it after the
+    // session call so the CSRF token is in place for the logout POST.
+    window.initAvatarMenu?.($("setupAvatarBtn"), [
+      { label: "Docs", href: "/docs" },
+      {
+        label: "Logout",
+        onSelect: async () => {
+          try { await api("POST", "/auth/logout"); } catch { /* leave anyway */ }
+          window.location.href = "/";
+        },
+      },
+    ]);
     const mode = new URLSearchParams(window.location.search).get("mode");
     if (mode === "mapping") {
       state.advancedMapping = true;

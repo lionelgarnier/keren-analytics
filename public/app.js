@@ -138,6 +138,7 @@ function toggleTheme() {
     document.documentElement.removeAttribute("data-theme");
   }
   try { localStorage.setItem("theme", next); } catch {}
+  window.__setThemeColorMeta?.(next === "dark");
   applyChartThemeDefaults();
   updateSankeySVGColors();
 }
@@ -174,6 +175,7 @@ window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e)
   } else {
     document.documentElement.removeAttribute("data-theme");
   }
+  window.__setThemeColorMeta?.(e.matches);
   applyChartThemeDefaults();
   updateSankeySVGColors();
 });
@@ -295,6 +297,49 @@ function exportDashboard() {
   setStatus("Dashboard exported.", "success");
 }
 
+/* ----- Overlay body scroll lock -----
+   iOS Safari ignores `overflow: hidden` on body for touch scrolling, so the
+   page keeps moving under an open overlay. Pinning the body at its current
+   offset is the technique that holds there; the counter keeps nested opens
+   from unlocking early, and the saved offset is restored on the way out. */
+let scrollLockCount = 0;
+let scrollLockY = 0;
+
+function lockScroll() {
+  if (scrollLockCount++ > 0) return;
+  scrollLockY = window.scrollY;
+  document.body.style.position = "fixed";
+  document.body.style.top = `${-scrollLockY}px`;
+  document.body.style.left = "0";
+  document.body.style.right = "0";
+  document.body.style.width = "100%";
+}
+
+function unlockScroll() {
+  if (scrollLockCount === 0) return;
+  if (--scrollLockCount > 0) return;
+  document.body.style.position = "";
+  document.body.style.top = "";
+  document.body.style.left = "";
+  document.body.style.right = "";
+  document.body.style.width = "";
+  window.scrollTo(0, scrollLockY);
+}
+
+/* Close a <dialog> when the click lands on its backdrop.
+   Testing `e.target === dlg` alone is not enough: a dialog with its own
+   padding reports itself as the target for clicks in that padding, which would
+   close it from inside. Comparing against its box tells the two apart. */
+function wireBackdropClose(dlg, closeFn) {
+  dlg.addEventListener("click", (e) => {
+    if (e.target !== dlg) return;
+    const r = dlg.getBoundingClientRect();
+    const outside =
+      e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+    if (outside) closeFn();
+  });
+}
+
 /* ----- ⌘K command palette ----- */
 const CMDK_COMMANDS = [
   { label: "Go to Marketing", hint: "tab", run: () => activateTab("marketing") },
@@ -344,17 +389,34 @@ function updateCmdkActive() {
   [...list.children].forEach((el, i) => el.classList.toggle("is-active", i === cmdkActiveIdx));
 }
 
+// The dialog's own `close` event is queued, not synchronous, so the unlock
+// cannot live there alone: runCmdk closes and then runs a command that may
+// scroll, and a late unlock would restore the old offset over it. Programmatic
+// closes release the lock first; the listener is the safety net for the native
+// Escape, and the flag keeps the double path harmless.
+let cmdkLocked = false;
+function releaseCmdkLock() {
+  if (!cmdkLocked) return;
+  cmdkLocked = false;
+  unlockScroll();
+}
+
 function openCmdk() {
   const { modal, input } = cmdkEls();
-  if (!modal) return;
+  if (!modal || modal.open) return;
   cmdkActiveIdx = 0;
   renderCmdkList("");
-  modal.classList.remove("hidden");
+  modal.showModal();
+  lockScroll();
+  cmdkLocked = true;
   if (input) { input.value = ""; input.focus(); }
 }
 
 function closeCmdk() {
-  cmdkEls().modal?.classList.add("hidden");
+  const { modal } = cmdkEls();
+  if (!modal || !modal.open) return;
+  releaseCmdkLock();
+  modal.close();
 }
 
 function runCmdk(idx) {
@@ -371,11 +433,21 @@ cmdkEls().input?.addEventListener("keydown", (e) => {
   else if (e.key === "ArrowUp") { e.preventDefault(); cmdkActiveIdx = Math.max(cmdkActiveIdx - 1, 0); updateCmdkActive(); }
   else if (e.key === "Enter") { e.preventDefault(); runCmdk(cmdkActiveIdx); }
 });
-document.querySelectorAll("#dashCmdk [data-cmdk-close]").forEach((el) =>
-  el.addEventListener("click", (e) => { if (e.target === e.currentTarget) closeCmdk(); })
-);
+const dashCmdkEl = document.getElementById("dashCmdk");
+if (dashCmdkEl) {
+  wireBackdropClose(dashCmdkEl, closeCmdk);
+  dashCmdkEl.addEventListener("close", releaseCmdkLock);
+}
 
 /* ----- KPI drill drawer ----- */
+// Same split as the palette: release synchronously, keep the event as a net.
+let drillLocked = false;
+function releaseDrillLock() {
+  if (!drillLocked) return;
+  drillLocked = false;
+  unlockScroll();
+}
+
 function openDrill(title, rows) {
   const modal = document.getElementById("dashDrill");
   const titleEl = document.getElementById("dashDrillTitle");
@@ -389,11 +461,18 @@ function openDrill(title, rows) {
     section.innerHTML = `<div class="dash-drill-section-h">${escapeHtmlApp(r.k)}</div><div class="dash-drill-val">${escapeHtmlApp(r.v)}</div>`;
     body.appendChild(section);
   });
-  modal.classList.remove("hidden");
+  if (!modal.open) {
+    modal.showModal();
+    lockScroll();
+    drillLocked = true;
+  }
 }
 
 function closeDrill() {
-  document.getElementById("dashDrill")?.classList.add("hidden");
+  const modal = document.getElementById("dashDrill");
+  if (!modal || !modal.open) return;
+  releaseDrillLock();
+  modal.close();
 }
 
 function wireKpiDrill(grid) {
@@ -418,6 +497,11 @@ function wireKpiDrill(grid) {
 }
 
 document.querySelectorAll("#dashDrill [data-drill-close]").forEach((el) => el.addEventListener("click", closeDrill));
+const dashDrillEl = document.getElementById("dashDrill");
+if (dashDrillEl) {
+  wireBackdropClose(dashDrillEl, closeDrill);
+  dashDrillEl.addEventListener("close", releaseDrillLock);
+}
 
 /* ----- Global dashboard keyboard shortcuts ----- */
 function inEditableTarget(e) {
@@ -433,8 +517,7 @@ document.addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
     if (dashOpen) {
       e.preventDefault();
-      const open = !document.getElementById("dashCmdk")?.classList.contains("hidden");
-      open ? closeCmdk() : openCmdk();
+      document.getElementById("dashCmdk")?.open ? closeCmdk() : openCmdk();
     } else if (hubOpen) {
       const search = resourcePanel.querySelector("#resourceSearchInput");
       if (search) { e.preventDefault(); search.focus(); search.select(); }
@@ -448,11 +531,9 @@ document.addEventListener("keydown", (e) => {
     exportDashboard();
     return;
   }
-  if (e.key === "Escape") {
-    closeCmdk();
-    closeDrill();
-    return;
-  }
+  // Escape is handled natively by the dialogs, which close only the topmost
+  // one — closing both from here would dismiss a drawer sitting behind the
+  // palette as well.
   if (!dashOpen || inEditableTarget(e)) return;
   if (e.key === "r" || e.key === "R") {
     e.preventDefault();
@@ -475,56 +556,78 @@ connectButton.addEventListener("click", () => {
 });
 
 async function logout() {
-  await apiFetch("/auth/logout", { method: "POST" });
+  // A failed destroy still means the user asked to leave: land them on the
+  // public page rather than leaving them on a dashboard with no feedback.
+  try {
+    await apiFetch("/auth/logout", { method: "POST" });
+  } catch {
+    // Session may survive server-side; the redirect below re-checks auth.
+  }
   window.location.href = "/";
 }
 
 logoutButton.addEventListener("click", logout);
 
-// Operator-console topbar tabs are re-rendered with the services hub, so the
-// Logout tab is wired through a delegated listener rather than a direct bind.
-document.addEventListener("click", (event) => {
-  const trigger = event.target.closest('[data-action="logout"]');
-  if (!trigger) return;
-  event.preventDefault();
-  logout();
-});
+const ACCOUNT_MENU_ITEMS = [
+  { label: "Docs", href: "/docs" },
+  { label: "Logout", onSelect: logout },
+];
 
 // Lightweight confirm dialog. Resolves true on confirm, false on cancel/Esc/
 // outside-click. Built on demand (no static markup), CSP-safe (no inline JS).
+// A native <dialog> gives the top layer, the inert background, the focus trap
+// and Escape for free — hand-rolled scrims provided none of them.
 function krConfirm({ title, body, confirmText = "Continue", cancelText = "Cancel" }) {
   return new Promise((resolve) => {
-    const overlay = document.createElement("div");
-    overlay.className = "kr-confirm-scrim";
-    overlay.innerHTML = `
-      <div class="kr-confirm" role="dialog" aria-modal="true" aria-labelledby="krConfirmTitle">
-        <h3 id="krConfirmTitle" class="kr-confirm-title"></h3>
-        <p class="kr-confirm-body"></p>
-        <div class="kr-confirm-actions">
-          <button type="button" class="kr-confirm-cancel"></button>
-          <button type="button" class="kr-confirm-ok"></button>
-        </div>
+    // The labelling id is fixed, so a second instance would duplicate it.
+    if (document.querySelector("dialog.kr-confirm[open]")) {
+      resolve(false);
+      return;
+    }
+    const dlg = document.createElement("dialog");
+    dlg.className = "kr-confirm";
+    dlg.setAttribute("aria-labelledby", "krConfirmTitle");
+    dlg.innerHTML = `
+      <h3 id="krConfirmTitle" class="kr-confirm-title"></h3>
+      <p class="kr-confirm-body"></p>
+      <div class="kr-confirm-actions">
+        <button type="button" class="kr-confirm-cancel"></button>
+        <button type="button" class="kr-confirm-ok"></button>
       </div>`;
-    overlay.querySelector(".kr-confirm-title").textContent = title;
-    overlay.querySelector(".kr-confirm-body").textContent = body;
-    const cancelBtn = overlay.querySelector(".kr-confirm-cancel");
-    const okBtn = overlay.querySelector(".kr-confirm-ok");
+    dlg.querySelector(".kr-confirm-title").textContent = title;
+    dlg.querySelector(".kr-confirm-body").textContent = body;
+    const cancelBtn = dlg.querySelector(".kr-confirm-cancel");
+    const okBtn = dlg.querySelector(".kr-confirm-ok");
     cancelBtn.textContent = cancelText;
     okBtn.textContent = confirmText;
 
-    function close(result) {
-      document.removeEventListener("keydown", onKey);
-      overlay.remove();
-      resolve(result);
+    // Escape closes natively without running this, so the result defaults to
+    // a refusal and the close listener is the single place that resolves.
+    let result = false;
+    let locked = false;
+    function release() {
+      if (!locked) return;
+      locked = false;
+      unlockScroll();
     }
-    function onKey(e) {
-      if (e.key === "Escape") close(false);
+    function close(value) {
+      result = value;
+      release();
+      dlg.close();
     }
-    overlay.addEventListener("click", (e) => { if (e.target === overlay) close(false); });
     cancelBtn.addEventListener("click", () => close(false));
     okBtn.addEventListener("click", () => close(true));
-    document.addEventListener("keydown", onKey);
-    document.body.appendChild(overlay);
+    wireBackdropClose(dlg, () => close(false));
+    dlg.addEventListener("close", () => {
+      release();
+      dlg.remove();
+      resolve(result);
+    });
+
+    document.body.appendChild(dlg);
+    dlg.showModal();
+    lockScroll();
+    locked = true;
     okBtn.focus();
   });
 }
@@ -987,6 +1090,9 @@ const D2_THEME_TOGGLE_SVG =
 const dashThemeToggleEl = document.getElementById("dashThemeToggle");
 if (dashThemeToggleEl) dashThemeToggleEl.innerHTML = D2_THEME_TOGGLE_SVG;
 
+// The dashboard topbar is static markup, so one bind at boot is enough.
+window.initAvatarMenu?.(document.getElementById("dashAvatarBtn"), ACCOUNT_MENU_ITEMS);
+
 // Bucket detectEnvironment()'s css class into a D v2 chip filter key.
 function d2EnvKey(env) {
   if (env.css === "env-prod") return "prod";
@@ -1084,10 +1190,11 @@ function openAiDataPopover(disclosure) {
     : "no AI configured";
   const list = (items) =>
     items.map((i) => `<li>${escapeHtmlApp(i)}</li>`).join("");
-  const overlay = document.createElement("div");
-  overlay.className = "kr-confirm-scrim";
-  overlay.innerHTML = `
-    <div class="ai-data-pop" role="dialog" aria-modal="true" aria-labelledby="aiDataPopTitle">
+  if (document.querySelector("dialog.ai-data-pop[open]")) return;
+  const dlg = document.createElement("dialog");
+  dlg.className = "ai-data-pop";
+  dlg.setAttribute("aria-labelledby", "aiDataPopTitle");
+  dlg.innerHTML = `
       <h3 id="aiDataPopTitle" class="ai-data-pop-title">What data is sent?</h3>
       <p class="ai-data-pop-dest">AI analysis: <strong>${dest}</strong>${aiOption && aiOption.outbound === false ? " (local, nothing leaves)" : ""}</p>
       <div class="ai-data-pop-cols">
@@ -1103,30 +1210,44 @@ function openAiDataPopover(disclosure) {
       <p class="ai-data-pop-foot">Choosing "without AI" disables every outbound call for this resource.</p>
       <div class="ai-data-pop-actions">
         <button type="button" class="kr-confirm-ok ai-data-pop-close">Got it</button>
-      </div>
-    </div>`;
-  function close() {
-    document.removeEventListener("keydown", onKey);
-    overlay.remove();
+      </div>`;
+  let locked = false;
+  function release() {
+    if (!locked) return;
+    locked = false;
+    unlockScroll();
   }
-  function onKey(e) { if (e.key === "Escape") close(); }
-  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
-  overlay.querySelector(".ai-data-pop-close").addEventListener("click", close);
-  document.addEventListener("keydown", onKey);
-  document.body.appendChild(overlay);
-  overlay.querySelector(".ai-data-pop-close").focus();
+  dlg.querySelector(".ai-data-pop-close").addEventListener("click", () => {
+    release();
+    dlg.close();
+  });
+  wireBackdropClose(dlg, () => { release(); dlg.close(); });
+  dlg.addEventListener("close", () => {
+    release();
+    dlg.remove();
+  });
+  document.body.appendChild(dlg);
+  dlg.showModal();
+  lockScroll();
+  locked = true;
+  dlg.querySelector(".ai-data-pop-close").focus();
 }
 
 // Floating menu anchored to a card's caret: the configured AI provider(s)
 // then "sans IA", then the data popover. Fixed-positioned off the button rect
 // so it never clips inside the grid's overflow.
 let openConfigMenuEl = null;
+let openConfigMenuAnchor = null;
 function closeConfigMenu() {
   if (openConfigMenuEl) {
     openConfigMenuEl.remove();
     openConfigMenuEl = null;
+    // The caret kept announcing an expanded menu long after it was gone.
+    openConfigMenuAnchor?.setAttribute("aria-expanded", "false");
+    openConfigMenuAnchor = null;
     document.removeEventListener("click", closeConfigMenu, { capture: true });
     document.removeEventListener("keydown", onConfigMenuKey);
+    window.removeEventListener("scroll", closeConfigMenu);
   }
 }
 function onConfigMenuKey(e) { if (e.key === "Escape") closeConfigMenu(); }
@@ -1187,17 +1308,21 @@ async function openConfigureMenu(anchorBtn, resource) {
   document.body.appendChild(menu);
   const r = anchorBtn.getBoundingClientRect();
   // Prefer dropping below-right of the caret; flip up if it would overflow.
-  menu.style.left = `${Math.min(r.left, window.innerWidth - menu.offsetWidth - 12)}px`;
+  menu.style.left = `${Math.max(12, Math.min(r.left, window.innerWidth - menu.offsetWidth - 12))}px`;
   const below = r.bottom + 6;
   menu.style.top = below + menu.offsetHeight > window.innerHeight
     ? `${Math.max(12, r.top - menu.offsetHeight - 6)}px`
     : `${below}px`;
 
   openConfigMenuEl = menu;
+  openConfigMenuAnchor = anchorBtn;
   anchorBtn.setAttribute("aria-expanded", "true");
   setTimeout(() => {
     document.addEventListener("click", closeConfigMenu, { capture: true });
     document.addEventListener("keydown", onConfigMenuKey);
+    // The menu is fixed-positioned against the caret's coordinates, so it
+    // drifts away from its button as soon as the page moves.
+    window.addEventListener("scroll", closeConfigMenu, { once: true, passive: true });
   }, 0);
 }
 
@@ -1246,17 +1371,21 @@ function openDashboardConfigMenu(anchorBtn) {
 
   document.body.appendChild(menu);
   const r = anchorBtn.getBoundingClientRect();
-  menu.style.left = `${Math.min(r.left, window.innerWidth - menu.offsetWidth - 12)}px`;
+  menu.style.left = `${Math.max(12, Math.min(r.left, window.innerWidth - menu.offsetWidth - 12))}px`;
   const below = r.bottom + 6;
   menu.style.top = below + menu.offsetHeight > window.innerHeight
     ? `${Math.max(12, r.top - menu.offsetHeight - 6)}px`
     : `${below}px`;
 
   openConfigMenuEl = menu;
+  openConfigMenuAnchor = anchorBtn;
   anchorBtn.setAttribute("aria-expanded", "true");
   setTimeout(() => {
     document.addEventListener("click", closeConfigMenu, { capture: true });
     document.addEventListener("keydown", onConfigMenuKey);
+    // The menu is fixed-positioned against the caret's coordinates, so it
+    // drifts away from its button as soon as the page moves.
+    window.addEventListener("scroll", closeConfigMenu, { once: true, passive: true });
   }, 0);
 }
 
@@ -1298,14 +1427,12 @@ function renderResources(resources) {
         <span class="d2-mark">Keren<span class="d2-mark-dot">.</span></span>
         <div class="d2-tabs">
           <a class="d2-tab is-active" href="/services">Services</a>
-          <a class="d2-tab" href="/docs">Docs</a>
-          <a class="d2-tab" href="/auth/logout" data-action="logout">Logout</a>
         </div>
       </div>
       <div class="d2-topbar-r">
         <button type="button" id="d2ThemeToggle" class="theme-toggle" aria-label="Toggle dark mode" title="Toggle theme">${D2_THEME_TOGGLE_SVG}</button>
         <span class="d2-mark-tag" style="margin-left:0">⌘ K</span>
-        <span class="d2-avatar">··</span>
+        <span class="d2-avatar-wrap"><button type="button" class="d2-avatar" aria-haspopup="menu" aria-expanded="false" aria-label="Account menu">··</button></span>
       </div>
     </div>
     <div class="d2-page-body">
@@ -1485,6 +1612,10 @@ function renderResources(resources) {
 
   // Theme toggle inside the d2 topbar (the global .navbar toggle is hidden).
   resourcePanel.querySelector("#d2ThemeToggle")?.addEventListener("click", toggleTheme);
+
+  // The hub topbar is rebuilt on every render, so the avatar is a new element
+  // each time and needs re-wiring alongside the theme toggle.
+  window.initAvatarMenu?.(resourcePanel.querySelector(".d2-avatar"), ACCOUNT_MENU_ITEMS);
 
   // "Connect workspace" reuses the existing Azure connect flow.
   const connect = () => { window.location.href = "/auth/login"; };
@@ -1845,20 +1976,13 @@ document.querySelectorAll(".view-toggle").forEach((toggle) => {
       toggle.querySelectorAll(".view-toggle-btn").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
       // Update views
-      const panel = toggle.closest(".panel");
+      const panel = toggle.closest(".dash-panel");
+      if (!panel) return;
       panel.querySelectorAll(".toggle-view").forEach((v) => v.classList.remove("active"));
       const viewId = btn.dataset.view;
       // Find the matching view by id convention: {group}{View}View
-      const targetMap = {
-        "geo-map": "geoMapView",
-        "geo-chart": "geoChartView",
-        "flow-sankey": "flowSankeyView",
-        "flow-table": "flowTableView",
-      };
-      const targetId = targetMap[`${group}-${viewId}`];
-      if (targetId) {
-        document.getElementById(targetId)?.classList.add("active");
-      }
+      const targetId = `${group}${viewId[0].toUpperCase()}${viewId.slice(1)}View`;
+      document.getElementById(targetId)?.classList.add("active");
       // Resize map if switching to map view
       if (group === "geo" && viewId === "map" && geoMapInstance) {
         setTimeout(() => geoMapInstance.invalidateSize(), 100);
@@ -1971,6 +2095,10 @@ function renderGeoMap(data) {
 
   geoMapInstance = L.map(container, {
     scrollWheelZoom: false,
+    // One-finger panning swallows the page scroll: a swipe started over the
+    // map moves the map instead of the page, trapping the reader. The zoom
+    // buttons keep the map usable without dragging.
+    dragging: !window.matchMedia("(pointer: coarse)").matches,
     zoomControl: true,
     attributionControl: true,
   }).setView([25, 10], 2);
@@ -2412,6 +2540,26 @@ function renderPeakHours(data, availability) {
     }
   });
   container.appendChild(grid);
+
+  // A title attribute never fires on touch, so the grid's numbers were
+  // unreadable without a mouse. Tapping a cell puts its reading here.
+  const readout = document.createElement("div");
+  readout.className = "dash-peaks-readout";
+  readout.textContent = "Tap a cell to read its traffic.";
+  container.appendChild(readout);
+
+  grid.addEventListener("click", (e) => {
+    const cell = e.target.closest(".dash-peaks-cell");
+    if (!cell) return;
+    const wasFocused = cell.classList.contains("is-focused");
+    grid.querySelectorAll(".dash-peaks-cell.is-focused").forEach((c) => c.classList.remove("is-focused"));
+    if (wasFocused) {
+      readout.textContent = "Tap a cell to read its traffic.";
+      return;
+    }
+    cell.classList.add("is-focused");
+    readout.textContent = cell.title;
+  });
 
   const foot = document.createElement("div");
   foot.className = "dash-peaks-foot";

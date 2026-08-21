@@ -48,6 +48,21 @@ export default [
     },
   },
   {
+    // Runs in Node but ships functions to page.evaluate(), whose bodies are
+    // evaluated in the browser and so reference browser globals.
+    files: ["scripts/mobile-smoke.mjs"],
+    languageOptions: {
+      globals: {
+        window: "readonly",
+        document: "readonly",
+        getComputedStyle: "readonly",
+        innerWidth: "readonly",
+        innerHeight: "readonly",
+        NodeFilter: "readonly",
+      },
+    },
+  },
+  {
     // Front-end: browser globals. These files are classic scripts, not modules.
     files: ["public/**/*.js"],
     languageOptions: {
