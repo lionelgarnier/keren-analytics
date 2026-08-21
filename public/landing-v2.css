@@ -421,7 +421,7 @@
   display: flex; justify-content: space-between;
   font-size: 13px; color: var(--lv2-text-muted);
 }
-.lv2-footer-links { display: flex; gap: 24px; }
+.lv2-footer-links { display: flex; gap: 24px; flex-wrap: wrap; }
 
 /* ── Embedded SVG color overrides (themable, no hardcoded hex) ──────────── */
 .lv2 .lv2-check-head svg { color: var(--lv2-ok); }
@@ -538,5 +538,15 @@ body.landing-active .navbar { display: none; }
     display: inline-flex;
     align-items: center;
     min-height: 44px;
+  }
+}
+
+/* Four comparison columns do not fit a phone; the table scrolls inside
+   itself rather than pushing the page sideways. */
+@media (max-width: 720px) {
+  .lv2-compare-table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
   }
 }

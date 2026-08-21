@@ -30,3 +30,39 @@ jobs:
 
       - name: Run test suite with coverage
         run: npm run test:coverage
+
+  mobile:
+    name: mobile smoke (390px)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install chromium --with-deps
+
+      # Not NODE_ENV=test: that mode deliberately skips listen() so the test
+      # suite can import the app without binding a port.
+      - name: Start server in mock mode
+        env:
+          AZURE_MODE: mock
+          SESSION_SECRET: ci-mobile-smoke
+          TELEMETRY_ENABLED: "false"
+        run: |
+          npm start &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:3000/healthz > /dev/null && exit 0
+            sleep 1
+          done
+          echo "server did not become healthy" >&2
+          exit 1
+
+      - name: Run mobile smoke test
+        run: npm run test:mobile

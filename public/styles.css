@@ -5925,3 +5925,11 @@ input,
     width: min(420px, calc(100vw - 32px));
   }
 }
+
+/* Panels are grid items, and a grid item refuses to shrink below its own
+   content unless told to. Without this the widest table inside stretches its
+   panel — and with it the page — past the viewport, even though the table is
+   already a scroll container. */
+@media (max-width: 720px) {
+  .dash-panel { min-width: 0; }
+}
