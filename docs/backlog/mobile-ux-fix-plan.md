@@ -340,6 +340,14 @@ d'état mais la vue ne bascule jamais. En plus, `targetMap`
   mort), la migration `<dialog>` (P2-8) et le repli topbar Docs/Logout (P1-7)
   restent **hors périmètre** — PR séparée si souhaitée plus tard.
 
+> **Suite : traité.** Ces trois points ont fait l'objet de la série D
+> (`docs/backlog/nav-dialog-cleanup-plan.md`, commits `dcd810c` → `81ff96d`) :
+> menu avatar, migration des 4 modales vers `<dialog>` natif, purge de
+> 826 lignes de CSS mort. Restent pour une passe ultérieure les orphelins
+> `.setup-container`/`-resource-*`/`-pill*`/`-gap*`/`-cell-*`/`-confidence*`/
+> `-origin*` et `.dash-trend-*` (non référencé, hors périmètre vérifié de D3),
+> plus la décision produit sur `.resource-pill`.
+
 ## Watchlist régressions (à contrôler pendant l'exécution)
 
 - **C3** est le plus sensible : (a) unlock toujours en première ligne des
