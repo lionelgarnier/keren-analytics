@@ -113,17 +113,24 @@ async function checkOverlay(page, name, open, selector) {
     await page.waitForTimeout(200);
     await open();
     await page.waitForTimeout(350);
+    // A <dialog> stays in the DOM when closed and then measures 0x0, which
+    // would satisfy the viewport test on its own — so establish that it is
+    // actually open and painted before asking where it sits.
     const box = await page.evaluate((sel) => {
       const el = document.querySelector(sel);
-      if (!el) return null;
+      if (!el) return { missing: true };
       const r = el.getBoundingClientRect();
       return {
+        opened: el.tagName === "DIALOG" ? el.open : !el.classList.contains("hidden"),
+        painted: r.width > 0 && r.height > 0,
         inViewport: r.left >= -1 && r.top >= -1 && r.right <= innerWidth + 1 && r.bottom <= innerHeight + 1,
         rect: `${Math.round(r.width)}x${Math.round(r.height)} at ${Math.round(r.x)},${Math.round(r.y)}`,
       };
     }, selector);
 
-    if (!box) fail("overlays", `${name} did not open (scrollY=${scrollY})`);
+    if (box.missing) fail("overlays", `${name} is not in the DOM (scrollY=${scrollY})`);
+    else if (!box.opened) fail("overlays", `${name} did not open (scrollY=${scrollY})`);
+    else if (!box.painted) fail("overlays", `${name} opened but renders nothing (scrollY=${scrollY}): ${box.rect}`);
     else if (!box.inViewport) fail("overlays", `${name} outside the viewport at scrollY=${scrollY}: ${box.rect}`);
     else pass(`${name} fully visible at scrollY=${scrollY}`);
 
