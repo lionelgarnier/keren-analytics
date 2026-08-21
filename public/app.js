@@ -1845,20 +1845,13 @@ document.querySelectorAll(".view-toggle").forEach((toggle) => {
       toggle.querySelectorAll(".view-toggle-btn").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
       // Update views
-      const panel = toggle.closest(".panel");
+      const panel = toggle.closest(".dash-panel");
+      if (!panel) return;
       panel.querySelectorAll(".toggle-view").forEach((v) => v.classList.remove("active"));
       const viewId = btn.dataset.view;
       // Find the matching view by id convention: {group}{View}View
-      const targetMap = {
-        "geo-map": "geoMapView",
-        "geo-chart": "geoChartView",
-        "flow-sankey": "flowSankeyView",
-        "flow-table": "flowTableView",
-      };
-      const targetId = targetMap[`${group}-${viewId}`];
-      if (targetId) {
-        document.getElementById(targetId)?.classList.add("active");
-      }
+      const targetId = `${group}${viewId[0].toUpperCase()}${viewId.slice(1)}View`;
+      document.getElementById(targetId)?.classList.add("active");
       // Resize map if switching to map view
       if (group === "geo" && viewId === "map" && geoMapInstance) {
         setTimeout(() => geoMapInstance.invalidateSize(), 100);
