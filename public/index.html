@@ -1249,6 +1249,14 @@
       </section>
     </main>
 
+    <!-- Error toast. #statusPanel is display:none on every D2 route, so errors
+         raised on the hub or a dashboard need a surface of their own. Filled by
+         setStatus(); dismissed by the button or Escape. -->
+    <div id="toastHost" class="toast-host">
+      <span id="toastMessage" role="alert" aria-live="assertive" aria-atomic="true"></span>
+      <button type="button" id="toastClose" class="toast-close" aria-label="Dismiss">&times;</button>
+    </div>
+
     <link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
     <script src="/vendor/leaflet/leaflet.js"></script>
     <script src="/vendor/chartjs/chart.umd.js"></script>

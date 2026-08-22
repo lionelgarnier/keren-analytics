@@ -279,6 +279,71 @@ html.booting .navbar { display: none; }
   color: var(--success);
 }
 
+/* ========== Error toast ========== */
+/* #statusPanel is display:none under body.d2-route, so the hub and the
+   dashboards have no visible status bar. Errors are mirrored here instead:
+   fixed, above the app chrome, dismissed by a click or on a timer. Kept out of
+   the layout with visibility:hidden so it never affects page width. */
+.toast-host {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  /* Clear the iOS home indicator, same inset the drill sheet accounts for. */
+  bottom: max(24px, env(safe-area-inset-bottom, 0px));
+  margin: 0 auto;
+  width: fit-content;
+  max-width: 420px;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 12px 12px 16px;
+  border-radius: var(--radius);
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+  color: var(--danger);
+  box-shadow: var(--shadow-md);
+  font-size: 14px;
+  line-height: 1.4;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(8px);
+  transition: opacity 120ms ease, transform 120ms ease, visibility 120ms;
+}
+
+.toast-host.is-visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.toast-close {
+  flex: none;
+  min-width: 32px;
+  min-height: 32px;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: inherit;
+  font-family: var(--font);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.toast-close:hover { opacity: 1; }
+
+.toast-close:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast-host { transition: none; }
+}
+
 /* ========== Skeleton loaders ========== */
 /* Each card carries a [data-card] attribute. While it loads, an absolutely
    positioned overlay shows a shimmering placeholder; the real content is
