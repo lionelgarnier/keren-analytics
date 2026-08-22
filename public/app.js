@@ -5,9 +5,6 @@ const statusPanel = document.getElementById("statusPanel");
 const resourcePanel = document.getElementById("resourcePanel");
 const dashboardPanel = document.getElementById("dashboardPanel");
 const rangeSelect = document.getElementById("rangeSelect");
-const selectedResourceBar = document.getElementById("selectedResourceBar");
-const selectedResourceName = document.getElementById("selectedResourceName");
-const changeResourceButton = document.getElementById("changeResourceButton");
 const landingPage = document.getElementById("landingPage");
 const previewBanner = document.getElementById("previewBanner");
 const onboardingBanner = document.getElementById("onboardingBanner");
@@ -16,6 +13,10 @@ let lastDiscoveredResources = [];
 let lastDashboardData = null;
 let isPreviewMode = false;
 let csrfToken = null;
+// Last service shown on the dashboard: the switcher's current-item marker and
+// the export filename fallback read it. Not reset when the selection is
+// cleared — an export from /preview still names the last service visited.
+let selectedServiceName = "";
 /** Card names whose data arrived this load — drives the done-message safety net. */
 const receivedCards = new Set();
 
@@ -248,10 +249,8 @@ document.querySelectorAll(".dash-range-btn").forEach((btn) => {
   });
 });
 
-// "Change" returns to the service hub (reuses the existing clear-selection flow).
-document.getElementById("dashChangeBtn")?.addEventListener("click", () => {
-  changeResourceButton?.click();
-});
+// "Change" returns to the service hub.
+document.getElementById("dashChangeBtn")?.addEventListener("click", clearSelectedResource);
 
 /* ----- Refresh (R key / palette) ----- */
 function refreshDashboard() {
@@ -275,7 +274,7 @@ function exportDashboard() {
     setStatus("Nothing to export yet — load a dashboard first.", "error");
     return;
   }
-  const service = router.current.service || selectedResourceName?.textContent?.trim() || "service";
+  const service = router.current.service || selectedServiceName.trim() || "service";
   const range = RANGE_LABEL[rangeSelect.value] || rangeSelect.value;
   const stamp = new Date().toISOString().slice(0, 10);
   const slug = service.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "service";
@@ -640,12 +639,11 @@ rangeSelect.addEventListener("change", () => {
   }
 });
 
-changeResourceButton.addEventListener("click", async () => {
+async function clearSelectedResource() {
   try {
     await apiFetch("/azure/select/clear", { method: "POST" });
   } catch { /* ignore */ }
   dashboardPanel.classList.add("hidden");
-  selectedResourceBar.classList.add("hidden");
   router.push({ page: "services" });
   try {
     const resp = await apiFetch("/api/setup/services");
@@ -653,7 +651,7 @@ changeResourceButton.addEventListener("click", async () => {
   } catch (error) {
     setStatus(error.message || "Unable to load resources.", "error");
   }
-});
+}
 
 /* ========== Landing page events ========== */
 document.getElementById("landingConnectBtn")?.addEventListener("click", () => {
@@ -818,8 +816,7 @@ function truncateGuid(id) {
 
 /* ========== Resource selection ========== */
 function showSelectedResource(name) {
-  selectedResourceName.textContent = name;
-  selectedResourceBar.classList.remove("hidden");
+  selectedServiceName = name;
   // Mirror the service name into the D v2 dashboard header + breadcrumb.
   const h1 = document.getElementById("dashServiceName");
   const crumb = document.getElementById("dashBreadcrumbName");
@@ -920,7 +917,7 @@ function switchService(resource) {
 
   function buildMenu(filter = "") {
     const resources = lastDiscoveredResources || [];
-    const current = (selectedResourceName.textContent || "").trim();
+    const current = selectedServiceName.trim();
     const f = filter.trim().toLowerCase();
     const matches = resources.filter(
       (r) =>
@@ -4005,7 +4002,6 @@ async function loadDashboard(range) {
     clearAllSkeletons();
     dashboardPanel.classList.add("hidden");
     if (error.data && error.data.error === "RESOURCE_SELECTION_REQUIRED") {
-      selectedResourceBar.classList.add("hidden");
       renderResources(error.data.resources || []);
       return;
     }
@@ -4215,7 +4211,6 @@ window.addEventListener("popstate", async () => {
 
   if (route.page === "services") {
     dashboardPanel.classList.add("hidden");
-    selectedResourceBar.classList.add("hidden");
     if (lastDiscoveredResources.length > 0) {
       renderResources(lastDiscoveredResources);
     }
@@ -4229,19 +4224,11 @@ window.addEventListener("popstate", async () => {
     hideLanding();
     isPreviewMode = false;
     activateTab(route.tab, { updateUrl: false });
-    // Always reveal the dashboard panel for a dashboard route — otherwise
-    // navigating Back to an already-selected service left BOTH panels hidden
-    // (blank screen), since the reveal used to live inside the "service
-    // changed" branch below.
+    // Always reveal the dashboard panel for a dashboard route — navigating
+    // Back to an already-selected service used to leave BOTH panels hidden
+    // (blank screen).
     showSelectedResource(route.service);
     dashboardPanel.classList.remove("hidden");
-    const currentName = selectedResourceName.textContent;
-    if (currentName !== route.service) {
-      const target = lastDiscoveredResources.find((r) => r.appInsightsName === route.service);
-      if (target) {
-        await selectResourceApi(target);
-      }
-    }
     await loadDashboard(rangeSelect.value);
   }
 });
