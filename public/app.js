@@ -4201,6 +4201,16 @@ async function init() {
   }
 }
 
+/** Leave a dashboard route for the service hub — used when we cannot prove the
+ *  session points at the service in the URL. renderResources() clears the
+ *  status bar, so the message goes after it. */
+function returnToHub(message) {
+  dashboardPanel.classList.add("hidden");
+  router.replace({ page: "services" });
+  renderResources(lastDiscoveredResources);
+  if (message) setStatus(message, "error");
+}
+
 /* ========== Browser back/forward navigation ========== */
 window.addEventListener("popstate", async () => {
   const route = router.current;
@@ -4237,23 +4247,28 @@ window.addEventListener("popstate", async () => {
     hideLanding();
     isPreviewMode = false;
     activateTab(route.tab, { updateUrl: false });
-    // Always reveal the dashboard panel for a dashboard route — navigating
-    // Back to an already-selected service used to leave BOTH panels hidden
-    // (blank screen).
+
+    // Back/forward only rewrites the URL, and the dashboard query is scoped to
+    // the session's selected resource. Prove the session points at this service
+    // before revealing anything: on either failure we cannot say whose data
+    // would appear, so hand back to the hub rather than paint it.
+    const target = lastDiscoveredResources.find((r) => r.appInsightsName === route.service);
+    if (!target) {
+      returnToHub(`Unknown service "${route.service}".`);
+      return;
+    }
+    try {
+      await ensureResourceSelected(target);
+    } catch (error) {
+      returnToHub(error.message || "Selection failed.");
+      return;
+    }
+
+    // Revealed unconditionally on the nominal path — keeping this out of a
+    // "service changed" branch is what stopped Back onto an already-selected
+    // service from leaving BOTH panels hidden (blank screen).
     showSelectedResource(route.service);
     dashboardPanel.classList.remove("hidden");
-    // Back/forward only rewrites the URL. The dashboard query is scoped to the
-    // session's selected resource, so without this the panel would render the
-    // service we came from under this service's name.
-    const target = lastDiscoveredResources.find((r) => r.appInsightsName === route.service);
-    if (target) {
-      try {
-        await ensureResourceSelected(target);
-      } catch (error) {
-        setStatus(error.message || "Selection failed.", "error");
-        return;
-      }
-    }
     await loadDashboard(rangeSelect.value);
   }
 });
