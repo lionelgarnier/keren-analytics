@@ -240,39 +240,6 @@ html.booting .navbar { display: none; }
   padding: 5px 12px;
 }
 
-/* ========== Resource pill (navbar) ========== */
-.resource-pill {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--accent-bg);
-  border: 1px solid var(--accent-border);
-  padding: 4px 6px 4px 12px;
-  border-radius: 20px;
-  font-size: 13px;
-}
-
-.resource-pill-name {
-  font-weight: 600;
-  color: var(--accent);
-  font-size: 12px;
-}
-
-.resource-pill-change {
-  background: transparent;
-  border: 1px solid var(--accent-border);
-  padding: 2px 8px;
-  border-radius: 12px;
-  cursor: pointer;
-  font-size: 11px;
-  color: var(--accent);
-  font-family: var(--font);
-}
-
-.resource-pill-change:hover {
-  background: var(--accent-border);
-}
-
 /* ========== Select ========== */
 .select {
   padding: 6px 12px;
