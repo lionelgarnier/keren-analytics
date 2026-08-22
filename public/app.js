@@ -13,9 +13,9 @@ let lastDiscoveredResources = [];
 let lastDashboardData = null;
 let isPreviewMode = false;
 let csrfToken = null;
-// Last service shown on the dashboard. Deliberately NOT reset when the
-// selection is cleared — the legacy DOM span kept its text, and the service
-// switcher's current marker + the export filename fallback rely on that.
+// Last service shown on the dashboard: the switcher's current-item marker and
+// the export filename fallback read it. Not reset when the selection is
+// cleared — an export from /preview still names the last service visited.
 let selectedServiceName = "";
 /** Card names whose data arrived this load — drives the done-message safety net. */
 const receivedCards = new Set();
