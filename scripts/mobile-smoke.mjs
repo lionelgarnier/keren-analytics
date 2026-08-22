@@ -232,6 +232,23 @@ try {
   await checkOverlay(page, "drill drawer", () => page.evaluate(() => document.querySelector(".dash-kpi-a")?.click()), ".dash-drill");
   await checkOverlay(page, "command palette", () => page.evaluate(() => window.openCmdk()), ".dash-cmdk");
 
+  // "Change" must hand the dashboard back to the service hub. It used to work
+  // only through a synthetic click on invisible legacy markup — cover the wiring.
+  console.log("\n[change]");
+  const clearReq = page
+    .waitForRequest((r) => r.method() === "POST" && r.url().endsWith("/azure/select/clear"), { timeout: 5000 })
+    .catch(() => null);
+  await page.evaluate(() => document.getElementById("dashChangeBtn")?.click());
+  if (await clearReq) pass("POST /azure/select/clear sent");
+  else fail("change", "POST /azure/select/clear was not sent");
+  await page.waitForSelector(".d2-rescard", { timeout: 10000 }).catch(() => {});
+  const backAtHub = await page.evaluate(
+    () => window.location.pathname === "/services" && document.querySelectorAll(".d2-rescard").length > 0
+  );
+  if (backAtHub) pass("Change returns to the service hub");
+  else fail("change", "Change did not land on the service hub");
+  await checkRoute(page, "/services", "hub after change");
+
   // The wizard's scan runs before the findings step appears.
   await page.goto(`${BASE_URL}/setup`, { waitUntil: "domcontentloaded" });
   await page.waitForSelector("#scanningContinue:not([disabled]), #findingsContinue", { timeout: 30000 }).catch(() => {});
