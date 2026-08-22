@@ -9,6 +9,7 @@ const landingPage = document.getElementById("landingPage");
 const previewBanner = document.getElementById("previewBanner");
 const onboardingBanner = document.getElementById("onboardingBanner");
 const toastHost = document.getElementById("toastHost");
+const toastMessage = document.getElementById("toastMessage");
 
 let lastDiscoveredResources = [];
 let lastDashboardData = null;
@@ -790,14 +791,21 @@ async function apiFetch(url, options = {}) {
 /* ========== Status ========== */
 let toastTimer = null;
 
-/** The status bar is the primary surface, but it is display:none on every D2
- *  route (hub, dashboards), where errors would otherwise be swallowed. */
-function showToast(message) {
-  if (!toastHost || !message) return;
-  toastHost.textContent = message;
-  toastHost.classList.add("is-visible");
+/** Auto-dismiss, unless the toast holds focus — pulling a focused button out
+ *  from under a keyboard user would drop them back to the document. */
+function restartToastTimer() {
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(hideToast, 8000);
+  if (toastHost?.classList.contains("is-visible")) toastTimer = setTimeout(hideToast, 8000);
+}
+
+/** The status bar is the primary surface, but it is display:none on every D2
+ *  route (hub, dashboards), where errors would otherwise be swallowed. Made
+ *  visible before the text is written so the live region actually announces. */
+function showToast(message) {
+  if (!toastHost || !toastMessage || !message) return;
+  toastHost.classList.add("is-visible");
+  toastMessage.textContent = message;
+  restartToastTimer();
 }
 
 function hideToast() {
@@ -805,7 +813,13 @@ function hideToast() {
   toastHost?.classList.remove("is-visible");
 }
 
-toastHost?.addEventListener("click", hideToast);
+document.getElementById("toastClose")?.addEventListener("click", hideToast);
+toastHost?.addEventListener("focusin", () => clearTimeout(toastTimer));
+toastHost?.addEventListener("focusout", restartToastTimer);
+// Escape closes it like the app's other transient surfaces (menus, dialogs).
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && toastHost?.classList.contains("is-visible")) hideToast();
+});
 
 function setStatus(message, variant = "info") {
   statusPanel.textContent = message;
