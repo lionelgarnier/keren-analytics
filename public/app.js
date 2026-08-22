@@ -8,6 +8,7 @@ const rangeSelect = document.getElementById("rangeSelect");
 const landingPage = document.getElementById("landingPage");
 const previewBanner = document.getElementById("previewBanner");
 const onboardingBanner = document.getElementById("onboardingBanner");
+const toastHost = document.getElementById("toastHost");
 
 let lastDiscoveredResources = [];
 let lastDashboardData = null;
@@ -787,9 +788,33 @@ async function apiFetch(url, options = {}) {
 }
 
 /* ========== Status ========== */
+let toastTimer = null;
+
+/** The status bar is the primary surface, but it is display:none on every D2
+ *  route (hub, dashboards), where errors would otherwise be swallowed. */
+function showToast(message) {
+  if (!toastHost || !message) return;
+  toastHost.textContent = message;
+  toastHost.classList.add("is-visible");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(hideToast, 8000);
+}
+
+function hideToast() {
+  clearTimeout(toastTimer);
+  toastHost?.classList.remove("is-visible");
+}
+
+toastHost?.addEventListener("click", hideToast);
+
 function setStatus(message, variant = "info") {
   statusPanel.textContent = message;
   statusPanel.className = `status-bar${variant !== "info" ? ` ${variant}` : ""}`;
+  // offsetParent is null when the bar — or an ancestor — is display:none, which
+  // is what body.d2-route does to it. Only errors are worth interrupting for;
+  // anything else clears a toast that is no longer current.
+  if (variant === "error" && message && !statusPanel.offsetParent) showToast(message);
+  else hideToast();
 }
 
 /* ========== Resource helpers ========== */
