@@ -347,6 +347,16 @@ d'état mais la vue ne bascule jamais. En plus, `targetMap`
 > `.setup-container`/`-resource-*`/`-pill*`/`-gap*`/`-cell-*`/`-confidence*`/
 > `-origin*` et `.dash-trend-*` (non référencé, hors périmètre vérifié de D3),
 > plus la décision produit sur `.resource-pill`.
+>
+> **`.resource-pill` : tranché le 2026-08-22.** La pilule est supprimée. Son
+> état (le nom du service) est remonté dans une variable de module
+> `selectedServiceName` (`app.js`), le bouton Change du dashboard appelle
+> directement `clearSelectedResource()` au lieu de relayer un clic synthétique
+> vers le bouton invisible, et les deux liens Re-scan / Mapping — déjà morts,
+> remplacés par le split-button Configuration — partent avec le markup
+> (`index.html`) et les 4 règles CSS (`styles.css`). Le smoke couvre désormais
+> « Change ramène au hub », le trou qui rendait ce piège invisible. La navbar
+> legacy elle-même reste : 3 états de bord l'affichent encore.
 
 ## Watchlist régressions (à contrôler pendant l'exécution)
 
