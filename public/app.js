@@ -17,6 +17,11 @@ let csrfToken = null;
 // the export filename fallback read it. Not reset when the selection is
 // cleared — an export from /preview still names the last service visited.
 let selectedServiceName = "";
+// Mirrors the resource id the server session currently has selected. The
+// dashboard query is scoped to it server-side, so navigation needs to know
+// when the session has drifted from the route. Seeded from
+// /api/setup/services, kept in step by selectResourceApi / clear.
+let serverSelectedResourceId = null;
 /** Card names whose data arrived this load — drives the done-message safety net. */
 const receivedCards = new Set();
 
@@ -643,6 +648,7 @@ async function clearSelectedResource() {
   try {
     await apiFetch("/azure/select/clear", { method: "POST" });
   } catch { /* ignore */ }
+  serverSelectedResourceId = null;
   dashboardPanel.classList.add("hidden");
   router.push({ page: "services" });
   try {
@@ -826,8 +832,8 @@ function showSelectedResource(name) {
 
 /** POST /azure/select for a resource — shared by the hub cards and the
  *  init() deep-link / single-resource paths. */
-function selectResourceApi(resource) {
-  return apiFetch("/azure/select", {
+async function selectResourceApi(resource) {
+  const result = await apiFetch("/azure/select", {
     method: "POST",
     body: JSON.stringify({
       resourceId: resource.resourceId,
@@ -837,6 +843,14 @@ function selectResourceApi(resource) {
       appInsightsName: resource.appInsightsName,
     }),
   });
+  serverSelectedResourceId = resource.resourceId;
+  return result;
+}
+
+/** Point the server session at `resource`, unless it is already there. */
+async function ensureResourceSelected(resource) {
+  if (serverSelectedResourceId === resource.resourceId) return;
+  await selectResourceApi(resource);
 }
 
 function maybeShowOnboarding() {
@@ -4129,6 +4143,7 @@ async function init() {
     const servicesResp = await apiFetch("/api/setup/services");
     const services = servicesResp.services || [];
     lastDiscoveredResources = services;
+    serverSelectedResourceId = servicesResp.selectedResourceId || null;
 
     if (services.length === 0) {
       setStatus(
@@ -4142,9 +4157,7 @@ async function init() {
     if (route.page === "dashboard" && route.service) {
       const target = services.find((r) => r.appInsightsName === route.service);
       if (target) {
-        if (servicesResp.selectedResourceId !== target.resourceId) {
-          await selectResourceApi(target);
-        }
+        await ensureResourceSelected(target);
         setD2Route(true);
         showSelectedResource(route.service);
         activateTab(route.tab, { updateUrl: false });
@@ -4229,6 +4242,18 @@ window.addEventListener("popstate", async () => {
     // (blank screen).
     showSelectedResource(route.service);
     dashboardPanel.classList.remove("hidden");
+    // Back/forward only rewrites the URL. The dashboard query is scoped to the
+    // session's selected resource, so without this the panel would render the
+    // service we came from under this service's name.
+    const target = lastDiscoveredResources.find((r) => r.appInsightsName === route.service);
+    if (target) {
+      try {
+        await ensureResourceSelected(target);
+      } catch (error) {
+        setStatus(error.message || "Selection failed.", "error");
+        return;
+      }
+    }
     await loadDashboard(rangeSelect.value);
   }
 });
