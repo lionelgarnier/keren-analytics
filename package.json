@@ -46,10 +46,10 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "eslint": "^10.8.0",
-    "playwright": "^1.56.1",
-    "prettier": "^3.9.6",
-    "supertest": "^7.2.2"
+    "eslint": "^10.11.0",
+    "playwright": "^1.63.0",
+    "prettier": "^3.9.9",
+    "supertest": "^7.3.0"
   },
   "overrides": {
     "protobufjs": "^7.6.2",
